@@ -20,3 +20,5 @@ To configure on server or localhost, simply download the files, and make sure
 (2) you have given executable permission the python scripts.
 
 To start the app, run index.py and log in with admin or your credentials. 
+
+(c) 2016 Shuo Zhang (@zangsir) and Amir Zeldes (@amir-zeldes)
