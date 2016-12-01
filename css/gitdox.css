@@ -1,0 +1,72 @@
+#doctable{    border: 2px solid black;
+    border-radius: 4px;font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;background-color:hsla(40,53%,100%,0.30)}
+
+h1, h2{font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;-webkit-font-smoothing: subpixel-antialiased;}
+
+.button {
+	display: inline-block;
+	outline: none;
+	cursor: pointer;
+	text-align: center;
+	text-decoration: none;
+	font: 12px/100% Arial, Helvetica, sans-serif;
+	background-color: #b4d6df;
+	border: 1px solid black;
+	padding: .5em 1em .55em;
+	text-shadow: 0 1px 1px rgba(0,0,0,.3);
+	-webkit-border-radius: .5em;
+	-moz-border-radius: .5em;
+	border-radius: .5em;
+	-webkit-box-shadow: 0 1px 2px rgba(0,0,0,.2);
+	-moz-box-shadow: 0 1px 2px rgba(0,0,0,.2);
+	box-shadow: 0 1px 2px rgba(0,0,0,.2);
+	min-width: 50px
+}
+.button:hover {
+	text-decoration: none;
+}
+.button:active {
+	position: relative;
+	top: 1px;
+}
+
+.slim{min-width:15px !important; padding: .3em .3em .3em !important; }
+
+select, input {
+    border: 1px solid #ccc;
+    width: 120px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #fafafa url("img/icon-select.png") no-repeat 90% 50%;
+    padding: 3px;
+}
+
+select select {
+    padding: 8px 8px;
+    width: 130%;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    background-image: none;
+    -webkit-appearance: none;
+}
+
+select select:focus {
+    outline: none;
+}
+
+#doc_data{width:720px}
+
+#doc_data input {width: 300px}
+
+.CodeMirror{max-width:790px !important}
+.admin_form{padding: 19px;
+    margin-bottom: 20px;
+    background-color: #dcdada;
+    border: 1px solid black;
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.05);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.05);
+    max-width:400px}
+
+#meta_table{width:100%;  table-layout: fixed;}

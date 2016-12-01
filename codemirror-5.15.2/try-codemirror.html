@@ -1,0 +1,119 @@
+<html lang="en">
+<head>
+<title>CodeMirror in Action</title>
+
+<script src="js/vendor/jquery-1.9.1.js"></script>
+
+<!-- More examples at http://codemirror.net/demo/ -->
+
+<!-- add basic CodeMirror functionality -->
+<script src="js/vendor/codemirror-4.1/lib/codemirror.js" type="text/javascript" charset="utf-8"></script>
+<script src="js/vendor/codemirror-4.1/addon/selection/active-line.js" type="text/javascript" charset="utf-8"></script>
+<link rel="stylesheet" href="js/vendor/codemirror-4.1/lib/codemirror.css" />
+
+<!-- add Javascript-mode dependencies -->
+<script src="js/vendor/codemirror-4.1/mode/javascript/javascript.js" type="text/javascript" charset="utf-8"></script>
+
+<!-- add PHP-mode dependencies (replace dependency loading by require.js!) -->
+<script src="js/vendor/codemirror-4.1/mode/xml/xml.js" type="text/javascript" charset="utf-8"></script>
+<script src="js/vendor/codemirror-4.1/mode/htmlmixed/htmlmixed.js" type="text/javascript" charset="utf-8"></script>
+<script src="js/vendor/codemirror-4.1/mode/clike/clike.js" type="text/javascript" charset="utf-8"></script>
+<script src="js/vendor/codemirror-4.1/mode/php/php.js" type="text/javascript" charset="utf-8"></script>
+
+<!-- add SPARQL-mode dependencies -->
+<script src="js/vendor/codemirror-4.1/mode/sparql/sparql.js" type="text/javascript" charset="utf-8"></script>
+
+<style type="text/css" media="screen">
+    
+    #container {
+        padding: 15px;
+    }
+    h5 {
+        margin: 7px 0px;
+    }
+    #editor1-pane, 
+    #editor2-pane {
+        position:relative;
+        display: block;
+        width: 600px;
+        height: 200px;
+        border: solid 1px #bbb;
+    }
+    
+    #editor1, 
+    #editor2 {
+        font-size: 9pt;
+    }
+    #editor1 .CodeMirror {
+        height: 198px;
+    }
+    
+    #editor2 .CodeMirror {
+        height: 198px; 
+    }
+</style>
+</head>
+<body>
+<div id="container">
+ 
+ <h5>PHP editor</h5>
+ <div id="editor1-pane">
+   <div id="editor1"></div>
+ </div>
+
+ <h5>SPARQL editor</h5>
+ <div id="editor2-pane">
+   <div id="editor2"></div>
+ </div>
+
+</div> 
+    
+<script type="text/javascript">
+$(document).ready(function () {
+    window.codemirror1 = CodeMirror($('#editor1').get(0), {
+        value: '<?php' + $("#php-sample-1").html(),
+        mode:  "php",
+        readOnly: true,
+        styleActiveLine: true,
+        lineNumbers: true,
+   });
+    window.codemirror2 = CodeMirror($('#editor2').get(0), {
+        value: $("#sparql-sample-1").html(),
+        mode:  "sparql",
+        styleActiveLine: true,
+        lineNumbers: true,
+    });
+    window.codemirror2.on('blur', function (editor) {
+        console.debug ('codemirror2 changed:');
+        console.debug (editor);
+        console.debug ('value is: ' + editor.getValue());
+        
+    });
+});
+</script>
+
+
+<script type="text/sparql" id="sparql-sample-1">
+PREFIX au:<http://inspire.jrc.ec.europa.eu/schemas/au/3.0/> 
+PREFIX geo:<http://www.opengis.net/ont/geosparql#>
+
+# This is a comment 
+
+SELECT ?nCode
+WHERE { 
+  ?f au:nationalCode ?nCode .
+  ?f geo:hasGeometry ?fGeom .
+  ?fGeom geo:asWKT ?fWKT . FILTER (bif:st_contains ( ?fWKT , bif:st_point (22.952149, 40.582051), 0.1))
+}
+</script>
+
+<script type="text/phps" id="php-sample-1"> 
+function foo() 
+{
+    $x = array('foo' => 'bar');
+    return $x;
+}
+</script>
+
+</body>
+</html>

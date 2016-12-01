@@ -1,0 +1,736 @@
+@font-face {
+    font-family: 'antinoouRegular';
+    src: url('antinoou-webfont.eot');
+    src: url('antinoou-webfont.eot?#iefix') format('embedded-opentype'),
+         url('antinoou-webfont.woff') format('woff'),
+         url('antinoou-webfont.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'antinoouItalic';
+    src: url('antinoouitalic-webfont.eot');
+    src: url('antinoouitalic-webfont.eot?#iefix') format('embedded-opentype'),
+         url('antinoouitalic-webfont.woff') format('woff'),
+         url('antinoouitalic-webfont.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+	background-image: url(../img/parchment.jpg);
+	background-color: #E3CA9C;
+	font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;
+	font-style: normal;
+	font-weight: 400;
+	margin-top: 0px;
+	margin-bottom: 0px;
+	margin-left: 0px;
+	margin-right: 0px;
+	font-size: 16px;
+	}
+
+#wrapper{
+	margin-right: auto;
+	margin-left: auto;
+	margin-bottom: 60px;
+	width: 832px;
+	min-height: 100%;
+	height: 100%;
+	z-index: 2;
+	margin-top: 50px;
+	clear: both;
+	}
+
+#content {
+	overflow-y: hidden;
+	clear: both;
+	padding-top: 10px;
+	padding-right: 56px;
+	padding-left: 56px;
+	padding-bottom: 40px;
+	line-height: 1.4em;
+	margin-top: 50px;
+	min-height: 100%;
+	margin-bottom: 40px;
+	-webkit-box-shadow: 0px 0px 10px 10px rgba(120,71,9,0.26);
+	box-shadow: 0px 0px 10px 10px rgba(120,71,9,0.26);
+	background-color: hsla(40,53%,100%,0.80);
+}
+
+/*This last integer in the hsla is the opacity of the content box. enter in a decimal value between 1.0 and 0.00 to get 100 different brightnesses of content box background
+*/
+
+.headline {
+	clear: both;
+	width: 100%;
+}
+
+.leftcolumn {
+	float: left;
+	width: 340px;
+	margin-right: 20px;
+	margin-bottom: -1000px;
+	padding-bottom: 1000px;
+}
+
+.rightcolumn {
+	width: 340px;
+	margin-left: 20px;
+	float: left;
+	margin-bottom: -1000px;
+	padding-bottom: 1000px;
+	border: 0px solid black
+ 
+}
+
+.news{
+color:#AE2124;
+font-size: 1.4em;
+font-weight: bold;
+}
+
+ .rss{
+ 
+ }
+    
+#copticlogo {
+	float: left;
+	width: 33%;
+	text-align: left;
+}
+
+#unicorn {
+	float: left;
+	width: 34%;
+	text-align: center;
+}
+
+#englishlogo {
+	float: left;
+	width: 33%;
+	text-align: right;
+}
+
+#header {
+	height: 100px;
+	width: 800px;
+	z-index: 2;
+	margin-left: auto;
+	margin-right: auto;
+	padding-top: 6px;
+	padding-left: 16px;
+	padding-right: 16px;
+}
+
+#footer {
+    background-color: #361B01;
+	color: #F4EBDE;
+	padding-top: 40px;
+	padding-right: 56px;
+	padding-bottom: 40px;
+	padding-left: 56px;
+	font-size: 16px;
+	line-height: 20px;
+	clear: both;
+	text-align: center;
+}
+
+#footer p {
+	font-size: 14px;
+	line-height: 20px;
+}
+
+#lastupdate {
+	font-size: 14px;
+	line-height: 20px;
+	clear: both;
+	text-align: center;
+}
+
+
+#footer a {
+	text-decoration: none;
+	color: #EFC17E;
+}
+
+#footer a:hover {
+	color: #FB3815;
+}
+
+/*#sponsors {
+	background-color: hsla(0,100%,100%,0);
+	padding-left: 6px;
+	padding-right: 6px;
+	padding-top: 6px;
+	padding-bottom: 6px;
+	text-align: center;
+}*/
+  
+/*#sponsors a {
+	text-decoration: none;
+	color: #F0D38E;
+}
+
+#sponsors a:hover {
+	color: #FB3815;
+}*/
+
+h1 {
+	font-size: 1.4em;
+	margin-bottom: 0px;
+	font-variant: normal;
+	font-weight: 700
+}
+
+
+h2 {
+	font-size: 1.2em;
+	margin-bottom: 0px;
+	font-variant: normal;
+	font-weight:700
+}
+
+h3 {font-size: 1em;
+	margin-bottom: 0px;
+	font-variant: normal;
+	font-weight:700}
+
+h4 {font-size: .8em;
+	margin-bottom: 0px;
+	font-variant: normal;
+	font-weight:700}
+	
+p, ul, ol, li, table {
+	line-height: 1.4em;
+	font-size: 16px;}
+
+a:link {
+	text-decoration: none;
+	color: #AE2124;
+}
+
+a:visited {
+	text-decoration: none;
+	color: #AE2124;
+}
+
+/*original new/visited color #742002, hover/active #BF0508*/
+
+a:hover {
+	text-decoration: underline;
+	color: #941C1F;
+}
+
+a:active {
+	text-decoration: underline;
+	color: #941C1F;
+}
+
+.line {
+position:absolute; /* doesn't have to be absolute */
+z-index: -2;         /* places the line behind other elements */
+}
+
+}  
+.line_down {
+position:absolute; /* doesn't have to be absolute */
+z-index: 1;         /* places the line behind other elements */
+}
+
+.line_down div {
+position:absolute;
+left: 0px; top: 0px;
+border-right-color: transparent;
+border-left-width: 0;
+border-style: solid;
+padding: 0px;
+margin: 0px;
+}
+
+/*navigation*/
+
+#nav {
+	display: inline-block; /* centers modern browsers */
+	padding-top: 10px;
+	padding-bottom: 6px;
+	padding-left: 0px;
+	margin-top: -50px;
+	text-align: center; /* centers IE6/7 */
+	position: fixed;
+	background-color: #361B01;
+	width: 100%;
+	z-index: 1;
+}
+#nav ul {
+    list-style:none;
+    text-align: center;
+    display: block;
+/* IE6/7 haslayout trip-switch */
+}
+
+#nav li {
+	margin: auto;
+	display: inline-block;
+	letter-spacing: 0.2em;
+	font-size: 12px;
+}
+
+#nav li ul {
+    position: absolute;
+    margin-top: 15px;
+    padding-left: 0px;
+    padding-top: 20px;
+    margin-left: 0px;
+    display: none;
+    visibility: hidden;
+    opacity: 0;
+    padding-bottom: 20px;
+    background-color: #361B01;
+}
+
+#nav li ul li{
+    color:#DFD1B4;
+    display: block; 
+}
+
+#nav li ul li a{
+    line-height: 40px;
+}
+
+#nav li ul li:hover{
+    color:#DFD1B4;
+}
+
+#nav li:hover ul {
+    display: block;
+    opacity: 1.0;
+    visibility: visible;
+}
+
+#nav a {
+	float: left;
+	text-decoration: none;
+	padding: 0 16px; /* variable width */
+	color: #F0D38E;
+}
+
+#nav a:hover{
+	color: #FB3815;
+}
+
+.arrow{border-top : 30px solid transparent;
+    border-bottom : 30px solid transparent;
+    border-left : 30px solid black;
+                  width:0;
+                  height:0;
+				  position: relative;
+				  top: 75px;
+				  left:5px;
+				  
+    }
+	
+.arrow_container {
+	float: left;
+	margin-bottom: 10px;
+	width: 40px;
+	height: 250px;
+	border: solid;
+	border-color: white;
+}
+
+.image_container{
+	padding:10px;background:white; float:left; border-bottom: solid; border-right:solid; border-width:1px; }
+
+.canvas_container {
+	float: left;
+	border:solid;
+	height:250px;
+	margin-bottom:10px;
+}
+
+table.anno_doc th{
+	border-bottom: navy solid thin;
+	border-top: navy solid thin;
+	text-align: left;
+	border-right: none;
+	font-weight: bold;
+	white-space: nowrap;
+	padding: 5px;
+}
+
+table.anno_doc {
+
+	margin-left: 20px;
+}
+
+.hu_logo{
+	z-index:-4;
+	/*background: url('../img/HU_logo_smaller.gif');
+	position: absolute;*/
+	float:left;
+	background-repeat: no-repeat;
+	background-position: right top;
+	height:195px;
+	display:table-cell;
+	width: 95%;
+	top: 0;
+	vertical-align: top;
+}
+
+.icon{
+    width: 40px;
+    height: auto;
+    border: 0px;
+    
+    }
+
+.d1_table {
+    border-collapse: collapse;
+    padding: 0px;
+    border-spacing: 0px;
+}
+.dl_table td{
+    text-align:center;
+    border-bottom: dashed;
+    border-bottom-width: 1px;
+}
+
+
+.dl_table th{
+    border-bottom: solid;
+    border-bottom-width: 1px;  
+}
+
+.shadow {
+	padding-left: 10px;
+	padding-right: 10px;
+	padding-bottom: 20px;
+	margin: 50px;
+	max-width: 80%;
+	display: block;
+	border: 2px solid #742002;
+	-moz-box-shadow: -5px -5px 5px #742002;
+	-webkit-box-shadow: 5px 5px 20px 2px hsla(16,98%,23%,0.33);
+	box-shadow: 5px 5px 20px 2px hsla(16,98%,23%,0.33);
+}
+
+.example_box{
+	margin:50;
+	display: block;
+	border: 2px solid;
+	background-color: #EFF8FF;
+	max-width: 80%;
+	padding: 10px;
+}
+.example_box ul li{margin-left:-10px}
+
+.example_box ul li{padding-bottom:15px}
+
+.example_box ul li ../img{padding-top:5px; margin-left:10px}
+
+.anti{font-family: antinoouRegular, sans-serif;}
+
+tt{padding-left: 5px; padding-top: 5px}
+
+.hidden { display: none; }
+.unhidden { display: block; } 
+
+
+/*
+ * Adapted from: CSS3 Treeview. No JavaScript
+ * @version 1.0
+ * @author Martin Ivanov (original version)
+ * @url developer's website: http://wemakesites.net/
+ * @url developer's twitter: https://twitter.com/#!/wemakesitesnet
+ * @url developer's blog http://acidmartin.wordpress.com/
+ **/
+ 
+/*
+ * This solution works with all modern browsers and Internet Explorer 9+. 
+ * If you are interested in purchasing a JavaScript enabler for IE8 
+ * for the CSS3 Treeview, please, check this link:
+ * http://experiments.wemakesites.net/miscellaneous/acidjs-css3-treeview/
+ **/
+
+ 
+.css-treeview ul,
+.css-treeview li
+{
+    padding: 0;
+    margin: 0;
+    list-style: none;
+	 vertical-align:middle;
+}
+ 
+.css-treeview input
+{
+    position: relative;
+    opacity: 0;
+}
+ 
+.css-treeview
+{
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
+	margin-left: 20px;
+}
+ 
+.css-treeview a
+{
+    text-decoration: none;
+}
+ 
+.css-treeview a:hover
+{
+    text-decoration: underline;
+}
+ 
+.css-treeview input + label + ul
+{
+    margin: 0 0 0 22px;
+}
+ 
+.css-treeview input ~ ul
+{
+    display: none;
+}
+ 
+.css-treeview label.folder,
+.css-treeview label.folder::before
+{
+    cursor: pointer;
+}
+ 
+.css-treeview input:disabled + label.folder
+{
+    cursor: default;
+    opacity: .6;
+}
+ 
+.css-treeview input:checked:not(:disabled) ~ ul
+{
+    display: block;
+}
+ 
+.css-treeview label.folder,
+.css-treeview label.folder::before
+{
+	    min-height: 22px;
+}
+ 
+.css-treeview label,
+.css-treeview label::before
+{
+    display: inline-block;
+    height: 16px;
+    line-height: 16px;
+    vertical-align: middle;
+	
+}
+ 
+.css-treeview label.folder
+{
+	    background-position: 18px 0px;
+
+}
+ 
+.css-treeview label.folder::before
+{
+    content: "";
+    width: 32px;
+    margin: 0 6px 0 0;
+    vertical-align: middle;
+    background-position: 0 -10px;
+}
+ 
+.css-treeview input.folder:checked + label.folder::before
+{
+    content: "";
+    width: 16px;
+    margin: 0 6px 0 0;
+    vertical-align: middle;
+    background: url("../img/close.png") no-repeat center;
+}
+
+
+ 
+/* webkit adjacent element selector bugfix */
+@media screen and (-webkit-min-device-pixel-ratio:0)
+{
+    .css-treeview 
+    {
+        -webkit-animation: webkit-adjacent-element-selector-bugfix infinite 1s;
+    }
+ 
+    @-webkit-keyframes webkit-adjacent-element-selector-bugfix 
+    {
+        from 
+        { 
+            padding: 0;
+        } 
+        to 
+        { 
+            padding: 0;
+        }
+    }
+}
+
+.css-treeview input.doc + label.doc::before,
+.css-treeview input.dl + label.dl::before
+{
+    content: "";
+    width: 16px;
+    margin: 0 6px 0 0;
+    vertical-align: middle;
+	height: 22px;
+	
+
+    background-position: 0 0px;
+}
+.css-treeview input.folder + label.folder::before
+{
+    content: "";
+    width: 16px;
+    margin: 0 6px 0 0;
+    vertical-align: middle;
+	
+    background: url("../img/open.png") no-repeat center;
+}
+.css-treeview label.doc, .css-treeview label.dl
+{
+    background-position: 9px 0;
+	height: 22px;
+	padding: 0 0 3px 0;
+
+}
+
+.css-treeview label.doc::before
+{
+    background: url("../img/doc.png") no-repeat;
+}
+
+.css-treeview label.dl::before
+{
+    background: url("../img/download.gif") no-repeat;
+	
+}
+
+li.info {
+/*background:url(../img/i_button.gif) no-repeat 0 5px; 
+padding: 0 0 3px 22px;
+height: 22px;*/
+line-height: 100%;
+margin-top: 10px;
+margin-bottom: 10px;
+}
+li.search {
+/*background:url(../img/search.gif) no-repeat 0 5px; 
+padding: 0 0 3px 22px;
+min-height: 22px;*/
+}
+li.download {
+/*min-height: 22px;
+padding: 0 0 3px 22px;*/
+}
+
+.example_queries li {
+margin-top: 1em;
+}
+
+.tree-container {
+  margin-top: 15px;
+  margin-bottom: 50px;
+}
+
+.about {
+  background: url("../img/i_button.gif") no-repeat;
+  padding-left: 21px;
+}
+.search {
+  background: url("../img/search.gif") no-repeat;
+  padding-left: 21px;
+}
+.download {
+  background: url("../img/download.gif") no-repeat;
+  padding-left: 21px;
+}
+.github {
+  background: url("../img/GitHub-Mark-Light-64px.png") no-repeat;
+  background-size: 19px 19px;
+  padding-left: 25px;
+}
+.twitter {
+  background: url("../img/newsociallogo.png") no-repeat;
+  background-size: 19px 19px;
+  padding-left: 25px;
+}
+
+body { -webkit-font-smoothing: subpixel-antialiased; }
+.small {
+	font-size: 14px;
+	line-height: 1.4em;
+}
+
+.nlp_input{	width: 650px;
+	height: 320px;
+	border: 3px solid #cccccc;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 5px;
+	font-size: 16px;
+
+	/*background-image: url(bg.gif);
+	background-position: bottom right;
+	background-repeat: no-repeat;*/}
+	
+	
+.nlp_form{
+    min-height: 20px;
+    padding: 19px;
+    margin-top: 20px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 700px;
+    border: 2px solid black;
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.05);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.05);
+font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;
+	overflow-y: hidden;
+	clear: both;
+	padding-top: 10px;
+	padding-right: 56px;
+	padding-left: 56px;
+	padding-bottom: 40px;
+	line-height: 1.4em;
+	background-color: hsla(40,53%,100%,0.80);
+
+    }
+
+.nlp_form div{margin-bottom: 20px}
+
+
+a.tooltip2 {outline:none; }
+a.tooltip2:hover {text-decoration:none;} 
+a.tooltip2 span {
+     margin-top:-20px;
+	 z-index:10;display:none; padding:14px 20px;
+    width:300px; 
+	font-weight: normal;
+}
+a.tooltip2:hover span{
+     position:absolute; color:#111; padding-top:-10px;
+	display:inline;
+    border:1px solid #DCA; background:#fffAF0;}
+.callout {z-index:20;position:absolute;top:20px;border:0;left:-12px;}
+    
+/*CSS3 extras*/
+a.tooltip2 span
+{
+    border-radius:4px;
+    box-shadow: 5px 5px 8px #CCC;
+	text-align: left;
+}

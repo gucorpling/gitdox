@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<body style="border:ridge;background:#FCFCFC;">
+
+<h1 style="background:#eee;">CodeMirror Tryout</h1>
+
+<div style="border:ridge;background:grey;">
+
+
+<script src="lib/codemirror.js"></script>
+<link rel="stylesheet" href="lib/codemirror.css">
+<script src="mode/xml/xml.js"></script>
+<script>
+
+var myCodeMirror = CodeMirror(document.body, {
+  value: "<html><body><h1>hello</h1></body></html>\n",
+  mode:  "xml",indentUnit:0
+});
+
+
+
+
+</script>
+
+</div>
+</body>
+</html>
+
