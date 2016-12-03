@@ -148,18 +148,8 @@ def load_page(user,admin,theform):
 	js = """<script> var docid = """ + str(doc_id)
 	js += """;localStorage.setItem("docid", docid);"""
 	js += """document.getElementById('zangsir').value = docid;</script>"""
-	if theform.getvalue('newdoc'):
-		#when creating new document from landing page, a new id as max_id+1 is passed
-		doc_id = theform.getvalue('id')
-		perform_action(doc_id)
-		doc_name = "new document"
-		repo_name = "account/repo_name"
-		assignee = "default_user"
-		status = "editing"
-		text_content = ""
 
-	
-	elif theform.getvalue('id'):
+	if theform.getvalue('id'):
 		#this should come from either creating new doc or 'editing doc' in landing page
 		doc_id=theform.getvalue('id')
 		perform_action(doc_id)
@@ -178,7 +168,9 @@ def load_page(user,admin,theform):
 				docname=theform.getvalue('edit_docname')
 				if docname!='new document':
 					perform_action('edit docname new'+docname)
-					create_document(doc_name,status,assignee,repo_name,text_content)
+					if int(doc_id) > int(max_id):
+						create_document(doc_name,status,assignee,repo_name,text_content)
+						max_id = doc_id
 					update_docname(doc_id,docname)
 					doc_saved=True
 
@@ -186,7 +178,9 @@ def load_page(user,admin,theform):
 				filename=theform.getvalue('edit_filename')
 				if filename!='account/repo_name':
 					perform_action('edit filename new'+filename)
-					create_document(doc_name,status,assignee,repo_name,text_content)
+					if int(doc_id) > int(max_id):
+						create_document(doc_name,status,assignee,repo_name,text_content)
+						max_id = doc_id
 					update_filename(doc_id,filename)
 					doc_saved=True
 				
@@ -196,7 +190,9 @@ def load_page(user,admin,theform):
 				newstatus=theform.getvalue('edit_status')
 				if newstatus!='editing':
 					perform_action('edit status new '+newstatus)
-					create_document(doc_name,status,assignee,repo_name,text_content)
+					if int(doc_id) > int(max_id):
+						create_document(doc_name,status,assignee,repo_name,text_content)
+						max_id = doc_id
 					update_status(doc_id,newstatus)
 					doc_saved=True
 				
@@ -204,7 +200,9 @@ def load_page(user,admin,theform):
 				#if not (theform.getvalue('edit_docname') or theform.getvalue('edit_filename')):
 				newassignee_username=theform.getvalue('edit_assignee')
 				if newassignee_username!="default_user":
-					create_document(doc_name,status,assignee,repo_name,text_content)
+					if int(doc_id) > int(max_id):
+						create_document(doc_name,status,assignee,repo_name,text_content)
+						max_id = doc_id
 					perform_action('edit ass new '+str(newassignee_username))
 					update_assignee(doc_id,newassignee_username)
 					doc_saved=True
@@ -384,6 +382,7 @@ def load_page(user,admin,theform):
 
 	page= "Content-type:text/html\r\n\r\n"
 	page += urllib.urlopen(prefix + "editor_codemir.html").read()
+	page += str(theform)
 	if len(doc_id) == 0:
 		exp = re.compile(r"<article>.*</article>",re.DOTALL)
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
