@@ -382,7 +382,6 @@ def load_page(user,admin,theform):
 
 	page= "Content-type:text/html\r\n\r\n"
 	page += urllib.urlopen(prefix + "editor_codemir.html").read()
-	page += str(theform)
 	if len(doc_id) == 0:
 		exp = re.compile(r"<article>.*</article>",re.DOTALL)
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
