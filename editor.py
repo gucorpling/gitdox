@@ -136,7 +136,7 @@ def get_git_credentials(user,admin):
 
 def load_page(user,admin,theform):
 	perform_action('===========new=============')
-	max_id=generic_query("SELECT MAX(id) AS max_id FROM coptic_docs","")[0][0]
+	max_id=generic_query("SELECT MAX(id) AS max_id FROM docs","")[0][0]
 	if not max_id:#this is for the initial case after init db 
 		max_id=0
 	text_content=""
@@ -207,11 +207,11 @@ def load_page(user,admin,theform):
 					update_assignee(doc_id,newassignee_username)
 					doc_saved=True
 			if doc_saved==True:		
-				text_content = generic_query("SELECT content FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-				doc_name=generic_query("SELECT name FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-				repo_name=generic_query("SELECT filename FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-				assignee=generic_query("SELECT assignee_username FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-				status=generic_query("SELECT status FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
+				text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
+				doc_name=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
+				repo_name=generic_query("SELECT filename FROM docs WHERE id=?",(doc_id,))[0][0]
+				assignee=generic_query("SELECT assignee_username FROM docs WHERE id=?",(doc_id,))[0][0]
+				status=generic_query("SELECT status FROM docs WHERE id=?",(doc_id,))[0][0]
 				
 		#after clicking edit in landing page, editing existing doc case, get the values from the db. pull the content from db to be displayed in the editor window.
 		else:
@@ -231,11 +231,11 @@ def load_page(user,admin,theform):
 				newassignee_username=theform.getvalue('edit_assignee')
 				perform_action('edit ass exsiting')
 				update_assignee(doc_id,newassignee_username)
-			text_content = generic_query("SELECT content FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-			doc_name=generic_query("SELECT name FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-			repo_name=generic_query("SELECT filename FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-			assignee=generic_query("SELECT assignee_username FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
-			status=generic_query("SELECT status FROM coptic_docs WHERE id=?",(doc_id,))[0][0]
+			text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
+			doc_name=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
+			repo_name=generic_query("SELECT filename FROM docs WHERE id=?",(doc_id,))[0][0]
+			assignee=generic_query("SELECT assignee_username FROM docs WHERE id=?",(doc_id,))[0][0]
+			status=generic_query("SELECT status FROM docs WHERE id=?",(doc_id,))[0][0]
 			
 
 		js="""<script> var docid = """ + str(doc_id)
@@ -250,7 +250,7 @@ def load_page(user,admin,theform):
 		perform_action("<start content>")
 		perform_action(text_content)
 		perform_action('<end content>')
-		#max_id=generic_query("SELECT MAX(id) AS max_id FROM coptic_docs","")[0][0]
+		#max_id=generic_query("SELECT MAX(id) AS max_id FROM docs","")[0][0]
 		if int(doc_id)>int(max_id):
 			perform_action('create doc existing')
 			create_document(doc_name,status,assignee,repo_name,text_content)
@@ -266,9 +266,9 @@ def load_page(user,admin,theform):
 
 	if theform.getvalue('push_git') == "push_git":
 		perform_action('push',True)
-		text_content = generic_query("SELECT content FROM coptic_docs WHERE id=?", (doc_id,))[0][0]
-		repo_name = generic_query("SELECT filename FROM coptic_docs WHERE id=?", (doc_id,))[0][0]
-		file_name = generic_query("SELECT name FROM coptic_docs WHERE id=?", (doc_id,))[0][0]
+		text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+		repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))[0][0]
+		file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
 		file_name = file_name.replace(" ","_") + ".xml"
 		repo_info = repo_name.split('/')
 		git_account, git_repo = repo_info[0], repo_info[1]
