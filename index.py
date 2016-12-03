@@ -113,7 +113,7 @@ def load_landing(user,admin,theform):
 	
 	#for each doc in the doc list, just display doc[:-1], since last col is content
 
-	table="""<table id="doctable"><tr><th>id</th><th>doc name</th><th>status</th><th>assigned</th><th>GitRepo</th><th colspan="2">actions</th></tr>"""
+	table="""<table id="doctable" class="sortable"><tr><th>id</th><th>doc name</th><th>status</th><th>assigned</th><th>GitRepo</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
 
 	for doc in docs_list:
 		row="<tr>"
