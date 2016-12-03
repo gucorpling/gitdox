@@ -144,7 +144,7 @@ function openPopup(url) {
         cb: {
           attrs: {n:null
           },
-          children: ["lb"]
+          children: ["lb","hi","note","gap","p"]
         },
 
         figure: {
@@ -167,7 +167,8 @@ function openPopup(url) {
 
         hi: {
           attrs: {rend:null
-          }
+          },
+		  children: []
         },
 
         lb: {
@@ -179,26 +180,26 @@ function openPopup(url) {
         note: {
           attrs: {note:null
           },
-          children: []
+          children: ["hi"]
         },
 
         p: {
           attrs: {n:null
           },
-          children: ["lb",'hi']
+          children: ["lb",'hi','note','gap']
         },
         
         pb: {
           attrs: {"xml:id":null
           },
-          children: ["cb",'lb']
+          children: ["cb",'lb','p']
         },
 
         supplied: {
           attrs: {evidence:null,
             reason:null
           },
-          children: []
+          children: ['note']
         },
 
 
