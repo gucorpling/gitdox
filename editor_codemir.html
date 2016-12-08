@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=800">
 <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
 <link rel="icon" href="favicon.ico" type="image/x-icon">
-
+<script src="js/jquery-1.11.3.min.js"></script>
 
 <!--The following script tag downloads a font from the Adobe Edge Web Fonts server for use within the web page. We recommend that you do not modify it.-->
 <script>var __adobewebfontsappname__="dreamweaver"</script>
@@ -35,7 +35,15 @@ body{padding:4pt;}
 
 </style>
 
-
+<script>
+	function validate_docname(){
+		name = $("#edit_docname");
+		pattern = /^[A-Za-z0-9_\.-]+$/;
+		if (!(pattern.test(name))){
+			alert("File names may only contain alphanumeric symbols, period, underscore and hyphen");
+		}
+	}
+</script>
 
 </head>
 <body>
@@ -84,6 +92,7 @@ body{padding:4pt;}
 <article>
 
 <form name="hiddenForm" id="codemir" method="post" action="editor.py">
+<input type="hidden" name="id" id="id" value="**id**">
 <input type="hidden" name="nlp_service" id="nlp_service">
     <h2>Editor | <a href="index.py">back to document list</a> </h2>
 
@@ -92,18 +101,16 @@ body{padding:4pt;}
     	<col style="width:150px">
   	</colgroup>
 <tbody>
-<tr><td>Document Name: </td><td>**editdocname**</td></tr>
-<tr><td>Git Repo: </td><td>**editfilename**</td></tr>
-<tr><td>Assigned to:</td><td>**editassignee**</td></tr>
-<tr><td>Status:</td><td>**editstatus**</td></tr>
+<tr><td>Document Name: </td><td>**edit_docname**</td></tr>
+<tr><td>Git Repo: </td><td>**edit_repo**</td></tr>
+<tr><td>Assigned to:</td><td>**edit_assignee**</td></tr>
+<tr><td>Status:</td><td>**edit_status**</td></tr>
 </tbody>
 </table>
 
 
 <textarea id="code" name="code">**content**</textarea>
 <div class="button" onclick="document.getElementById('codemir').submit();" ><i class="fa fa-floppy-o"> </i> Save</div> **NLP**  **github**
-
-<input type="hidden" id="zangsir" name="id" value=""/>
 
 <h3>meta data</h3>
 **metadata**
@@ -144,7 +151,7 @@ function openPopup(url) {
         cb: {
           attrs: {n:null
           },
-          children: ["lb"]
+          children: ["lb","hi","note","gap","p"]
         },
 
         figure: {
@@ -167,7 +174,8 @@ function openPopup(url) {
 
         hi: {
           attrs: {rend:null
-          }
+          },
+		  children: []
         },
 
         lb: {
@@ -179,26 +187,26 @@ function openPopup(url) {
         note: {
           attrs: {note:null
           },
-          children: []
+          children: ["hi"]
         },
 
         p: {
           attrs: {n:null
           },
-          children: ["lb",'hi']
+          children: ["lb",'hi','note','gap']
         },
         
         pb: {
           attrs: {"xml:id":null
           },
-          children: ["cb",'lb']
+          children: ["cb",'lb','p']
         },
 
         supplied: {
           attrs: {evidence:null,
             reason:null
           },
-          children: []
+          children: ['note']
         },
 
 
@@ -261,8 +269,6 @@ function openPopup(url) {
 
 
 </div>
-
-**js**
 
         </div>
     </div>

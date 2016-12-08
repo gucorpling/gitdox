@@ -51,9 +51,9 @@ def cell(text):
 
 def get_max_id():
 	#get current max of existing records in the db
-	current_max=generic_query("SELECT MAX(id) AS max_id FROM coptic_docs",())[0][0]
+	current_max=generic_query("SELECT MAX(id) AS max_id FROM docs",())[0][0]
 	#set the max key for auto_increment of id to that value
-	generic_query("UPDATE sqlite_sequence SET seq=? WHERE name=?",(current_max,"coptic_docs"))
+	generic_query("UPDATE sqlite_sequence SET seq=? WHERE name=?",(current_max,"docs"))
 	return current_max
 
 
@@ -104,8 +104,8 @@ def load_landing(user,admin,theform):
 		docid=theform.getvalue('id')
 		delete_doc(docid)
 
-	#docs_list=generic_query("SELECT * FROM coptic_docs","")
-	docs_list=generic_query("SELECT id,name,status,assignee_username,filename FROM coptic_docs",())
+	#docs_list=generic_query("SELECT * FROM docs","")
+	docs_list=generic_query("SELECT id,name,status,assignee_username,filename FROM docs",())
 
 	max_id=get_max_id()
 	if not max_id:  # This is for the initial case after init db
@@ -113,7 +113,7 @@ def load_landing(user,admin,theform):
 	
 	#for each doc in the doc list, just display doc[:-1], since last col is content
 
-	table="""<table id="doctable"><tr><th>id</th><th>doc name</th><th>status</th><th>assigned</th><th>GitRepo</th><th colspan="2">actions</th></tr>"""
+	table="""<table id="doctable" class="sortable"><tr><th>id</th><th>doc name</th><th>status</th><th>assigned</th><th>GitRepo</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
 
 	for doc in docs_list:
 		row="<tr>"

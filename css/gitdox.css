@@ -70,3 +70,7 @@ select select:focus {
     max-width:400px}
 
 #meta_table{width:100%;  table-layout: fixed;}
+
+table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after { 
+    content: "\00a0\25B4\25BE" 
+}

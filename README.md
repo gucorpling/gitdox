@@ -22,3 +22,5 @@ To configure on server or localhost, simply download the files, and make sure
 To start the app, run index.py and log in with admin or your credentials. 
 
 (c) 2016 Shuo Zhang (@zangsir) and Amir Zeldes (@amir-zeldes)
+
+This work was supported by the [KELLIA](http://kellia.uni-goettingen.de/) project, [NEH](https://www.neh.gov/) grant #HG-229371, co-sponsored by the German [DFG](http://www.dfg.de/).
