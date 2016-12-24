@@ -35,15 +35,7 @@ body{padding:4pt;}
 
 </style>
 
-<script>
-	function validate_docname(){
-		name = $("#edit_docname");
-		pattern = /^[A-Za-z0-9_\.-]+$/;
-		if (!(pattern.test(name))){
-			alert("File names may only contain alphanumeric symbols, period, underscore and hyphen");
-		}
-	}
-</script>
+<script src="js/validate.js"></script>
 
 </head>
 <body>
@@ -101,8 +93,18 @@ body{padding:4pt;}
     	<col style="width:150px">
   	</colgroup>
 <tbody>
-<tr><td>Document Name: </td><td>**edit_docname**</td></tr>
-<tr><td>Git Repo: </td><td>**edit_repo**</td></tr>
+<tr><td>Document Name: </td>
+	<td>
+		<input type="text" id="edit_docname" name="edit_docname" defaultValue="**docname**" value="**docname**" onblur="validate_docname();">
+		<div onclick="document.getElementById('codemir').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
+<tr>
+	<td>Git Repo: </td>
+	<td><input type="text" id="edit_filename" name="edit_filename" value="**repo**" defaultValue="**repo**" onblur="validate_repo();">
+		<div onclick="document.getElementById('codemir').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
 <tr><td>Assigned to:</td><td>**edit_assignee**</td></tr>
 <tr><td>Status:</td><td>**edit_status**</td></tr>
 </tbody>
