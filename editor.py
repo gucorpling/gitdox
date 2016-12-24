@@ -15,7 +15,7 @@ from modules.dataenc import pass_dec, pass_enc
 import github3
 from requests.auth import HTTPBasicAuth
 import requests
-import platform
+import platform, re
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -62,7 +62,9 @@ def print_meta(doc_id):
 		('metaid:'+str(metaid))
 		id=str(doc_id)
 		for i in item[2:]:
-			row += cell(i)
+			cell_contents = cell(i)
+			cell_contents = re.sub(r'(<td>)(https?://[^ <>]+)',r'\1<a href="\2">\2</a>',cell_contents)
+			row += cell_contents
 
 	#delete meta
 		metaid_code="""<div class="button slim" onclick="document.getElementById('metaid').value='"""+metaid+"""'; document.getElementById('codemir').submit();"><i class="fa fa-trash"></i> </div>"""
@@ -125,19 +127,25 @@ def load_page(user,admin,theform):
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
 	text_content = ""
-	doc_name = ""
 	repo_name = ""
 	status = ""
 	assignee = ""
-	doc_id = ""
+
+	if theform.getvalue('edit_docname'):
+		docname = theform.getvalue('edit_docname')
+		doc_id = theform.getvalue('id')
+	elif theform.getvalue('id'):
+		doc_id = theform.getvalue('id')
+		if int(doc_id) > int(max_id):
+			docname = "new_document"
+		else:
+			docname = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
+	else:
+		doc_id = ""  # Should only happen if someone navigated directly to editor.py
 
 	if theform.getvalue('id'):
-		# This should come from either creating new doc or 'editing doc' in index page
-		doc_id=theform.getvalue('id')
-
 		# Creating new doc case, assign some default values
 		if int(doc_id) > int(max_id):
-			doc_name="new_document"
 			repo_name="account/repo_name"
 			status="editing"
 			assignee="default_user"
@@ -145,10 +153,9 @@ def load_page(user,admin,theform):
 			doc_saved=False
 			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
 			if theform.getvalue('edit_docname'):
-				docname=theform.getvalue('edit_docname')
-				if docname!='new document':
+				if docname != 'new_document':
 					if int(doc_id) > int(max_id):
-						create_document(doc_name,status,assignee,repo_name,text_content)
+						create_document(docname,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_docname(doc_id,docname)
 					doc_saved=True
@@ -157,7 +164,7 @@ def load_page(user,admin,theform):
 				filename=theform.getvalue('edit_filename')
 				if filename!='account/repo_name':
 					if int(doc_id) > int(max_id):
-						create_document(doc_name,status,assignee,repo_name,text_content)
+						create_document(docname,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_filename(doc_id,filename)
 					doc_saved=True
@@ -167,7 +174,7 @@ def load_page(user,admin,theform):
 				newstatus=theform.getvalue('edit_status')
 				if newstatus!='editing':
 					if int(doc_id) > int(max_id):
-						create_document(doc_name,status,assignee,repo_name,text_content)
+						create_document(docname,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_status(doc_id,newstatus)
 					doc_saved=True
@@ -176,19 +183,20 @@ def load_page(user,admin,theform):
 				newassignee_username=theform.getvalue('edit_assignee')
 				if newassignee_username!="default_user":
 					if int(doc_id) > int(max_id):
-						create_document(doc_name,status,assignee,repo_name,text_content)
+						create_document(docname,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_assignee(doc_id,newassignee_username)
 					doc_saved=True
 			if doc_saved==True:		
 				text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
-				doc_name=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
+				docname=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
 				repo_name=generic_query("SELECT filename FROM docs WHERE id=?",(doc_id,))[0][0]
 				assignee=generic_query("SELECT assignee_username FROM docs WHERE id=?",(doc_id,))[0][0]
 				status=generic_query("SELECT status FROM docs WHERE id=?",(doc_id,))[0][0]
 				
-		#after clicking edit in landing page, editing existing doc case, get the values from the db. pull the content from db to be displayed in the editor window.
+		# After clicking edit in landing page, editing existing doc case, get the values from the db. pull the content from db to be displayed in the editor window.
 		else:
+
 			if theform.getvalue('edit_docname'):
 				docname=theform.getvalue('edit_docname')
 				update_docname(doc_id,docname)
@@ -202,7 +210,7 @@ def load_page(user,admin,theform):
 				newassignee_username=theform.getvalue('edit_assignee')
 				update_assignee(doc_id,newassignee_username)
 			text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
-			doc_name=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
+			docname=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
 			repo_name=generic_query("SELECT filename FROM docs WHERE id=?",(doc_id,))[0][0]
 			assignee=generic_query("SELECT assignee_username FROM docs WHERE id=?",(doc_id,))[0][0]
 			status=generic_query("SELECT status FROM docs WHERE id=?",(doc_id,))[0][0]
@@ -214,7 +222,7 @@ def load_page(user,admin,theform):
 		text_content = text_content.replace("\r","")
 		text_content = unicode(text_content.decode("utf8"))
 		if int(doc_id)>int(max_id):
-			create_document(doc_name,status,assignee,repo_name,text_content)
+			create_document(docname,status,assignee,repo_name,text_content)
 		else:
 			save_changes(doc_id,text_content)
 
@@ -259,13 +267,7 @@ def load_page(user,admin,theform):
 
 	# Editing options
 	# Docname
-	edit_docname = """<input type='text' id='edit_docname' name='edit_docname' value='%s' onblur='validate_docname();'>
-	<div onclick="document.getElementById('codemir').submit();" class="button slim"><i class="fa fa-floppy-o"> </i>
-	""" %doc_name
 	# Filename
-	edit_filename = """<input type='text' name='edit_filename' value='%s'>
-		<div onclick="document.getElementById('codemir').submit();" class="button slim"><i class="fa fa-floppy-o"> </i>
-	""" %repo_name
 	#push_git = """<input type='hidden' name='push_git' value='yes'> <input type='submit' value='Push'>"""
 	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
 	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">
@@ -273,7 +275,7 @@ def load_page(user,admin,theform):
 	"""
 
 	if git_status:
-		#remove some html keyword symbols in the commit message returned by github3
+		# Remove some html keyword symbols in the commit message returned by github3
 		push_msg=git_status.replace('<','')
 		push_msg=push_msg.replace('>','')
 		push_git+="""<p style='color:red;'>""" + push_msg + ' successful' + """</p>"""
@@ -335,9 +337,9 @@ def load_page(user,admin,theform):
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
 	else:
 		page=page.replace("**content**",text_content)
-		page=page.replace("**edit_docname**",edit_docname)
+		page=page.replace("**docname**",docname)
 		page=page.replace("**edit_status**",edit_status)
-		page=page.replace("**edit_repo**",edit_filename)
+		page=page.replace("**repo**",repo_name)
 		page=page.replace("**edit_assignee**",edit_assignee)
 		page=page.replace("**metadata**",metadata)
 		page=page.replace("**NLP**",nlp_service)
