@@ -21,16 +21,6 @@ else:
 
 project = "Scriptorium"
 
-def perform_action(text_content, logging=True):
-	#this is used to write information into a text file to serve as a debugging tool and log
-	#change logging=True to start logging
-	if logging:
-		f=open(prefix+"hwak.txt","a")
-		f.write('\n')
-		f.write(text_content)
-		f.close()
-
-
 def make_options(**kwargs):
 	if "file" in kwargs:
 		kwargs["file"] = prefix + kwargs["file"]
@@ -96,24 +86,19 @@ def gen_meta_popup():
 
 
 def load_landing(user,admin,theform):
-	perform_action('user='+user)
-	perform_action('admin='+admin)
 	gen_meta_popup()
 
 	if theform.getvalue('deletedoc'):
 		docid=theform.getvalue('id')
 		delete_doc(docid)
 
-	#docs_list=generic_query("SELECT * FROM docs","")
-	docs_list=generic_query("SELECT id,name,status,assignee_username,filename FROM docs",())
+	docs_list=generic_query("SELECT id,name,corpus,status,assignee_username FROM docs",())
 
 	max_id=get_max_id()
 	if not max_id:  # This is for the initial case after init db
 		max_id=0
 	
-	#for each doc in the doc list, just display doc[:-1], since last col is content
-
-	table="""<table id="doctable" class="sortable"><tr><th>id</th><th>doc name</th><th>status</th><th>assigned</th><th>GitRepo</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
+	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>doc name</th><th>corpus</th><th>status</th><th>assigned</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
 
 	for doc in docs_list:
 		row="<tr>"
@@ -125,13 +110,11 @@ def load_landing(user,admin,theform):
 		button_edit="""<form action="editor.py" method="post" id="form_edit_"""+id+"""">"""
 		id_code="""<input type="hidden" name="id"  value="""+id+">"
 		button_edit+=id_code
-		#button_edit+="""<input type="submit" value="EDIT DOCUMENT"></form>	"""
 		button_edit+="""<div onclick="document.getElementById('form_edit_"""+id+"""').submit();" class="button"> <i class="fa fa-pencil-square-o"></i> edit</div></form>"""
 
 		#delete document
 		button_delete="""<form action="index.py" method="post" id="form_del_"""+id+"""">"""
 		button_delete+=id_code
-		#button_delete+="""<input type='submit' name='deletedoc'  value='DELETE DOCUMENT'></form>"""
 		button_delete+="""<input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/><div onclick="document.getElementById('form_del_"""+id+"""').submit();" class="button"> <i class="fa fa-trash-o"></i> delete</div></form>"""
 
 		row+=cell(button_edit)
@@ -153,9 +136,6 @@ def load_landing(user,admin,theform):
 	return page
 
 
-
-
-
 def open_main_server():
 	thisscript = os.environ.get('SCRIPT_NAME', '')
 	action = None
@@ -169,4 +149,3 @@ def open_main_server():
 
 
 open_main_server()
-

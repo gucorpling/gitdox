@@ -128,6 +128,7 @@ def load_page(user,admin,theform):
 		max_id = 0
 	text_content = ""
 	repo_name = ""
+	corpus = ""
 	status = ""
 	assignee = ""
 
@@ -149,13 +150,14 @@ def load_page(user,admin,theform):
 			repo_name="account/repo_name"
 			status="editing"
 			assignee="default_user"
+			corpus="default_corpus"
 			text_content=""
 			doc_saved=False
 			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
 			if theform.getvalue('edit_docname'):
 				if docname != 'new_document':
 					if int(doc_id) > int(max_id):
-						create_document(docname,status,assignee,repo_name,text_content)
+						create_document(docname,corpus,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_docname(doc_id,docname)
 					doc_saved=True
@@ -164,17 +166,24 @@ def load_page(user,admin,theform):
 				filename=theform.getvalue('edit_filename')
 				if filename!='account/repo_name':
 					if int(doc_id) > int(max_id):
-						create_document(docname,status,assignee,repo_name,text_content)
+						create_document(docname,corpus,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_filename(doc_id,filename)
 					doc_saved=True
 
+			if theform.getvalue('edit_corpusname'):
+				corpus=theform.getvalue('edit_corpusname')
+				if int(doc_id) > int(max_id):
+					create_document(docname,corpus,status,assignee,repo_name,text_content)
+					max_id = doc_id
+				update_corpus(doc_id,corpus)
+				doc_saved=True
 
 			if theform.getvalue('edit_status'):
 				newstatus=theform.getvalue('edit_status')
 				if newstatus!='editing':
 					if int(doc_id) > int(max_id):
-						create_document(docname,status,assignee,repo_name,text_content)
+						create_document(docname,corpus,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_status(doc_id,newstatus)
 					doc_saved=True
@@ -183,7 +192,7 @@ def load_page(user,admin,theform):
 				newassignee_username=theform.getvalue('edit_assignee')
 				if newassignee_username!="default_user":
 					if int(doc_id) > int(max_id):
-						create_document(docname,status,assignee,repo_name,text_content)
+						create_document(docname,corpus,status,assignee,repo_name,text_content)
 						max_id = doc_id
 					update_assignee(doc_id,newassignee_username)
 					doc_saved=True
@@ -192,6 +201,7 @@ def load_page(user,admin,theform):
 				docname=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
 				repo_name=generic_query("SELECT filename FROM docs WHERE id=?",(doc_id,))[0][0]
 				assignee=generic_query("SELECT assignee_username FROM docs WHERE id=?",(doc_id,))[0][0]
+				corpus=generic_query("SELECT corpus FROM docs WHERE id=?",(doc_id,))[0][0]
 				status=generic_query("SELECT status FROM docs WHERE id=?",(doc_id,))[0][0]
 				
 		# After clicking edit in landing page, editing existing doc case, get the values from the db. pull the content from db to be displayed in the editor window.
@@ -203,6 +213,9 @@ def load_page(user,admin,theform):
 			if theform.getvalue('edit_filename'):
 				filename=theform.getvalue('edit_filename')
 				update_filename(doc_id,filename)
+			if theform.getvalue('edit_corpusname'):
+				corpus=theform.getvalue('edit_corpusname')
+				update_corpus(doc_id,corpus)
 			if theform.getvalue('edit_status'):
 				newstatus=theform.getvalue('edit_status')
 				update_status(doc_id,newstatus)
@@ -211,6 +224,7 @@ def load_page(user,admin,theform):
 				update_assignee(doc_id,newassignee_username)
 			text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
 			docname=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
+			corpus=generic_query("SELECT corpus FROM docs WHERE id=?",(doc_id,))[0][0]
 			repo_name=generic_query("SELECT filename FROM docs WHERE id=?",(doc_id,))[0][0]
 			assignee=generic_query("SELECT assignee_username FROM docs WHERE id=?",(doc_id,))[0][0]
 			status=generic_query("SELECT status FROM docs WHERE id=?",(doc_id,))[0][0]
@@ -222,7 +236,7 @@ def load_page(user,admin,theform):
 		text_content = text_content.replace("\r","")
 		text_content = unicode(text_content.decode("utf8"))
 		if int(doc_id)>int(max_id):
-			create_document(docname,status,assignee,repo_name,text_content)
+			create_document(docname,corpus,status,assignee,repo_name,text_content)
 		else:
 			save_changes(doc_id,text_content)
 
@@ -331,6 +345,7 @@ def load_page(user,admin,theform):
 
 
 	page= "Content-type:text/html\r\n\r\n"
+	#page += str(theform)
 	page += urllib.urlopen(prefix + "editor_codemir.html").read()
 	if len(doc_id) == 0:
 		exp = re.compile(r"<article>.*</article>",re.DOTALL)
@@ -338,6 +353,7 @@ def load_page(user,admin,theform):
 	else:
 		page=page.replace("**content**",text_content)
 		page=page.replace("**docname**",docname)
+		page=page.replace("**corpusname**",corpus)
 		page=page.replace("**edit_status**",edit_status)
 		page=page.replace("**repo**",repo_name)
 		page=page.replace("**edit_assignee**",edit_assignee)

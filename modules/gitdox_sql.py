@@ -30,7 +30,7 @@ def setup_db():
 
     #docs table
     cur.execute('''CREATE TABLE IF NOT EXISTS docs
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, status text,assignee_username text ,filename text, content text)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text)''')
     #metadata table
     cur.execute('''CREATE TABLE IF NOT EXISTS metadata 
                  (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text UNIQUE, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE)''')
@@ -40,8 +40,8 @@ def setup_db():
     conn.close()
     
 
-def create_document(name,status,assigned_username,filename,content):
-    generic_query("INSERT INTO docs(name,status,assignee_username,filename,content) VALUES(?,?,?,?,?)", (name,status,assigned_username,filename,content))
+def create_document(name,corpus,status,assigned_username,filename,content):
+    generic_query("INSERT INTO docs(name,corpus,status,assignee_username,filename,content) VALUES(?,?,?,?,?,?)", (name,corpus,status,assigned_username,filename,content))
 
 
 def generic_query(sql,params):
@@ -76,6 +76,8 @@ def update_docname(id,docname):
 def update_filename(id,filename):
     generic_query("UPDATE docs SET filename=? WHERE id=?",(filename,id))
 
+def update_corpus(id,corpusname):
+    generic_query("UPDATE docs SET corpus=? WHERE id=?",(corpusname,id))
 
 #def create_user(username):
  #   generic_query("INSERT INTO users(username) VALUES(?)",(username,))

@@ -99,6 +99,12 @@ body{padding:4pt;}
 		<div onclick="document.getElementById('codemir').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
 	</td>
 </tr>
+<tr><td>Corpus Name: </td>
+	<td>
+		<input type="text" id="edit_corpusname" name="edit_corpusname" defaultValue="**corpusname**" value="**corpusname**" onblur="validate_corpusname();">
+		<div onclick="document.getElementById('codemir').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
 <tr>
 	<td>Git Repo: </td>
 	<td><input type="text" id="edit_filename" name="edit_filename" value="**repo**" defaultValue="**repo**" onblur="validate_repo();">

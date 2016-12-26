@@ -9,6 +9,17 @@ function validate_docname()
 	}
 }
 
+function validate_corpusname()
+{
+    var oldName = $("#edit_corpusname").prop("defaultValue");
+	var newName = $("#edit_corpusname").val();
+	pattern = /.*/;  //place holder
+	if (!(pattern.test(newName))){
+		alert("Invalid corpus name");
+		$("#edit_corpusname").val(oldName);
+	}
+}
+
 function validate_repo()
 {
     var oldName = $("#edit_filename").prop("defaultValue");
