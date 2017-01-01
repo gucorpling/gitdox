@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<title>GitDox: Edit</title>
+<meta charset="utf-8"/>
+
+
+<head>
+<link rel="stylesheet" href="css/scriptorium.css" type="text/css" charset="utf-8"/>
+<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
+<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=800">
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<script src="js/jquery-1.11.3.min.js"></script>
+
+<!--The following script tag downloads a font from the Adobe Edge Web Fonts server for use within the web page. We recommend that you do not modify it.-->
+<script>var __adobewebfontsappname__="dreamweaver"</script>
+<link rel="stylesheet" href="https://use.edgefonts.net/c/dbcb1c/1w;asul,2,WXx:W:n4/l" media="all"><script src="https://use.edgefonts.net/asul:n4:default.js" type="text/javascript"></script>
+
+
+<style>
+table {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+    width:400pt;
+}
+
+td, th {
+    border: 1px solid #dddddd;
+    text-align: left;
+    padding: 8px;
+}
+
+body{padding:4pt;}
+
+</style>
+
+<script src="js/validate.js"></script>
+
+</head>
+<body>
+
+<div id="wrapper">
+		<div id="header">
+			<div id="copticlogo">
+				<a href="http://copticscriptorium.org/">
+					<img id="img1" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/copticlogo.png" width="210" height="101" alt="Coptic SCRIPTORIUM"/>
+				</a>
+			</div>
+			<div id="unicorn">
+				<a href="http://copticscriptorium.org/">
+					<img id="img2" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/unicorn.png" width="80" height="101" alt="Unicorn"/>
+				</a>
+			</div>
+			<div id="englishlogo">
+				<a href="http://copticscriptorium.org/">
+					<img id="img3" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/englishlogo.png" width="199" height="101" alt="Coptic SCRIPTORIUM"/>
+				</a>
+			</div>
+			<img id="img4" src="img/ruleline.png" width="100%" height="14" alt=""/>
+			</br>
+			</br>
+		</div>
+    <div id="content">
+<h1>GitDox: Edit</h1>
+<hr>
+
+<div>
+
+
+
+<link rel="stylesheet" href="codemirror-5.15.2/lib/codemirror.css">
+<link rel="stylesheet" href="codemirror-5.15.2/addon/hint/show-hint.css">
+<script src="codemirror-5.15.2/lib/codemirror.js"></script>
+<script src="codemirror-5.15.2/addon/hint/show-hint.js"></script>
+<script src="codemirror-5.15.2/addon/hint/xml-hint.js"></script>
+<script src="codemirror-5.15.2/mode/xml/xml.js"></script>
+<style type="text/css">
+      .CodeMirror { border: 1px solid #eee; }
+    </style>
+
+
+
+<article>
+
+<form name="hiddenForm" id="editor_form" method="post" action="editor.py" enctype="multipart/form-data">
+<input type="hidden" name="id" id="id" value="**id**">
+<input type="hidden" name="nlp_service" id="nlp_service">
+    <h2>Editor | <a href="index.py">back to document list</a> </h2>
+
+<table id="doc_data" style="background:#eee;padding:5pt;">
+	<colgroup>
+    	<col style="width:150px">
+  	</colgroup>
+<tbody>
+<tr><td>Document Name: </td>
+	<td>
+		<input type="text" id="edit_docname" name="edit_docname" defaultValue="**docname**" value="**docname**" onblur="validate_docname();">
+		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
+<tr><td>Corpus Name: </td>
+	<td>
+		<input type="text" id="edit_corpusname" name="edit_corpusname" defaultValue="**corpusname**" value="**corpusname**" onblur="validate_corpusname();">
+		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
+<tr>
+	<td>Git Repo: </td>
+	<td><input type="text" id="edit_filename" name="edit_filename" value="**repo**" defaultValue="**repo**" onblur="validate_repo();">
+		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
+<tr><td>Assigned to:</td><td>**edit_assignee**</td></tr>
+<tr><td>Status:</td><td>**edit_status**</td></tr>
+<tr><td>Mode:</td><td>**edit_mode**</td></tr>
+</tbody>
+</table>
+
+**embedded_editor**
+
+
+<h3>meta data</h3>
+**metadata**
+
+<SCRIPT LANGUAGE="JavaScript"><!--
+myPopup = '';
+
+function openPopup(url) {
+    myPopup = window.open(url,'popupWindow','width=640,height=480');
+    if (!myPopup.opener)
+         myPopup.opener = self;
+}
+
+//--></SCRIPT>
+
+
+<div class="button" onClick="openPopup('popupPage.html')"><i class="fa fa-info-circle"> </i> Add meta</div>
+
+
+<INPUT TYPE="HIDDEN" NAME="metakey">
+<INPUT type="hidden" name="metavalue">
+
+
+
+</form>
+
+
+</article>
+
+
+</div>
+
+        </div>
+    </div>
+</body>

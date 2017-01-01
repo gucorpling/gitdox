@@ -1,13 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Import modules for CGI handling 
-import cgi, cgitb 
+import cgi, cgitb
 import os, shutil
 from os import listdir
 from modules.logintools import login
-from modules.configobj import ConfigObj
-from modules.pathutils import *
 import urllib
 from modules.gitdox_sql import *
 from os.path import isfile, join
@@ -16,27 +13,14 @@ import github3
 from requests.auth import HTTPBasicAuth
 import requests
 import platform, re
+from paths import ether_url
+from modules.ether import make_spreadsheet
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
 	prefix = "transc\\"
 else:
 	prefix = ""
-
-
-def make_options(**kwargs):
-	if "file" in kwargs:
-		kwargs["file"] = prefix + kwargs["file"]
-		names = open(kwargs["file"],'r').read().replace("\r","").split("\n")
-		names = list(name[:name.find("\t")] for name in names)
-	elif "names" in kwargs:
-		names = kwargs[names]
-	selected = kwargs["selected"] if "selected" in kwargs else None
-	options=""
-	for name in names:
-		if name!='':
-			options += '<option value=%s>\n' %name
-	return options
 
 
 def cell(text):
@@ -67,7 +51,7 @@ def print_meta(doc_id):
 			row += cell_contents
 
 	#delete meta
-		metaid_code="""<div class="button slim" onclick="document.getElementById('metaid').value='"""+metaid+"""'; document.getElementById('codemir').submit();"><i class="fa fa-trash"></i> </div>"""
+		metaid_code="""<div class="button slim" onclick="document.getElementById('metaid').value='"""+metaid+"""'; document.getElementById('editor_form').submit();"><i class="fa fa-trash"></i> </div>"""
 		#id_code="""<input type="hidden" name="id"  value="""+id+">"
 
 		button_delete=""
@@ -123,6 +107,7 @@ def get_git_credentials(user,admin):
 
 
 def load_page(user,admin,theform):
+	global ether_url
 	max_id = generic_query("SELECT MAX(id) AS max_id FROM docs","")[0][0]
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
@@ -131,6 +116,8 @@ def load_page(user,admin,theform):
 	corpus = ""
 	status = ""
 	assignee = ""
+	mode = "xml"
+	upload_file = ""
 
 	if theform.getvalue('edit_docname'):
 		docname = theform.getvalue('edit_docname')
@@ -222,12 +209,18 @@ def load_page(user,admin,theform):
 			if theform.getvalue('edit_assignee'):
 				newassignee_username=theform.getvalue('edit_assignee')
 				update_assignee(doc_id,newassignee_username)
+			if theform.getvalue('edit_mode'):
+				new_mode=theform.getvalue('edit_mode')
+				update_mode(doc_id,new_mode)
+			if theform.getvalue('file'):
+				upload_file = theform.getvalue('file')
 			text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
 			docname=generic_query("SELECT name FROM docs WHERE id=?",(doc_id,))[0][0]
 			corpus=generic_query("SELECT corpus FROM docs WHERE id=?",(doc_id,))[0][0]
 			repo_name=generic_query("SELECT filename FROM docs WHERE id=?",(doc_id,))[0][0]
 			assignee=generic_query("SELECT assignee_username FROM docs WHERE id=?",(doc_id,))[0][0]
 			status=generic_query("SELECT status FROM docs WHERE id=?",(doc_id,))[0][0]
+			mode = generic_query("SELECT mode FROM docs WHERE id=?", (doc_id,))[0][0]
 
 	# In the case of reloading after hitting 'save', either create new doc into db, or update db
 	# CodeMirror sends the form with its code content in it before 'save' so we just display it again
@@ -245,8 +238,7 @@ def load_page(user,admin,theform):
 	if theform.getvalue('commit_msg'):
 		commit_message = theform.getvalue('commit_msg')
 
-
-	if theform.getvalue('push_git') == "push_git":
+	if theform.getvalue('push_git') == "push_git" and mode == "xml":
 		text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
 		repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))[0][0]
 		file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
@@ -273,7 +265,7 @@ def load_page(user,admin,theform):
 		else:
 			shutil.rmtree(prefix+subdir)
 	
-	if theform.getvalue('nlp_service') == "do_nlp":
+	if theform.getvalue('nlp_service') == "do_nlp" and mode == "xml":
 		api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api?data=%s&lb=line&format=pipes" %text_content
 		resp = requests.get(api_call, auth=HTTPBasicAuth('coptic_client', 'kz7hh2'))
 		text_content=resp.text
@@ -285,7 +277,7 @@ def load_page(user,admin,theform):
 	#push_git = """<input type='hidden' name='push_git' value='yes'> <input type='submit' value='Push'>"""
 	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
 	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">
-	<div name="push_git" class="button" onclick="document.getElementById('push_git').value='push_git'; document.getElementById('codemir').submit();"> <i class="fa fa-github"></i> Commit </div>
+	<div name="push_git" class="button" onclick="document.getElementById('push_git').value='push_git'; document.getElementById('editor_form').submit();"> <i class="fa fa-github"></i> Commit </div>
 	"""
 
 	if git_status:
@@ -316,7 +308,7 @@ def load_page(user,admin,theform):
 			userfile = userfile.replace(".ini","")
 			user_list.append(userfile)
 
-	edit_assignee="""<select name="edit_assignee" onchange='this.form.submit()'>"""
+	edit_assignee="""<select name="edit_assignee" onchange="this.form.submit()">"""
 	for user in user_list:
 		assignee_select=""
 		user_name=user
@@ -325,6 +317,9 @@ def load_page(user,admin,theform):
 		edit_assignee+="""<option value='""" + user_name + "' %s>" + user_name + """</option>""" 
 		edit_assignee=edit_assignee%assignee_select
 	edit_assignee+="</select>"
+
+	edit_mode = '''<select name="edit_mode" onchange="this.form.submit()">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
+	edit_mode = edit_mode.replace(mode+'"', mode+'" selected="selected"')
 
 	#meta data
 	if theform.getvalue('metakey'):
@@ -338,7 +333,7 @@ def load_page(user,admin,theform):
 
 	nlp_service = """
 
-	<div class="button" name="nlp_button" onclick="document.getElementById('nlp_service').value='do_nlp'; document.getElementById('codemir').submit();"> <i class="fa fa-cogs"></i> NLP </div>
+	<div class="button" name="nlp_button" onclick="document.getElementById('nlp_service').value='do_nlp'; document.getElementById('editor_form').submit();"> <i class="fa fa-cogs"></i> NLP </div>
 
 
 	"""
@@ -346,7 +341,30 @@ def load_page(user,admin,theform):
 
 	page= "Content-type:text/html\r\n\r\n"
 	#page += str(theform)
-	page += urllib.urlopen(prefix + "editor_codemir.html").read()
+	page += urllib.urlopen(prefix + "templates" + os.sep + "editor.html").read()
+
+	if mode == "ether":
+		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
+		ether_url += "gd_" + corpus + "_" + docname
+
+		if "file" in theform:
+			fileitem = theform["file"]
+			#  strip leading path from file name to avoid directory traversal attacks
+			fn = os.path.basename(fileitem.filename)
+			msg = 'The file "' + fn + '" was uploaded successfully'
+			if fn.endswith(".xls") or fn.endswith(".xlsx"):
+				make_spreadsheet(fileitem.file.read(),"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/=gd_" + corpus + "_" + docname,"excel")
+			else:
+				make_spreadsheet(fileitem.file.read(),"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname)
+		else:
+			msg = "no file was uploaded"
+
+		embedded_editor = embedded_editor.replace("**source**",ether_url)
+	else:
+		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "codemirror.html").read()
+
+	page = page.replace("**embedded_editor**",embedded_editor)
+
 	if len(doc_id) == 0:
 		exp = re.compile(r"<article>.*</article>",re.DOTALL)
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
@@ -357,6 +375,7 @@ def load_page(user,admin,theform):
 		page=page.replace("**edit_status**",edit_status)
 		page=page.replace("**repo**",repo_name)
 		page=page.replace("**edit_assignee**",edit_assignee)
+		page=page.replace("**edit_mode**",edit_mode)
 		page=page.replace("**metadata**",metadata)
 		page=page.replace("**NLP**",nlp_service)
 		page=page.replace("**id**",doc_id)

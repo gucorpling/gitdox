@@ -1,0 +1,123 @@
+<textarea id="code" name="code">**content**</textarea>
+<div class="button" onclick="document.getElementById('editor_form').submit();" ><i class="fa fa-floppy-o"> </i> Save</div> **NLP**  **github**
+
+    <script>
+
+
+      var tags = {
+        "!top": ["TEI"],
+        "!attrs": {
+        },
+        TEI: {
+          children:['add','figure','gap','note','p','pb','supplied']
+        },
+        cb: {
+          attrs: {n:null
+          },
+          children: ["lb","hi","note","gap","p"]
+        },
+
+        figure: {
+          attrs: {rend:null
+          },
+          children: []
+        },
+
+        gap: {
+          attrs: {
+            extent:null,
+            quantity:null,
+            reason:null,
+            unit:null
+
+          },
+          children: []
+
+        },
+
+        hi: {
+          attrs: {rend:null
+          },
+		  children: []
+        },
+
+        lb: {
+          attrs: {n:null
+          },
+          children: []
+        },
+
+        note: {
+          attrs: {note:null
+          },
+          children: ["hi"]
+        },
+
+        p: {
+          attrs: {n:null
+          },
+          children: ["lb",'hi','note','gap']
+        },
+
+        pb: {
+          attrs: {"xml:id":null
+          },
+          children: ["cb",'lb','p']
+        },
+
+        supplied: {
+          attrs: {evidence:null,
+            reason:null
+          },
+          children: ['note']
+        },
+
+
+
+      };
+
+      function completeAfter(cm, pred) {
+        var cur = cm.getCursor();
+        if (!pred || pred()) setTimeout(function() {
+          if (!cm.state.completionActive)
+            cm.showHint({completeSingle: false});
+        }, 100);
+        return CodeMirror.Pass;
+      }
+
+      function completeIfAfterLt(cm) {
+        return completeAfter(cm, function() {
+          var cur = cm.getCursor();
+          return cm.getRange(CodeMirror.Pos(cur.line, cur.ch - 1), cur) == "<";
+        });
+      }
+
+      function completeIfInTag(cm) {
+        return completeAfter(cm, function() {
+          var tok = cm.getTokenAt(cm.getCursor());
+          if (tok.type == "string" && (!/['"]/.test(tok.string.charAt(tok.string.length - 1)) || tok.string.length == 1)) return false;
+          var inner = CodeMirror.innerMode(cm.getMode(), tok.state).state;
+          return inner.tagName;
+        });
+      }
+
+      var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+        mode: "xml",
+        lineNumbers: true,indentUnit:0,lineWrapping:true,
+        extraKeys: {
+          "'<'": completeAfter,
+          "'/'": completeIfAfterLt,
+          "' '": completeIfInTag,
+          "'='": completeIfInTag,
+          "Ctrl-Space": "autocomplete"
+        },
+        hintOptions: {schemaInfo: tags}
+      });
+
+	  function updateTextArea() {
+	      editor.save();
+	  }
+	  editor.on('change', updateTextArea);
+
+    </script>
+

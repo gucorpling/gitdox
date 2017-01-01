@@ -31,3 +31,10 @@ function validate_repo()
 	}
 }
 
+function upload()
+{
+    var r = confirm("Really upload a file? This will overwrite existing spreadsheet data!");
+    if (r == true) {
+        this.form.submit();
+    }
+}
