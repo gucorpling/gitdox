@@ -35,7 +35,7 @@ def harvest_meta(sgml):
 	:return: dictionary of key value pairs
 	"""
 
-	sgml = sgml.strip()
+	sgml = sgml.replace("\r","").strip()
 	meta = {}
 	if not sgml.startswith("<meta "):
 		return meta
