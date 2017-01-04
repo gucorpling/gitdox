@@ -35,15 +35,7 @@ body{padding:4pt;}
 
 </style>
 
-<script>
-	function validate_docname(){
-		name = $("#edit_docname");
-		pattern = /^[A-Za-z0-9_\.-]+$/;
-		if (!(pattern.test(name))){
-			alert("File names may only contain alphanumeric symbols, period, underscore and hyphen");
-		}
-	}
-</script>
+<script src="js/validate.js"></script>
 
 </head>
 <body>
@@ -65,7 +57,7 @@ body{padding:4pt;}
 					<img id="img3" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/englishlogo.png" width="199" height="101" alt="Coptic SCRIPTORIUM"/>
 				</a>
 			</div>
-			<img id="img4" src="img/ruleline.png" width="800px" height="14" alt=""/>
+			<img id="img4" src="img/ruleline.png" width="100%" height="14" alt=""/>
 			</br>
 			</br>
 		</div>
@@ -91,7 +83,7 @@ body{padding:4pt;}
 
 <article>
 
-<form name="hiddenForm" id="codemir" method="post" action="editor.py">
+<form name="hiddenForm" id="editor_form" method="post" action="editor.py" enctype="multipart/form-data">
 <input type="hidden" name="id" id="id" value="**id**">
 <input type="hidden" name="nlp_service" id="nlp_service">
     <h2>Editor | <a href="index.py">back to document list</a> </h2>
@@ -101,16 +93,32 @@ body{padding:4pt;}
     	<col style="width:150px">
   	</colgroup>
 <tbody>
-<tr><td>Document Name: </td><td>**edit_docname**</td></tr>
-<tr><td>Git Repo: </td><td>**edit_repo**</td></tr>
+<tr><td>Document Name: </td>
+	<td>
+		<input type="text" id="edit_docname" name="edit_docname" defaultValue="**docname**" value="**docname**" onblur="validate_docname();">
+		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
+<tr><td>Corpus Name: </td>
+	<td>
+		<input type="text" id="edit_corpusname" name="edit_corpusname" defaultValue="**corpusname**" value="**corpusname**" onblur="validate_corpusname();">
+		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
+<tr>
+	<td>Git Repo: </td>
+	<td><input type="text" id="edit_filename" name="edit_filename" value="**repo**" defaultValue="**repo**" onblur="validate_repo();">
+		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+</tr>
 <tr><td>Assigned to:</td><td>**edit_assignee**</td></tr>
 <tr><td>Status:</td><td>**edit_status**</td></tr>
+<tr><td>Mode:</td><td>**edit_mode**</td></tr>
 </tbody>
 </table>
 
+**embedded_editor**
 
-<textarea id="code" name="code">**content**</textarea>
-<div class="button" onclick="document.getElementById('codemir').submit();" ><i class="fa fa-floppy-o"> </i> Save</div> **NLP**  **github**
 
 <h3>meta data</h3>
 **metadata**
@@ -135,137 +143,10 @@ function openPopup(url) {
 
 
 
-
 </form>
-
-    <script>
-      
-
-      var tags = {
-        "!top": ["TEI"],
-        "!attrs": {
-        },
-        TEI: {
-          children:['add','figure','gap','note','p','pb','supplied']
-        },
-        cb: {
-          attrs: {n:null
-          },
-          children: ["lb","hi","note","gap","p"]
-        },
-
-        figure: {
-          attrs: {rend:null
-          },
-          children: []
-        },
-
-        gap: {
-          attrs: {
-            extent:null,
-            quantity:null,
-            reason:null,
-            unit:null
-
-          },
-          children: []
-          
-        },
-
-        hi: {
-          attrs: {rend:null
-          },
-		  children: []
-        },
-
-        lb: {
-          attrs: {n:null
-          },
-          children: []
-        },
-
-        note: {
-          attrs: {note:null
-          },
-          children: ["hi"]
-        },
-
-        p: {
-          attrs: {n:null
-          },
-          children: ["lb",'hi','note','gap']
-        },
-        
-        pb: {
-          attrs: {"xml:id":null
-          },
-          children: ["cb",'lb','p']
-        },
-
-        supplied: {
-          attrs: {evidence:null,
-            reason:null
-          },
-          children: ['note']
-        },
-
-
-
-      };
-
-      function completeAfter(cm, pred) {
-        var cur = cm.getCursor();
-        if (!pred || pred()) setTimeout(function() {
-          if (!cm.state.completionActive)
-            cm.showHint({completeSingle: false});
-        }, 100);
-        return CodeMirror.Pass;
-      }
-
-      function completeIfAfterLt(cm) {
-        return completeAfter(cm, function() {
-          var cur = cm.getCursor();
-          return cm.getRange(CodeMirror.Pos(cur.line, cur.ch - 1), cur) == "<";
-        });
-      }
-
-      function completeIfInTag(cm) {
-        return completeAfter(cm, function() {
-          var tok = cm.getTokenAt(cm.getCursor());
-          if (tok.type == "string" && (!/['"]/.test(tok.string.charAt(tok.string.length - 1)) || tok.string.length == 1)) return false;
-          var inner = CodeMirror.innerMode(cm.getMode(), tok.state).state;
-          return inner.tagName;
-        });
-      }
-
-      var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
-        mode: "xml",
-        lineNumbers: true,indentUnit:0,lineWrapping:true,
-        extraKeys: {
-          "'<'": completeAfter,
-          "'/'": completeIfAfterLt,
-          "' '": completeIfInTag,
-          "'='": completeIfInTag,
-          "Ctrl-Space": "autocomplete"
-        },
-        hintOptions: {schemaInfo: tags}
-      });
-	  
-	  function updateTextArea() {
-	      editor.save();
-	  }
-	  editor.on('change', updateTextArea);
-	  
-    </script>
-
-
-
-
 
 
 </article>
-
-
 
 
 </div>

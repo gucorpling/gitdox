@@ -55,11 +55,11 @@ select select:focus {
     outline: none;
 }
 
-#doc_data{width:720px}
+#doc_data{width:100%; /*720px*/}
 
 #doc_data input {width: 300px}
 
-.CodeMirror{max-width:790px !important}
+.CodeMirror{max-width:100% !important; /*790px*/}
 .admin_form{padding: 19px;
     margin-bottom: 20px;
     background-color: #dcdada;
@@ -69,8 +69,12 @@ select select:focus {
     box-shadow: inset 0 1px 1px rgba(0,0,0,.05);
     max-width:400px}
 
-#meta_table{width:100%;  table-layout: fixed;}
+#meta_table{width:800px;  table-layout: fixed;}
 
 table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after { 
     content: "\00a0\25B4\25BE" 
 }
+
+#corpus_list_table {border: none; table-layout: fixed; width:350px}
+#corpus_list_table td {border: none}
+.corp_label{width:120px}

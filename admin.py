@@ -175,7 +175,7 @@ def load_admin(user,admin,theform):
 					<img id="img3" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/englishlogo.png" width="199" height="101" alt="Coptic SCRIPTORIUM"/>
 				</a>
 			</div>
-			<img id="img4" src="img/ruleline.png" width="800px" height="14" alt=""/>
+			<img id="img4" src="img/ruleline.png" width="95%" height="14" alt=""/>
 			</br>
 			</br>
 		</div>
