@@ -39,7 +39,10 @@ def make_options(**kwargs):
 	return options
 
 def cell(text):
-	return "<td>" + str(text) + "</td>"
+	if 'class="fa' in str(text):
+		return '<td style="text-align:center">' + str(text) + "</td>"
+	else:
+		return "<td>" + str(text) + "</td>"
 
 def get_max_id():
 	#get current max of existing records in the db
@@ -107,24 +110,27 @@ def load_landing(user,admin,theform):
 		corpus_list = corpus_list.replace('="'+selected_corpus+'"','="'+selected_corpus+'" selected="selected"')
 
 	if selected_corpus != "" and selected_corpus != "all":
-		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username FROM docs where corpus=?", (selected_corpus,))
+		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs where corpus=?", (selected_corpus,))
 		if len(doc_list) == 0: # Restricted query produced no documents, switch back to all document display 
-			doc_list = generic_query("SELECT id,name,corpus,status,assignee_username FROM docs", ())
+			doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs", ())
 			selected_corpus = ""
 	else:
-		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username FROM docs",())
+		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs",())
 
 	max_id = get_max_id()
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
 
-	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>doc name</th><th>corpus</th><th>status</th><th>assigned</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
+	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>doc name</th><th>corpus</th><th>status</th><th>assigned</th><th>mode</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
 
 	for doc in doc_list:
 		row="<tr>"
 		for item in doc:
-			
-			row+=cell(item)
+			if item == "xml":
+				item = '<i class="fa fa-code" title="xml">&nbsp;</i>'
+			elif item == "ether":
+				item = '<i class="fa fa-table" title="spreadsheet">&nbsp;</i>'
+			row += cell(item)
 		id=str(doc[0])
 		#edit document
 		button_edit="""<form action="editor.py" method="post" id="form_edit_"""+id+"""">"""
@@ -138,10 +144,10 @@ def load_landing(user,admin,theform):
 		button_delete+="""<input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/><div onclick="document.getElementById('form_del_"""+id+"""').submit();" class="button"> <i class="fa fa-trash-o"></i> delete</div>
 		<input type="hidden" name="sel_corpus" value="**sel_corpus**"></form>"""
 
-		row+=cell(button_edit)
-		row+=cell(button_delete)
-		row+="</tr>"
-		table+=row
+		row += cell(button_edit)
+		row += cell(button_delete)
+		row += "</tr>"
+		table += row
 		
 	table+="</table>"
 
