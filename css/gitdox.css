@@ -74,3 +74,7 @@ select select:focus {
 table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after { 
     content: "\00a0\25B4\25BE" 
 }
+
+#corpus_list_table {border: none; table-layout: fixed; width:350px}
+#corpus_list_table td {border: none}
+.corp_label{width:120px}

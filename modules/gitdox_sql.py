@@ -40,8 +40,8 @@ def setup_db():
 	conn.close()
 	
 
-def create_document(name,corpus,status,assigned_username,filename,content):
-	generic_query("INSERT INTO docs(name,corpus,status,assignee_username,filename,content,mode) VALUES(?,?,?,?,?,?,'xml')", (name,corpus,status,assigned_username,filename,content))
+def create_document(doc_id, name,corpus,status,assigned_username,filename,content):
+	generic_query("INSERT INTO docs(id, name,corpus,status,assignee_username,filename,content,mode) VALUES(?,?,?,?,?,?,?,'xml')", (int(doc_id),name,corpus,status,assigned_username,filename,content))
 
 
 def generic_query(sql,params):
@@ -52,7 +52,10 @@ def generic_query(sql,params):
 	
 	with conn:
 		cur = conn.cursor()
-		cur.execute(sql,params)
+		if params is not None:
+			cur.execute(sql,params)
+		else:
+			cur.execute(sql)
 		
 		rows = cur.fetchall()
 		return rows
@@ -62,7 +65,6 @@ def save_changes(id,content):
 	"""save change from the editor"""
 	generic_query("UPDATE docs SET content=? WHERE id=?",(content,id))
 
-
 def update_assignee(doc_id,user_name):
 	generic_query("UPDATE docs SET assignee_username=? WHERE id=?",(user_name,doc_id))
 
@@ -71,7 +73,6 @@ def update_status(id,status):
 
 def update_docname(id,docname):
 	generic_query("UPDATE docs SET name=? WHERE id=?",(docname,id))
-
 
 def update_filename(id,filename):
 	generic_query("UPDATE docs SET filename=? WHERE id=?",(filename,id))
@@ -84,6 +85,8 @@ def update_mode(id,mode):
 
 def delete_doc(id):
 	generic_query("DELETE FROM docs WHERE id=?",(id,))
+	generic_query("DELETE FROM metadata WHERE docid=?", (id,))
+
 
 def save_meta(doc_id,key,value):
 	generic_query("INSERT OR REPLACE INTO metadata(docid,key,value) VALUES(?,?,?)",(doc_id,key,value))
@@ -91,4 +94,8 @@ def save_meta(doc_id,key,value):
 def delete_meta(metaid):
 	generic_query("DELETE FROM metadata WHERE metaid=?",(metaid,))
 
+def get_doc_info(doc_id):
+	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode FROM docs WHERE id=?", (doc_id,))[0]
 
+def get_corpora():
+	return generic_query("SELECT DISTINCT corpus FROM docs ORDER BY corpus COLLATE NOCASE", None)
