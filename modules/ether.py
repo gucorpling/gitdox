@@ -11,6 +11,7 @@ Author: Amir Zeldes
 import re, tempfile, subprocess, os
 from collections import defaultdict
 from collections import OrderedDict
+
 import cgi
 
 __version__ = "2.0.0"
@@ -76,6 +77,8 @@ version:1.5
 		line = line.strip()
 		line = line.replace(":","\\c")
 		if line.startswith("<?") or line.endswith("/>"):  # Skip unary tags and XML instructions
+			pass
+		elif line.startswith("<meta") or line.startswith("</meta"):  # meta tags
 			pass
 		elif line.startswith("</"):  # Closing tag
 			my_match = re.match("</([^>]+)>",line)
@@ -145,7 +148,7 @@ Content-type: text/plain; charset=UTF-8
 
 
 def exec_via_temp(input_text, command_params, workdir=""):
-	temp = tempfile.NamedTemporaryFile(delete=False)
+	temp = tempfile.NamedTemporaryFile(delete=False,mode='wb')
 	exec_out = ""
 	try:
 		temp.write(input_text)
@@ -160,23 +163,58 @@ def exec_via_temp(input_text, command_params, workdir=""):
 			proc = subprocess.Popen(command_params, stdout=subprocess.PIPE,stdin=subprocess.PIPE,stderr=subprocess.PIPE,cwd=workdir)
 			(stdout, stderr) = proc.communicate()
 
-		exec_out = stderr
 	except Exception as e:
 		return str(e)
 	finally:
 		os.remove(temp.name)
-		return exec_out
+		return stdout, stderr
 
 
 def make_spreadsheet(data,ether_path,format="sgml"):
 	if format=="sgml":
 		socialcalc_data = sgml_to_ether(data)
 		ether_command = "curl --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
+	elif format=="socialcalc":
+		socialcalc_data = data.encode("utf8")
+		ether_command = "curl --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	else:
 		socialcalc_data = data
 		ether_command = "curl -i -X PUT --data-binary @tempfilename " + ether_path # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
-	err = exec_via_temp(socialcalc_data,ether_command)
-	return err
+	#ether_command = ["curl","--request","PUT","--header","'Content-Type: text/x-socialcalc'", "--data-binary", "@" + "tempfilename",
+	#				 ether_path] # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
+	#ether_command = ["less","tempfilename",">","/var/www/html/gitdox/out.eth"]
+	#outfile = open("/var/www/html/gitdox/out.eth",'wb')
+	#outfile.write(socialcalc_data.encode("utf8"))
+	#outfile.close()
+	out, err = exec_via_temp(socialcalc_data,ether_command)
+	return out, err
+
+
+def delete_spreadsheet(ether_url, name):
+	"""
+	Forcibly deletes EtherCalc spreadsheet from redis DB
+
+	:param name: name of the spreadsheet (last part of URL)
+	:return: void
+	"""
+
+	ether_command = "curl -X DELETE " + ether_url + "_/" + name
+	del_proc = subprocess.Popen(ether_command,shell=True)
+
+	(stdout, stderr) = del_proc.communicate()
+
+	return stdout, stderr
+
+
+def sheet_exists(ether_path, name):
+	return len(get_socialcalc(ether_path,name)) > 0
+
+
+def get_socialcalc(ether_path, name):
+	command = "curl -X GET " + ether_path + "_/" + name
+	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+	(stdout, stderr) = proc.communicate()
+	return stdout.decode("utf8")
 
 
 if __name__  == "__main__":
