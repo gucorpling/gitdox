@@ -48,7 +48,7 @@ def harvest_meta(sgml):
 
 
 def print_meta(doc_id):
-	meta = generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE",(doc_id,))
+	meta = generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE",(int(doc_id),))
 	# docid,metaid,key,value - four cols
 	table="""<input type="hidden" id="metaid" name="metaid" value="">
 	<table id="meta_table">
@@ -350,7 +350,7 @@ def load_page(user,admin,theform):
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
 		metavalue = theform.getvalue('metavalue')
-		save_meta(doc_id,metakey,metavalue)
+		save_meta(int(doc_id),metakey,metavalue)
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
 		delete_meta(metaid)
@@ -366,9 +366,6 @@ def load_page(user,admin,theform):
 
 	page= "Content-type:text/html\r\n\r\n"
 	#page += str(theform)
-	page += urllib.urlopen(prefix + "templates" + os.sep + "editor.html").read()
-
-	page += mymsg
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
@@ -387,7 +384,7 @@ def load_page(user,admin,theform):
 					make_spreadsheet(sgml,"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname)
 					for key, value in meta_key_val.iteritems():
 						key = key.replace("@","_")
-						save_meta(doc_id,key,value)
+						save_meta(int(doc_id),key,value)
 		else:
 			msg = "no file was uploaded"
 
@@ -395,6 +392,8 @@ def load_page(user,admin,theform):
 	else:
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "codemirror.html").read()
 
+	page += urllib.urlopen(prefix + "templates" + os.sep + "editor.html").read()
+	page += mymsg
 	page = page.replace("**embedded_editor**",embedded_editor)
 
 	if len(doc_id) == 0:

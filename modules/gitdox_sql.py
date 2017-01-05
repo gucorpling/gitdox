@@ -33,7 +33,7 @@ def setup_db():
 				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text)''')
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata 
-				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text UNIQUE, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE)''')
+				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key, value) ON CONFLICT REPLACE)''')
 
 	
 	conn.commit()
