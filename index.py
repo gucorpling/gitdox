@@ -110,12 +110,12 @@ def load_landing(user,admin,theform):
 		corpus_list = corpus_list.replace('="'+selected_corpus+'"','="'+selected_corpus+'" selected="selected"')
 
 	if selected_corpus != "" and selected_corpus != "all":
-		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs where corpus=?", (selected_corpus,))
+		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs where corpus=? ORDER BY corpus, name COLLATE NOCASE", (selected_corpus,))
 		if len(doc_list) == 0: # Restricted query produced no documents, switch back to all document display 
-			doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs", ())
+			doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE", ())
 			selected_corpus = ""
 	else:
-		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs",())
+		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
 
 	max_id = get_max_id()
 	if not max_id:  # This is for the initial case after init db
