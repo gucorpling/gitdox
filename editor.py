@@ -13,7 +13,7 @@ import github3
 from requests.auth import HTTPBasicAuth
 import requests
 import platform, re
-from paths import ether_url
+from paths import ether_url, get_menu
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc
 
 # Support IIS site prefix on Windows
@@ -24,7 +24,9 @@ else:
 
 
 def cell(text):
-	return "\n	<td>" + str(text) + "</td>"
+	if isinstance(text, int):
+		text = str(text)
+	return "\n	<td>" + text + "</td>"
 
 
 def harvest_meta(sgml):
@@ -41,7 +43,7 @@ def harvest_meta(sgml):
 		return meta
 	else:
 		metatag = re.search(r'<meta ([^>]*)>',sgml).group(1)
-		matches = re.findall(r'([^=>]+)="([^">]+)"',metatag)
+		matches = re.findall(r'([^=>]+?)="([^">]+)"',metatag)
 		for match in matches:
 			meta[match[0]] = match[1]
 	return meta
@@ -350,7 +352,7 @@ def load_page(user,admin,theform):
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
 		metavalue = theform.getvalue('metavalue')
-		save_meta(int(doc_id),metakey,metavalue)
+		save_meta(int(doc_id),metakey.encode("utf8"),metavalue.encode("utf8"))
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
 		delete_meta(metaid)
@@ -384,7 +386,7 @@ def load_page(user,admin,theform):
 					make_spreadsheet(sgml,"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname)
 					for key, value in meta_key_val.iteritems():
 						key = key.replace("@","_")
-						save_meta(int(doc_id),key,value)
+						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
 		else:
 			msg = "no file was uploaded"
 
@@ -415,6 +417,7 @@ def load_page(user,admin,theform):
 		else:
 			page = page.replace("**github**", '')
 
+	page = page.replace("**navbar**", get_menu())
 	return page
 
 

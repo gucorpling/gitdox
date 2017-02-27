@@ -11,7 +11,7 @@ from modules.pathutils import *
 import urllib
 from modules.gitdox_sql import *
 from modules.ether import delete_spreadsheet
-from paths import ether_url
+from paths import ether_url, get_menu
 from os.path import isfile, join
 import platform
 
@@ -22,6 +22,7 @@ else:
 	prefix = ""
 
 project = "Scriptorium"
+
 
 def make_options(**kwargs):
 	if "file" in kwargs:
@@ -115,13 +116,13 @@ def load_landing(user,admin,theform):
 			doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE", ())
 			selected_corpus = ""
 	else:
-		doc_list = generic_query("SELECT id,name,corpus,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
+		doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
 
 	max_id = get_max_id()
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
 
-	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>doc name</th><th>corpus</th><th>status</th><th>assigned</th><th>mode</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
+	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>corpus</th><th>document</th><th>status</th><th>assigned</th><th>mode</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
 
 	for doc in doc_list:
 		row="<tr>"
@@ -130,6 +131,8 @@ def load_landing(user,admin,theform):
 				item = '<i class="fa fa-code" title="xml">&nbsp;</i>'
 			elif item == "ether":
 				item = '<i class="fa fa-table" title="spreadsheet">&nbsp;</i>'
+			elif "-" in str(item):
+				item = item.replace("-","&#8209;")  # Use non-breaking hyphens
 			row += cell(item)
 		id=str(doc[0])
 		#edit document
@@ -151,7 +154,11 @@ def load_landing(user,admin,theform):
 		
 	table+="</table>"
 
-	page= ""
+	page = ""
+
+	menu = get_menu()
+	menu = menu.encode("utf8")
+
 	landing = open(prefix+"templates"+os.sep+"landing.html").read()
 	landing = landing.replace("**max_id_plus1**",str(max_id+1))
 	landing = landing.replace("**user**",user)
@@ -159,6 +166,7 @@ def load_landing(user,admin,theform):
 	landing = landing.replace("**corpora**",corpus_list)
 	landing = landing.replace("**sel_corpus**",selected_corpus)
 	landing = landing.replace("**table**",table)
+	landing = landing.replace("**navbar**", menu)
 	page += landing
 	print "Content-type:text/html\n\n"
 
