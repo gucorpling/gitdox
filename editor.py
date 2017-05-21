@@ -23,11 +23,6 @@ else:
 	prefix = ""
 
 
-def cell(text):
-	if isinstance(text, int):
-		text = str(text)
-	return "\n	<td>" + text + "</td>"
-
 
 def harvest_meta(sgml):
 	"""
@@ -47,41 +42,6 @@ def harvest_meta(sgml):
 		for match in matches:
 			meta[match[0]] = match[1]
 	return meta
-
-
-def print_meta(doc_id):
-	meta = generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE",(int(doc_id),))
-	# docid,metaid,key,value - four cols
-	table="""<input type="hidden" id="metaid" name="metaid" value="">
-	<table id="meta_table">
-	<colgroup>
-    	<col>
-    	<col>
-    	<col style="width: 40px">
-  	</colgroup>
-  		<tbody>
-	"""
-	for item in meta:
-		# Each item appears in one row of the table
-		row = "\n <tr>"
-		metaid = str(item[1])
-		('metaid:'+str(metaid))
-		id = str(doc_id)
-		for i in item[2:]:
-			cell_contents = cell(i)
-			cell_contents = re.sub(r'(<td>)(https?://[^ <>]+)',r'\1<a href="\2">\2</a>',cell_contents)
-			row += cell_contents
-
-		# delete meta
-		metaid_code="""<div class="button slim" onclick="document.getElementById('metaid').value='"""+metaid+"""'; document.getElementById('editor_form').submit();"><i class="fa fa-trash"></i> </div>"""
-
-		button_delete=""
-		button_delete+=metaid_code
-		row += cell(button_delete)
-		row += "\n </tr>"
-		table += row
-	table += "\n</tbody>\n</table>\n"
-	return table
 
 
 def push_update_to_git(username,password,path,account,repo,message):

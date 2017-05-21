@@ -11,6 +11,8 @@ Author: Amir Zeldes
 import re, tempfile, subprocess, os
 from collections import defaultdict
 from collections import OrderedDict
+from operator import itemgetter
+from gitdox_sql import *
 
 import cgi
 
@@ -144,6 +146,74 @@ Content-type: text/plain; charset=UTF-8
 --SocialCalcSpreadsheetControlSave--
 """
 
+	return output
+
+def ether_to_sgml(ether, doc_id):
+	colmap = {}
+	cells = []
+	for line in ether.splitlines():
+		parsed_cell = re.match(r'cell:([A-Z]+)(\d+):(.*)$', line)
+		if parsed_cell is not None:
+			col = parsed_cell.group(1)
+			row = int(parsed_cell.group(2))
+			other = parsed_cell.group(3).split(':')
+			cellinfo = {}
+			i = 0
+			while i+1 < len(other):
+				cellinfo[other[i]] = other[i+1]
+				i += 2
+			cells.append((col, row, cellinfo))
+
+	cells = sorted(cells, key=itemgetter(1)) # so header row gets read first
+
+	open_tags = defaultdict(lambda: defaultdict(list))
+	toks = {}
+
+	close_tags = defaultdict(list)
+	for cell in cells:
+		if cell[1] == 1:
+			colname = cell[2]['t']
+			colmap[cell[0]] = colname
+		else:
+			col = cell[0]
+			row = cell[1]
+			col_name = colmap[col]
+			content = cell[2]['t']
+			if col_name == 'tok':
+				toks[row] = content
+			else:
+				element = col_name
+				attrib = col_name
+
+				open_tags[row][element].append((attrib, content))
+
+				if 'rowspan' in cell[2]:
+					rowspan = int(cell[2]['rowspan'])
+					close_row = row + rowspan
+				else:
+					close_row = row + 1
+				if element not in close_tags[close_row]:
+					close_tags[close_row].append(element)
+
+	output = print_meta(doc_id)
+
+	for r in xrange(2,len(toks)+3):
+		for element in close_tags[r]:
+			output += '</' + element + '>\n'
+
+		if r == len(toks)+2:
+			break
+
+		for element in open_tags[r]:
+			tag = '<' + element
+			for attrib, value in open_tags[r][element]:
+				tag += ' ' + attrib + '="' + value + '"'
+			tag += '>\n'
+			output += tag
+
+		output += toks[r] + '\n'
+
+	output = output.replace('\c', ':')
 	return output
 
 
