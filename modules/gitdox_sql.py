@@ -134,7 +134,13 @@ def delete_meta(metaid):
 	generic_query("DELETE FROM metadata WHERE metaid=?",(metaid,))
 
 def get_doc_info(doc_id):
-	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode FROM docs WHERE id=?", (doc_id,))[0]
+	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode FROM docs WHERE id=?", (int(doc_id),))[0]
+
+def get_doc_meta(doc_id):
+	return generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE", (int(doc_id),))
 
 def get_corpora():
 	return generic_query("SELECT DISTINCT corpus FROM docs ORDER BY corpus COLLATE NOCASE", None)
+
+def get_validate_rules():
+	return generic_query("SELECT * FROM validate", None)
