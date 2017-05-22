@@ -1,4 +1,4 @@
-<textarea id="code" name="code">**content**</textarea>
+<textarea id="code" name="code" style="font-family: Antinoou">**content**</textarea>
 <div class="button" onclick="document.getElementById('editor_form').submit();" ><i class="fa fa-floppy-o"> </i> Save</div> **NLP**  **github**
 
     <script>
@@ -118,6 +118,8 @@
 	      editor.save();
 	  }
 	  editor.on('change', updateTextArea);
+	  
+	  delete CodeMirror.keyMap.emacsy["Alt-F"]; delete CodeMirror.keyMap.emacsy["Alt-D"];
 
     </script>
 
