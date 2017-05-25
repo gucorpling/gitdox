@@ -93,7 +93,7 @@ def cell(text):
 	return "\n	<td>" + text + "</td>"
 
 def print_meta(doc_id):
-	meta = generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE",(int(doc_id),))
+	meta = get_doc_meta(doc_id)
 	# docid,metaid,key,value - four cols
 	table="""<input type="hidden" id="metaid" name="metaid" value="">
 	<table id="meta_table">

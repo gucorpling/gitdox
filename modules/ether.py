@@ -149,6 +149,13 @@ Content-type: text/plain; charset=UTF-8
 	return output
 
 def ether_to_sgml(ether, doc_id):
+	"""
+
+	:param ether: String in SocialCalc format
+	:param doc_id: GitDox databsed internal document ID number as string
+	:return:
+	"""
+
 	colmap = {}
 	cells = []
 	for line in ether.splitlines():
@@ -195,7 +202,20 @@ def ether_to_sgml(ether, doc_id):
 				if element not in close_tags[close_row]:
 					close_tags[close_row].append(element)
 
-	output = print_meta(doc_id)
+	meta = "<meta"
+	meta_items = []
+	meta_rows = get_doc_meta(doc_id)
+	# docid,metaid,key,value - four cols
+	for item in meta_rows:
+		key, value = item[2], item[3]
+		key = key.replace("=","&equals;")
+		value = value.replace('"',"&quot;")
+		meta_items.append(key + '="' + value + '"')
+
+	meta_props = " ".join(meta_items)
+	if meta_props != "":
+		meta_props = " " + meta_props
+	output = meta + meta_props + ">\n"
 
 	for r in xrange(2,len(toks)+3):
 		for element in close_tags[r]:
@@ -214,6 +234,7 @@ def ether_to_sgml(ether, doc_id):
 		output += toks[r] + '\n'
 
 	output = output.replace('\c', ':')
+	output += "</meta>\n"
 	return output
 
 

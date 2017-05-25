@@ -14,7 +14,7 @@ from requests.auth import HTTPBasicAuth
 import requests
 import platform, re
 from paths import ether_url, get_menu
-from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc
+from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -226,31 +226,40 @@ def load_page(user,admin,theform):
 	if theform.getvalue('commit_msg'):
 		commit_message = theform.getvalue('commit_msg')
 
-	if theform.getvalue('push_git') == "push_git" and mode == "xml":
-		text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+	if theform.getvalue('push_git') == "push_git":
 		repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))[0][0]
 		file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
-		file_name = file_name.replace(" ","_") + ".xml"
 		repo_info = repo_name.split('/')
 		git_account, git_repo = repo_info[0], repo_info[1]
-		if len(repo_info)>2:
+		if len(repo_info) > 2:
 			subdir = '/'.join(repo_info[2:]) + "/"
 		else:
 			subdir = ""
-		if not os.path.isdir(prefix+subdir) and subdir != "":
-			os.mkdir(prefix+subdir, 0755)
 
 		# The user will indicate the subdir in the repo_name stored in the db.
 		# Therefore, a file may be associated with the target repo subdir zangsir/coptic-xml-tool/uploaded_commits,
 		# and that is fine, but we will need to make this uploaded_commits subdir first to create our file.
+		if not os.path.isdir(prefix + subdir) and subdir != "":
+			os.mkdir(prefix + subdir, 0755)
+
+		git_username, git_password = get_git_credentials(user, admin)
+
+		if mode == "xml":
+			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+			file_name = file_name.replace(" ","_") + ".xml"
+		else: # (mode == "ether")
+			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
+			file_name = file_name.replace(" ","_") + "_ether.sgml"
 		saved_file = subdir + file_name
-		serialize_file (text_content,saved_file)
-		git_username,git_password=get_git_credentials(user,admin)
+		serialize_file(text_content, saved_file)
 		git_status = push_update_to_git(git_username, git_password, saved_file, git_account, git_repo, commit_message)
+
+		# File system cleanup
 		if subdir == "":
 			# Delete a file
 			os.remove(prefix+file_name)
 		else:
+			# Delete a subdirectory
 			shutil.rmtree(prefix+subdir)
 	
 	if theform.getvalue('nlp_service') == "do_nlp" and mode == "xml":
@@ -319,9 +328,11 @@ def load_page(user,admin,theform):
 	metadata = print_meta(doc_id)
 
 	nlp_service = """
-
 	<div class="button" name="nlp_button" onclick="document.getElementById('nlp_service').value='do_nlp'; document.getElementById('editor_form').submit();"> <i class="fa fa-cogs"></i> NLP </div>
+	"""
 
+	disabled_nlp_service = """
+	<div class="button disabled" name="nlp_button"> <i class="fa fa-cogs"></i> NLP </div>
 
 	"""
 
@@ -370,6 +381,7 @@ def load_page(user,admin,theform):
 		page=page.replace("**edit_assignee**",edit_assignee)
 		page=page.replace("**edit_mode**",edit_mode)
 		page=page.replace("**metadata**",metadata)
+		page=page.replace("**disabled_NLP**",disabled_nlp_service)
 		page=page.replace("**NLP**",nlp_service)
 		page=page.replace("**id**",doc_id)
 		if int(admin)>0:
