@@ -78,3 +78,9 @@ table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sor
 #corpus_list_table {border: none; table-layout: fixed; width:350px}
 #corpus_list_table td {border: none}
 .corp_label{width:120px}
+
+.disabled{color:gray;cursor:default!important;background-color:lightgray}
+.disabled:active {
+	position: relative;
+	top: 0px !important;
+}

@@ -13,8 +13,8 @@ import github3
 from requests.auth import HTTPBasicAuth
 import requests
 import platform, re
-from paths import ether_url
-from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc
+from paths import ether_url, get_menu
+from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -22,9 +22,8 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
-def cell(text):
-	return "\n	<td>" + str(text) + "</td>"
-
+  
+  
 def harvest_meta(sgml):
 	"""
 	Get metadata key value pairs from <meta> element in imported SGML file
@@ -33,51 +32,16 @@ def harvest_meta(sgml):
 	:return: dictionary of key value pairs
 	"""
 
-	sgml = sgml.strip()
+	sgml = sgml.replace("\r","").strip()
 	meta = {}
 	if not sgml.startswith("<meta "):
 		return meta
 	else:
 		metatag = re.search(r'<meta ([^>]*)>',sgml).group(1)
-		matches = re.findall(r'([^=>]+)="([^">]+)"',metatag)
+		matches = re.findall(r'([^=>]+?)="([^">]+)"',metatag)
 		for match in matches:
 			meta[match[0]] = match[1]
 	return meta
-
-
-def print_meta(doc_id):
-	meta = generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE",(doc_id,))
-	# docid,metaid,key,value - four cols
-	table="""<input type="hidden" id="metaid" name="metaid" value="">
-	<table id="meta_table">
-	<colgroup>
-    	<col>
-    	<col>
-    	<col style="width: 40px">
-  	</colgroup>
-  		<tbody>
-	"""
-	for item in meta:
-		# Each item appears in one row of the table
-		row = "\n <tr>"
-		metaid = str(item[1])
-		('metaid:'+str(metaid))
-		id = str(doc_id)
-		for i in item[2:]:
-			cell_contents = cell(i)
-			cell_contents = re.sub(r'(<td>)(https?://[^ <>]+)',r'\1<a href="\2">\2</a>',cell_contents)
-			row += cell_contents
-
-		# delete meta
-		metaid_code="""<div class="button slim" onclick="document.getElementById('metaid').value='"""+metaid+"""'; document.getElementById('editor_form').submit();"><i class="fa fa-trash"></i> </div>"""
-
-		button_delete=""
-		button_delete+=metaid_code
-		row += cell(button_delete)
-		row += "\n </tr>"
-		table += row
-	table += "\n</tbody>\n</table>\n"
-	return table
 
 
 def push_update_to_git(username,password,path,account,repo,message):
@@ -262,31 +226,40 @@ def load_page(user,admin,theform):
 	if theform.getvalue('commit_msg'):
 		commit_message = theform.getvalue('commit_msg')
 
-	if theform.getvalue('push_git') == "push_git" and mode == "xml":
-		text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+	if theform.getvalue('push_git') == "push_git":
 		repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))[0][0]
 		file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
-		file_name = file_name.replace(" ","_") + ".xml"
 		repo_info = repo_name.split('/')
 		git_account, git_repo = repo_info[0], repo_info[1]
-		if len(repo_info)>2:
+		if len(repo_info) > 2:
 			subdir = '/'.join(repo_info[2:]) + "/"
 		else:
 			subdir = ""
-		if not os.path.isdir(prefix+subdir) and subdir != "":
-			os.mkdir(prefix+subdir, 0755)
 
 		# The user will indicate the subdir in the repo_name stored in the db.
 		# Therefore, a file may be associated with the target repo subdir zangsir/coptic-xml-tool/uploaded_commits,
 		# and that is fine, but we will need to make this uploaded_commits subdir first to create our file.
+		if not os.path.isdir(prefix + subdir) and subdir != "":
+			os.mkdir(prefix + subdir, 0755)
+
+		git_username, git_password = get_git_credentials(user, admin)
+
+		if mode == "xml":
+			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+			file_name = file_name.replace(" ","_") + ".xml"
+		else: # (mode == "ether")
+			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
+			file_name = file_name.replace(" ","_") + "_ether.sgml"
 		saved_file = subdir + file_name
-		serialize_file (text_content,saved_file)
-		git_username,git_password=get_git_credentials(user,admin)
+		serialize_file(text_content, saved_file)
 		git_status = push_update_to_git(git_username, git_password, saved_file, git_account, git_repo, commit_message)
+
+		# File system cleanup
 		if subdir == "":
 			# Delete a file
 			os.remove(prefix+file_name)
 		else:
+			# Delete a subdirectory
 			shutil.rmtree(prefix+subdir)
 	
 	if theform.getvalue('nlp_service') == "do_nlp" and mode == "xml":
@@ -348,25 +321,24 @@ def load_page(user,admin,theform):
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
 		metavalue = theform.getvalue('metavalue')
-		save_meta(doc_id,metakey,metavalue)
+		save_meta(int(doc_id),metakey.encode("utf8"),metavalue.encode("utf8"))
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
 		delete_meta(metaid)
 	metadata = print_meta(doc_id)
 
 	nlp_service = """
-
 	<div class="button" name="nlp_button" onclick="document.getElementById('nlp_service').value='do_nlp'; document.getElementById('editor_form').submit();"> <i class="fa fa-cogs"></i> NLP </div>
+	"""
 
+	disabled_nlp_service = """
+	<div class="button disabled" name="nlp_button"> <i class="fa fa-cogs"></i> NLP </div>
 
 	"""
 
 
 	page= "Content-type:text/html\r\n\r\n"
 	#page += str(theform)
-	page += urllib.urlopen(prefix + "templates" + os.sep + "editor.html").read()
-
-	page += mymsg
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
@@ -385,7 +357,7 @@ def load_page(user,admin,theform):
 					make_spreadsheet(sgml,"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname)
 					for key, value in meta_key_val.iteritems():
 						key = key.replace("@","_")
-						save_meta(doc_id,key,value)
+						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
 		else:
 			msg = "no file was uploaded"
 
@@ -393,6 +365,8 @@ def load_page(user,admin,theform):
 	else:
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "codemirror.html").read()
 
+	page += urllib.urlopen(prefix + "templates" + os.sep + "editor.html").read()
+	page += mymsg
 	page = page.replace("**embedded_editor**",embedded_editor)
 
 	if len(doc_id) == 0:
@@ -407,6 +381,7 @@ def load_page(user,admin,theform):
 		page=page.replace("**edit_assignee**",edit_assignee)
 		page=page.replace("**edit_mode**",edit_mode)
 		page=page.replace("**metadata**",metadata)
+		page=page.replace("**disabled_NLP**",disabled_nlp_service)
 		page=page.replace("**NLP**",nlp_service)
 		page=page.replace("**id**",doc_id)
 		if int(admin)>0:
@@ -414,6 +389,7 @@ def load_page(user,admin,theform):
 		else:
 			page = page.replace("**github**", '')
 
+	page = page.replace("**navbar**", get_menu())
 	return page
 
 

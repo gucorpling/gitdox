@@ -11,7 +11,7 @@ from modules.pathutils import *
 import urllib
 from modules.gitdox_sql import *
 from modules.dataenc import pass_dec, pass_enc
-
+from paths import get_menu
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -153,11 +153,10 @@ def load_admin(user,admin,theform):
 		padding: 8px;
 	}
 
-	body{padding:10pt;}
-
 	</style>
 	</head>
 	<body>
+	**navbar**
 	<div id="wrapper">
 		<div id="header">
 			<div id="copticlogo">
@@ -260,7 +259,7 @@ def load_admin(user,admin,theform):
 
 
 	page+="</div></div></body></html>"
- 
+	page = page.replace("**navbar**",get_menu())
 
 	return page
 
@@ -302,11 +301,10 @@ def load_user_config(user,admin,theform):
 		padding: 8px;
 	}
 
-	body{padding:10pt;}
-
 	</style>
 	</head>
 	<body>
+	**navbar**
 	<div id="wrapper">
 		<div id="header">
 			<div id="copticlogo">
@@ -359,10 +357,10 @@ def load_user_config(user,admin,theform):
 	
 	page+="</div></div></body></html>"
 
-	
-
+	page = page.replace("**navbar**",get_menu())
 
 	return page
+
 
 def open_main_server():
 	thisscript = os.environ.get('SCRIPT_NAME', '')
@@ -377,9 +375,6 @@ def open_main_server():
 		print load_admin(user,admin,theform)
 	elif admin == "0" or admin=="1":
 		print load_user_config(user,admin,theform)
-
-
-
 
 
 open_main_server()
