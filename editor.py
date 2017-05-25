@@ -22,8 +22,8 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
-
-
+  
+  
 def harvest_meta(sgml):
 	"""
 	Get metadata key value pairs from <meta> element in imported SGML file

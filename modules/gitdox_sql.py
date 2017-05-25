@@ -35,7 +35,7 @@ def setup_db():
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata 
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key, value) ON CONFLICT REPLACE)''')
 
-	
+
 	conn.commit()
 	conn.close()
 	
