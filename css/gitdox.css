@@ -37,7 +37,7 @@ select, input {
     width: 120px;
     border-radius: 3px;
     overflow: hidden;
-    background: #fafafa url("img/icon-select.png") no-repeat 90% 50%;
+    background: #fafafa; /*url("img/icon-select.png") no-repeat 90% 50%;*/
     padding: 3px;
 }
 
