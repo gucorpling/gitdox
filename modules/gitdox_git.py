@@ -50,8 +50,8 @@ def get_git_credentials(user,admin,code):
 		if line!='':
 			l=line.split(' = ')
 			user_dict[l[0]]=l[1]
-	git_username=user_dict['git_username']
-	git_password=pass_dec(user_dict['git_password'])
+	git_username=user_dict['git_username'] if "git_username" in user_dict else "_"
+	git_password=pass_dec(user_dict['git_password']) if "git_password" in user_dict else "_"
 	git_use2fa=user_dict['git_2fa'] if "git_2fa" in user_dict else "false"
 	return git_username,git_password[0],git_use2fa
 
