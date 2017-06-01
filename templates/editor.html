@@ -12,6 +12,7 @@
 <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
 <link rel="icon" href="favicon.ico" type="image/x-icon">
 <script src="js/jquery-1.11.3.min.js"></script>
+<script src="js/editor.js"></script>
 
 <!--The following script tag downloads a font from the Adobe Edge Web Fonts server for use within the web page. We recommend that you do not modify it.-->
 <script>var __adobewebfontsappname__="dreamweaver"</script>
@@ -97,11 +98,16 @@ td, th {
 		<input type="text" id="edit_docname" name="edit_docname" defaultValue="**docname**" value="**docname**" onblur="validate_docname();">
 		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
 	</td>
+	<td><div class="button" onclick="validate();">Validate</div></td>
 </tr>
 <tr><td>Corpus Name: </td>
 	<td>
 		<input type="text" id="edit_corpusname" name="edit_corpusname" defaultValue="**corpusname**" value="**corpusname**" onblur="validate_corpusname();">
 		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+	</td>
+	<td rowspan="5">
+	<div id="validation_report">
+	</div>
 	</td>
 </tr>
 <tr>
@@ -116,22 +122,12 @@ td, th {
 </tbody>
 </table>
 
+
 **embedded_editor**
 
 
 <h3>meta data</h3>
 **metadata**
-
-<SCRIPT LANGUAGE="JavaScript"><!--
-myPopup = '';
-
-function openPopup(url) {
-    myPopup = window.open(url,'popupWindow','width=640,height=480');
-    if (!myPopup.opener)
-         myPopup.opener = self;
-}
-
-//--></SCRIPT>
 
 
 <div class="button" onClick="openPopup('popupPage.html')"><i class="fa fa-info-circle"> </i> Add meta</div>
