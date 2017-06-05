@@ -198,6 +198,7 @@ def load_page(user,admin,theform):
 
 	git_status=False
 
+	commit_message = ""
 	if theform.getvalue('commit_msg'):
 		commit_message = theform.getvalue('commit_msg')
 
@@ -248,8 +249,8 @@ def load_page(user,admin,theform):
 	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
 	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">"""
 	if git_2fa == "true":
-		push_git += """<input type="text" name="2fa" placeholder = "2-factor code" style="width:80px">"""
-	push_git += """<div name="push_git" class="button" onclick="document.getElementById('push_git').value='push_git'; document.getElementById('editor_form').submit();"> <i class="fa fa-github"></i> Commit </div>
+		push_git += """<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">"""
+	push_git += """<div name="push_git" class="button" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
 	"""
 
 	if git_status:
@@ -301,7 +302,6 @@ def load_page(user,admin,theform):
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
 		delete_meta(metaid)
-	metadata = print_meta(doc_id)
 
 	nlp_service = """
 	<div class="button" name="nlp_button" onclick="document.getElementById('nlp_service').value='do_nlp'; document.getElementById('editor_form').submit();"> <i class="fa fa-cogs"></i> NLP </div>
@@ -349,6 +349,7 @@ def load_page(user,admin,theform):
 		exp = re.compile(r"<article>.*</article>",re.DOTALL)
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
 	else:
+		metadata = print_meta(doc_id)
 		page=page.replace("**content**",text_content)
 		page=page.replace("**docname**",docname)
 		page=page.replace("**corpusname**",corpus)
