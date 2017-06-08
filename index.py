@@ -54,37 +54,33 @@ def get_max_id():
 
 
 def gen_meta_popup():
-	popup_meta_html="""
-	<HTML>
-	<HEAD>
-	<SCRIPT LANGUAGE="JavaScript"><!--
-	function copyForm() {
-		opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
-		opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
+	popup_meta_html="""<HTML>
+<HEAD>
+<SCRIPT LANGUAGE="JavaScript">
+function copyForm() {
+	opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
+	opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
 
-		opener.document.hiddenForm.submit();
-		window.close();
-		return false;
-	}
-	//--></SCRIPT>
-	</HEAD>
-	<BODY>
-	<FORM NAME="popupForm" onSubmit="return copyForm()">
-	meta key (e.g.,year):<br>
-	<input list="metakeys" name="metakey">
-	<datalist id="metakeys">
-		***options***
-	</datalist>
-	<br>
-	meta value(e.g.,200BC):<br>
-	<input type="text" name='metavalue'><br>
-	<INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
-	</FORM>
-	</BODY>
-	</HTML>
-
-
-	"""
+	opener.document.hiddenForm.submit();
+	window.close();
+	return false;
+}
+</SCRIPT>
+</HEAD>
+<BODY>
+<FORM NAME="popupForm" onSubmit="return copyForm()">
+field name (e.g., corpus):<br>
+<input list="metakeys" name="metakey">
+<datalist id="metakeys">
+***options***
+</datalist>
+<br>
+field value (e.g., shenoute.fox):<br>
+<input type="text" name='metavalue'><br>
+<INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
+</FORM>
+</BODY>
+</HTML>"""
 	options=make_options(file='metadata_fields.tab')
 	popup_meta_html=popup_meta_html.replace("***options***",options)
 	f=open(prefix+'popupPage.html','w')
