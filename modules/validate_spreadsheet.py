@@ -2,7 +2,6 @@
 # -*- coding: UTF-8 -*-
 
 from gitdox_sql import *
-from paths import ether_url
 from ether import get_socialcalc, make_spreadsheet
 import re
 import cgi
@@ -40,7 +39,7 @@ def validate_doc(doc_id, highlight=False):
 		if rule_applies is True:
 			rule_report = apply_rule(doc_id, rule)
 			if rule_report is not None:
-				report += rule_report
+				report += '<div class="rule" title="'+rule_report+'">'+re.sub(r'__d__.*__d__','',rule_report)+'</div>'
 
 	return report
 
@@ -96,7 +95,7 @@ def apply_rule(doc_id, rule):
 									report += doc_name + ": Cell " + col + row + ": row span is not " + argument + "<br/>"
 
 						elif operator == "~":  # regex
-							cell_content = re.search(r':t:([^:]*):', line)
+							cell_content = re.search(r':t:([^:]*)(:|$)', line)
 							if cell_content is not None:
 								cell_content = cell_content.group(1)
 								match = re.match(argument, cell_content)
@@ -175,6 +174,14 @@ def apply_rule(doc_id, rule):
 
 if __name__ == "__main__":
 	print
+
+	if __name__ == '__main__' and __package__ is None:
+		from os import sys, path
+		sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+		from paths import ether_url
+	else:
+		from ..paths import ether_url
+
 	parameter = cgi.FieldStorage()
 	doc_id = parameter.getvalue("doc_id")  # "all" if all documents
 
