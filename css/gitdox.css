@@ -84,3 +84,12 @@ table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sor
 	position: relative;
 	top: 0px !important;
 }
+
+.report_container{
+
+padding: 10px;
+  border: solid 5px #c9c9c9;
+  background-color: white;
+  width: 50%;
+  vertical-align: top;
+  }
