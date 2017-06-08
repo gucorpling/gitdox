@@ -1,7 +1,7 @@
 
 	<HTML>
 	<HEAD>
-	<SCRIPT LANGUAGE="JavaScript"><!--
+	<SCRIPT LANGUAGE="JavaScript">
 	function copyForm() {
 		opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
 		opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
@@ -10,53 +10,14 @@
 		window.close();
 		return false;
 	}
-	//--></SCRIPT>
+	</SCRIPT>
 	</HEAD>
 	<BODY>
 	<FORM NAME="popupForm" onSubmit="return copyForm()">
 	field name (e.g., corpus):<br>
 	<input list="metakeys" name="metakey">
 	<datalist id="metakeys">
-		<option value=corpus>
-<option value=Coptic_edition>
-<option value=Greek_source>
-<option value=title>
-<option value=msltem_title>
-<option value=author>
-<option value=language>
-<option value=annotation>
-<option value=project>
-<option value=translation>
-<option value=msName>
-<option value=pages_from>
-<option value=pages_to>
-<option value=msContents_title@type>
-<option value=msContents_title@n>
-<option value=repository>
-<option value=collection>
-<option value=idno>
-<option value=version@n>
-<option value=version@date>
-<option value=source_info>
-<option value=license>
-<option value=document_cts_urn>
-<option value=Trismegistos>
-<option value=objectType>
-<option value=country>
-<option value=placeName>
-<option value=origPlace>
-<option value=origDate>
-<option value=origDate_precision>
-<option value=origDate_notBefore>
-<option value=origDate_notAfter>
-<option value=source>
-<option value=note>
-<option value=witness>
-<option value=redundant>
-<option value=previous>
-<option value=next>
-<option value=endnote>
-
+	***options***
 	</datalist>
 	<br>
 	field value (e.g., shenoute.fox):<br>
