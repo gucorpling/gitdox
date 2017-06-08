@@ -31,6 +31,26 @@ function validate_repo()
 	}
 }
 
+
+function do_push()
+{
+    document.getElementById('push_git').value='push_git';
+
+    // Check if 2fa is on
+    if ($('#code_2fa').length != 0){
+        var code_2fa = $("#code_2fa").val();
+        pattern = /^[0-9]+$/;
+        if (!(pattern.test(code_2fa))){
+            var r = confirm("You should supply a numeric 2 factor authentication code. Try to commit anyway?");
+        }
+        if (r == false) {
+            return;
+        }
+	}
+
+	document.getElementById('editor_form').submit();
+}
+
 function upload()
 {
     var r = confirm("Really upload a file? This will overwrite existing spreadsheet data!");
