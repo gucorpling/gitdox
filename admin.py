@@ -143,6 +143,7 @@ def load_admin(user,admin,theform):
 	}
 
 	</style>
+	<script src="js/jquery-1.11.3.min.js"></script>
 	</head>
 	<body>
 	**navbar**
