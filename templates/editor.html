@@ -98,7 +98,7 @@ td, th {
 		<input type="text" id="edit_docname" name="edit_docname" defaultValue="**docname**" value="**docname**" onblur="validate_docname();">
 		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
 	</td>
-	<td><div class="button" onclick="validate();">Validate</div></td>
+	<td><div class="button" id="validate_editor" onclick="validate_doc();">Validate</div></td>
 </tr>
 <tr><td>Corpus Name: </td>
 	<td>
@@ -107,7 +107,6 @@ td, th {
 	</td>
 	<td rowspan="5" class="report_container">
 	<div id="validation_report">
-		<i>(validation result)</i>
 	</div>
 	</td>
 </tr>
