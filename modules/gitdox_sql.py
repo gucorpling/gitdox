@@ -19,6 +19,7 @@ def setup_db():
 	cur.execute("DROP TABLE IF EXISTS docs")
 	cur.execute("DROP TABLE IF EXISTS users")
 	cur.execute("DROP TABLE IF EXISTS metadata")
+	cur.execute("DROP TABLE IF EXISTS validate")
 
 	conn.commit()
 	
@@ -34,6 +35,9 @@ def setup_db():
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata 
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key, value) ON CONFLICT REPLACE)''')
+	#validation table
+	cur.execute('''CREATE TABLE IF NOT EXISTS validate
+				 (doc text, corpus text, domain text, name text, operator text, argument text, id INTEGER PRIMARY KEY AUTOINCREMENT)''')
 
 
 	conn.commit()
