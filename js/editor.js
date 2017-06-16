@@ -71,3 +71,14 @@ function validate_all() {
 
     });
 }
+
+function nlp_spreadsheet(){
+
+    var r = confirm("Process XML to make a new spreadsheet? \nThis will overwrite the current spreadsheet");
+    if (r == false) {
+        return;
+    }
+    document.getElementById('nlp_spreadsheet').value='do_spreadsheet';
+    document.getElementById('editor_form').submit();
+
+}

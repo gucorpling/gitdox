@@ -276,6 +276,7 @@ def exec_via_temp(input_text, command_params, workdir=""):
 
 		#command_params = [x if 'tempfilename' not in x else x.replace("tempfilename",temp.name) for x in command_params]
 		command_params = command_params.replace("tempfilename",temp.name)
+
 		if workdir == "":
 			proc = subprocess.Popen(command_params, stdout=subprocess.PIPE,stdin=subprocess.PIPE,stderr=subprocess.PIPE,shell=True)
 			(stdout, stderr) = proc.communicate()
@@ -290,9 +291,16 @@ def exec_via_temp(input_text, command_params, workdir=""):
 		return stdout, stderr
 
 
+def fix_colnames(socialcalc):
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_group_(orig_group:)',r'\1\2',socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_(orig|pos|lemma:)', r'\1\2', socialcalc)
+	return socialcalc
+
+
 def make_spreadsheet(data,ether_path,format="sgml"):
 	if format=="sgml":
 		socialcalc_data = sgml_to_ether(data)
+		socialcalc_data = fix_colnames(socialcalc_data)
 		ether_command = "curl --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	elif format=="socialcalc":
 		socialcalc_data = data.encode("utf8")
