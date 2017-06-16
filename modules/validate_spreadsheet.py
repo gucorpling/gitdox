@@ -242,7 +242,7 @@ def apply_rule(doc_id, rule, ether, meta):
 			for metadatum in meta:
 				if metadatum[2] == name:
 					value = metadatum[3]
-					match = re.match(argument, value)
+					match = re.search(argument, value)
 					if match is None:
 						report += "Metadata for " + name + " does not match pattern" + "<br/>"
 						extra += "Metadata: " + value + "<br/>" + "Pattern: " + argument + "<br/>"
@@ -271,8 +271,8 @@ if __name__ == "__main__":
 	doc_id = parameter.getvalue("doc_id")
 
 	if doc_id == "all":
-		print "Content-type:application/json\r\n\r\n"
+		print "Content-type:application/json\n\n"
 		print validate_all_docs()
 	else:
-		print "Content-type:text/html\r\n\r\n"
+		print "Content-type:text/html\n\n"
 		print validate_doc(doc_id, highlight=True)
