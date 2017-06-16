@@ -158,18 +158,27 @@ def load_landing(user,admin,theform):
 
 	table+="</table>"
 
+	if admin == "3":
+		validation_rules = """<form action='validation_rules.py' id="form_validation_rules" method="post" style="display:inline-block">
+		<div onclick="document.getElementById('form_validation_rules').submit();" class="button">
+  		<i class="fa fa-table"></i>
+		validation rules</div></form>"""
+	else:
+		validation_rules = ""
+
 	page = ""
 
 	menu = get_menu()
 	menu = menu.encode("utf8")
 
-	landing = open(prefix+"templates"+os.sep+"landing.html").read()
-	landing = landing.replace("**max_id_plus1**",str(max_id+1))
-	landing = landing.replace("**user**",user)
-	landing = landing.replace("**project**",project)
-	landing = landing.replace("**corpora**",corpus_list)
-	landing = landing.replace("**sel_corpus**",selected_corpus)
-	landing = landing.replace("**table**",table)
+	landing = open(prefix + "templates" + os.sep + "landing.html").read()
+	landing = landing.replace("**max_id_plus1**", str(max_id + 1))
+	landing = landing.replace("**user**", user)
+	landing = landing.replace("**project**", project)
+	landing = landing.replace("**validation_rules**", validation_rules)
+	landing = landing.replace("**corpora**", corpus_list)
+	landing = landing.replace("**sel_corpus**", selected_corpus)
+	landing = landing.replace("**table**", table)
 	landing = landing.replace("**navbar**", menu)
 	page += landing
 	print "Content-type:text/html\n\n"

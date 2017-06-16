@@ -148,3 +148,15 @@ def get_corpora():
 
 def get_validate_rules():
 	return generic_query("SELECT * FROM validate", None)
+
+def get_sorted_rules(sort):
+	return generic_query("SELECT * FROM validate ORDER BY " + sort, None)  # parameterization doesn't work for order by
+
+def create_validate_rule(doc, corpus, domain, name, operator, argument):
+	generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument))
+
+def delete_validate_rule(id):
+	generic_query("DELETE FROM validate WHERE id=?", (int(id),))
+
+def update_validate_rule(doc, corpus, domain, name, operator, argument, id):
+	generic_query("UPDATE validate SET doc = ?, corpus = ?, domain = ?, name = ?, operator = ?, argument = ? WHERE id = ?",(doc, corpus, domain, name, operator, argument, id))
