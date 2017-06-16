@@ -38,7 +38,7 @@ def harvest_meta(sgml):
 		return meta
 	else:
 		metatag = re.search(r'<meta ([^>]*)>',sgml).group(1)
-		matches = re.findall(r'([^=>]+?)="([^">]+)"',metatag)
+		matches = re.findall(r'([^ =>]+?)="([^">]+)"',metatag)
 		for match in matches:
 			meta[match[0]] = match[1]
 	return meta
