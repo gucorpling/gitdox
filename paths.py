@@ -1,4 +1,5 @@
-import requests
+import requests, os
+from modules.configobj import ConfigObj
 
 # URL for ethercalc spreadsheets, possible including authentication
 # e.g. http://mydomain.com/ethercalc/
@@ -11,3 +12,7 @@ def get_menu():
 	resp = requests.get(cs)
 	return resp.text
 
+
+def get_nlp_credentials():
+	config = ConfigObj("users" + os.sep + "config.ini")
+	return config["nlp_user"], config["nlp_password"]

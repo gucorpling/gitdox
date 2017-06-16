@@ -22,16 +22,7 @@ else:
 project = "Scriptorium"
 
 
-def perform_action(text_content, logging=True):
-	#this is used to write information into a text file to serve as a debugging tool and log
-	#change logging=True to start logging
-	if logging:
-		f=open(prefix+"hwak.txt","a")
-		f.write('\n')
-		f.write(text_content)
-		f.close()
-
-def write_user_file(username,password,admin,email,realname,git_username,git_password):
+def write_user_file(username,password,admin,email,realname,git_username,git_password,git_2fa=False):
 	#this is used to write information into a text file to serve as a debugging tool and log
 	#change logging=True to start logging
 	userdir=prefix+"users"+os.sep
@@ -45,6 +36,7 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 	f.write('numlogins = 85\nnumused = 2869\n')
 	f.write('git_username='+git_username+'\n')
 	f.write('git_password='+pass_enc(git_password)+'\n')
+	f.write('git_2fa='+str(git_2fa).lower()+'\n')
 	f.close()
 
 
@@ -69,7 +61,7 @@ def update_password(user,new_pass):
 	g.close()
 
 
-def update_git_info(user,new_git_username,new_git_password):
+def update_git_info(user,new_git_username,new_git_password,new_git_2fa=False):
 	f=open(prefix+'users'+os.sep+user+'.ini','r')
 	ff=f.read().split('\n')
 	f.close()
@@ -84,6 +76,9 @@ def update_git_info(user,new_git_username,new_git_password):
 			elif line_split[0].strip().startswith('git_username'):
 				newline='git_username = ' + new_git_username
 				new_file.append(newline)
+			elif line_split[0].strip().startswith('git_2fa'):
+				newline = 'git_2fa = ' + str(new_git_2fa).lower()
+				new_file.append(newline)
 			else:
 				new_file.append(line)
 	open(prefix + 'users'+os.sep+user+'.ini', 'w').close()
@@ -93,23 +88,17 @@ def update_git_info(user,new_git_username,new_git_password):
 	g.close()
 
 
-
-
-
 def load_admin(user,admin,theform):
 	warn=""
 	if theform.getvalue('user_delete'):
 		userdir=prefix+'users' + os.sep
 		user_del_file=theform.getvalue('user_delete')
 		user_del=user_del_file.split('.ini')[0]
-		perform_action(user_del)
 		#delete_user(user_del)
 		#need to also delete the user.ini file
 		os.remove(userdir+user_del_file)
 
 	if theform.getvalue('create_user'):
-		perform_action('create user')
-		
 		username=theform.getvalue('username')
 		password=theform.getvalue('password')
 		realname=theform.getvalue('realname') if theform.getvalue('realname') is not None else ""
@@ -117,18 +106,18 @@ def load_admin(user,admin,theform):
 		admin=theform.getvalue('admin')
 		git_username=theform.getvalue('git_username') if theform.getvalue('git_username') is not None else "none"
 		git_password=theform.getvalue('git_password') if theform.getvalue('git_password') is not None else "none"
+		git_2fa=theform.getvalue('git_2fa') if theform.getvalue('git_2fa') is not None else "false"
 
 		if username!=None and password!=None:
 
 			#create user in database
 			#create_user(username)
 			#need to write a user file for login tools
-			write_user_file(username,password,admin,email,realname,git_username,git_password)
+			write_user_file(username,password,admin,email,realname,git_username,git_password,git_2fa)
 		else:
 			warn="</br><b style='color:red;'>ERROR: username or password missing; user cannot be created.</b></br>"
 
 	if theform.getvalue('init_db'):
-		perform_action('init db')
 		setup_db()
 
 	page= "Content-type:text/html\r\n\r\n"
@@ -154,6 +143,7 @@ def load_admin(user,admin,theform):
 	}
 
 	</style>
+	<script src="js/jquery-1.11.3.min.js"></script>
 	</head>
 	<body>
 	**navbar**
@@ -231,6 +221,7 @@ def load_admin(user,admin,theform):
 	<option value="3">Administrator</option> </select></td></tr>
 	<tr><td>git username </td><td><input type='text' name='git_username'></td></tr>
 	<tr><td>git password</td><td> <input type='password' name='git_password'></td></tr>
+	<tr><td>use two-factor auth</td><td> <input type='checkbox' name='git_2fa' value='true'></td></tr>
 	</tbody>
 	</table>
 
@@ -267,16 +258,14 @@ def load_admin(user,admin,theform):
 def load_user_config(user,admin,theform):
 	if theform.getvalue('new_pass'):
 		new_pass=theform.getvalue('new_pass')
-		perform_action(new_pass)
 		update_password(user,new_pass)
 	if theform.getvalue('new_git_password'):
 
 		new_git_password=theform.getvalue('new_git_password')
 		new_git_username=theform.getvalue('new_git_username')
-		perform_action(new_git_password)
-		perform_action(new_git_username)
+		new_git_2fa=theform.getvalue('new_git_2fa')
 
-		update_git_info(user,new_git_username,new_git_password)
+		update_git_info(user,new_git_username,new_git_password,new_git_2fa)
 
 
 	page= "Content-type:text/html\r\n\r\n"
@@ -350,7 +339,10 @@ def load_user_config(user,admin,theform):
 
 	#edit git info
 	if admin=="1":
-		page+="<form action='admin.py' method='post'><table><tr><td>new git username</td><td><input type='text' name='new_git_username'></td></tr><tr><td>new git password</td><td><input type='password' name='new_git_password'></td></tr></table>"
+		page+="""<form action='admin.py' method='post'><table><tr><td>new git username</td><td><input type='text' name='new_git_username'></td></tr>
+		<tr><td>new git password</td><td><input type='password' name='new_git_password'></td></tr>
+		<tr><td>use two-factor auth</td><td><input type='checkbox' name='new_git_2fa' value='true'></td></tr>
+		</table>"""
 
 
 		page+="<input type='submit' value='change'> </form>"

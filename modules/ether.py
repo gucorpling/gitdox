@@ -174,7 +174,12 @@ def ether_to_sgml(ether, doc_id):
 	cells = sorted(cells, key=itemgetter(1)) # so header row gets read first
 
 	open_tags = defaultdict(lambda: defaultdict(list))
+	last_open_index = defaultdict(int)
+	open_tag_length = defaultdict(int)
+	open_tag_order = defaultdict(list)
+	last_row = 1
 	toks = {}
+	row = 1
 
 	close_tags = defaultdict(list)
 	for cell in cells:
@@ -184,8 +189,20 @@ def ether_to_sgml(ether, doc_id):
 		else:
 			col = cell[0]
 			row = cell[1]
+			if row != last_row:  # New row starting, sort previous lists for opening and closing orders
+				close_tags[row].sort(key=lambda x: (-last_open_index[x],x))
+				for element in open_tags[last_row]:
+					open_tag_order[last_row].append(element)
+				open_tag_order[last_row].sort(key=lambda x: (open_tag_length[x],x), reverse=True)
+				last_row = row
 			col_name = colmap[col]
-			content = cell[2]['t']
+			if 't' in cell[2]:  # cell contains text
+				content = cell[2]['t']
+			elif 'v' in cell[2]: # cell contains numerical value
+				content = cell[2]['v']
+			elif col_name != 'tok':
+				continue  # cell does not contain a value and this is not a token entry
+
 			if col_name == 'tok':
 				toks[row] = content
 			else:
@@ -193,6 +210,7 @@ def ether_to_sgml(ether, doc_id):
 				attrib = col_name
 
 				open_tags[row][element].append((attrib, content))
+				last_open_index[element] = int(row)
 
 				if 'rowspan' in cell[2]:
 					rowspan = int(cell[2]['rowspan'])
@@ -201,6 +219,15 @@ def ether_to_sgml(ether, doc_id):
 					close_row = row + 1
 				if element not in close_tags[close_row]:
 					close_tags[close_row].append(element)
+				open_tag_length[element] = int(close_row) - int(last_open_index[element])
+
+	# Sort last row tags
+	close_tags[row].sort(key=lambda x: (-last_open_index[x], x))
+	if row + 1 in close_tags:
+		close_tags[row+1].sort(key=lambda x: (-last_open_index[x], x))
+	for element in open_tags[last_row]:
+		open_tag_order[last_row].append(element)
+	open_tag_order[last_row].sort(key=lambda x: (open_tag_length[x], x), reverse=True)
 
 	meta = "<meta"
 	meta_items = []
@@ -218,13 +245,15 @@ def ether_to_sgml(ether, doc_id):
 	output = meta + meta_props + ">\n"
 
 	for r in xrange(2,len(toks)+3):
+		if r == 30:
+			pass
 		for element in close_tags[r]:
 			output += '</' + element + '>\n'
 
 		if r == len(toks)+2:
 			break
 
-		for element in open_tags[r]:
+		for element in open_tag_order[r]:
 			tag = '<' + element
 			for attrib, value in open_tags[r][element]:
 				tag += ' ' + attrib + '="' + value + '"'
@@ -247,6 +276,7 @@ def exec_via_temp(input_text, command_params, workdir=""):
 
 		#command_params = [x if 'tempfilename' not in x else x.replace("tempfilename",temp.name) for x in command_params]
 		command_params = command_params.replace("tempfilename",temp.name)
+
 		if workdir == "":
 			proc = subprocess.Popen(command_params, stdout=subprocess.PIPE,stdin=subprocess.PIPE,stderr=subprocess.PIPE,shell=True)
 			(stdout, stderr) = proc.communicate()
@@ -261,9 +291,16 @@ def exec_via_temp(input_text, command_params, workdir=""):
 		return stdout, stderr
 
 
+def fix_colnames(socialcalc):
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_group_(orig_group:)',r'\1\2',socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_(orig|pos|lemma:)', r'\1\2', socialcalc)
+	return socialcalc
+
+
 def make_spreadsheet(data,ether_path,format="sgml"):
 	if format=="sgml":
 		socialcalc_data = sgml_to_ether(data)
+		socialcalc_data = fix_colnames(socialcalc_data)
 		ether_command = "curl --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	elif format=="socialcalc":
 		socialcalc_data = data.encode("utf8")

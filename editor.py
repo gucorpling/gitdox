@@ -7,13 +7,12 @@ from os import listdir
 from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
+from modules.gitdox_git import *
 from os.path import isfile, join
-from modules.dataenc import pass_dec, pass_enc
-import github3
-from requests.auth import HTTPBasicAuth
 import requests
+from requests.auth import HTTPBasicAuth
 import platform, re
-from paths import ether_url, get_menu
+from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml
 
 # Support IIS site prefix on Windows
@@ -22,8 +21,9 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
-  
-  
+code_2fa = None
+
+
 def harvest_meta(sgml):
 	"""
 	Get metadata key value pairs from <meta> element in imported SGML file
@@ -44,49 +44,19 @@ def harvest_meta(sgml):
 	return meta
 
 
-def push_update_to_git(username,password,path,account,repo,message):
-	files_to_upload = [path]
-	gh = github3.login(username=username, password=password)
-	repository = gh.repository(account, repo)
-	for file_info in files_to_upload:
-		with open(prefix+file_info, 'rb') as fd:
-			contents = fd.read()
-		contents_object = repository.contents(file_info)
-		if contents_object: #this file already exists on remote repo
-			#update
-			push_status = contents_object.update(message,contents)
-			return str(push_status)
-		else:#file doesn't exist on remote repo
-			#push
-			push_status = repository.create_file(path=file_info, message=message.format(file_info),content=contents,)
-			return str(push_status['commit'])
-
-
 def serialize_file(text_content,file_name):
 	f=open(prefix+file_name,'w')
 	f.write(text_content.encode("utf8"))
 	f.close()
 
 
-def get_git_credentials(user,admin):
-	if admin==0:
-		return
-	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
-	userdir = scriptpath + "users" + os.sep
-	userfile = userdir + user + '.ini'
-	f=open(userfile,'r').read().split('\n')
-	user_dict={}
-	for line in f:
-		if line!='':
-			l=line.split(' = ')
-			user_dict[l[0]]=l[1]
-	git_username=user_dict['git_username']
-	git_password=pass_dec(user_dict['git_password'])
-	return git_username,git_password[0]
-
-
 def load_page(user,admin,theform):
 	global ether_url
+	global code_2fa
+	if theform.getvalue("2fa"):
+		code_2fa = theform.getvalue("2fa")
+	else:
+		code_2fa = ""
 	max_id = generic_query("SELECT MAX(id) AS max_id FROM docs","")[0][0]
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
@@ -100,6 +70,11 @@ def load_page(user,admin,theform):
 	docname = ""
 	mymsg = ""
 	old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode = ["","","","","",""]
+
+	if int(admin) > 0:
+		git_username, git_password, git_2fa = get_git_credentials(user, admin, code_2fa)
+	else:
+		git_username, git_password, git_2fa = (None,None,None)
 
 	if theform.getvalue('id'):
 		doc_id = theform.getvalue('id')
@@ -158,9 +133,21 @@ def load_page(user,admin,theform):
 		else:
 			# Get previous values from DB
 			old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode = get_doc_info(doc_id)
-			# Assume new value are same, overwrite with different form values and update DB if new values found
+			# Assume new values are same, overwrite with different form values and update DB if new values found
 			docname, corpus, repo_name, status, assignee, mode = old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode
 			docname = old_docname
+
+			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
+			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet" and mode == "xml":
+				api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
+				nlp_user, nlp_password = get_nlp_credentials()
+				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
+				data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
+				resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
+				sgml=resp.text.encode("utf8")
+				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
+				mode = "ether"
+
 
 	if theform.getvalue('edit_docname'):
 		docname = theform.getvalue('edit_docname')
@@ -198,6 +185,9 @@ def load_page(user,admin,theform):
 				mode = theform.getvalue('edit_mode')
 				if mode != old_mode:
 					update_mode(doc_id,mode)
+			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet":  # mode has been changed to spreadsheet via NLP
+				update_mode(doc_id, "ether")
+				mode = "ether"
 			if old_docname != docname or old_corpus != corpus:
 				old_sheet_name = "gd" + "_" + old_corpus + "_" + old_docname
 				if sheet_exists(ether_url, old_sheet_name):  # Check if there is an ether sheet to copy
@@ -223,6 +213,7 @@ def load_page(user,admin,theform):
 
 	git_status=False
 
+	commit_message = ""
 	if theform.getvalue('commit_msg'):
 		commit_message = theform.getvalue('commit_msg')
 
@@ -242,8 +233,6 @@ def load_page(user,admin,theform):
 		if not os.path.isdir(prefix + subdir) and subdir != "":
 			os.mkdir(prefix + subdir, 0755)
 
-		git_username, git_password = get_git_credentials(user, admin)
-
 		if mode == "xml":
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
 			file_name = file_name.replace(" ","_") + ".xml"
@@ -262,18 +251,21 @@ def load_page(user,admin,theform):
 			# Delete a subdirectory
 			shutil.rmtree(prefix+subdir)
 	
-	if theform.getvalue('nlp_service') == "do_nlp" and mode == "xml":
-		api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api?data=%s&lb=line&format=pipes" %text_content
-		resp = requests.get(api_call, auth=HTTPBasicAuth('coptic_client', 'kz7hh2'))
+	if theform.getvalue('nlp_tokenize') == "do_tokenize" and mode == "xml":
+		api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
+		nlp_user, nlp_password = get_nlp_credentials()
+		data = {"data":text_content, "lb":"line", "format":"pipes"}
+		resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 		text_content=resp.text
-
 
 	# Editing options
 	# Docname
 	# Filename
 	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
-	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">
-	<div name="push_git" class="button" onclick="document.getElementById('push_git').value='push_git'; document.getElementById('editor_form').submit();"> <i class="fa fa-github"></i> Commit </div>
+	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">"""
+	if git_2fa == "true":
+		push_git += """<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">"""
+	push_git += """<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
 	"""
 
 	if git_status:
@@ -325,16 +317,24 @@ def load_page(user,admin,theform):
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
 		delete_meta(metaid)
-	metadata = print_meta(doc_id)
 
 	nlp_service = """
-	<div class="button" name="nlp_button" onclick="document.getElementById('nlp_service').value='do_nlp'; document.getElementById('editor_form').submit();"> <i class="fa fa-cogs"></i> NLP </div>
-	"""
+	<div class="button h128" name="tokenize_button" onclick="document.getElementById('nlp_tokenize').value='do_tokenize'; document.getElementById('editor_form').submit();"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
+	<div class="button h128" name="nlp_button" onclick="nlp_spreadsheet();">
+		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
+  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
+ 			<i class="fa fa-table fa-stack-1x"></i>
+ 		</span> </i> NLP </div>
+	""".decode("utf8")
 
 	disabled_nlp_service = """
-	<div class="button disabled" name="nlp_button"> <i class="fa fa-cogs"></i> NLP </div>
-
-	"""
+	<div class="button disabled h128" name="tokenize_button"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
+	<div class="button disabled h128" name="nlp_button">
+		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
+  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
+ 			<i class="fa fa-table fa-stack-1x"></i>
+ 		</span> </i> NLP </div>
+	""".decode("utf8")
 
 
 	page= "Content-type:text/html\r\n\r\n"
@@ -373,6 +373,7 @@ def load_page(user,admin,theform):
 		exp = re.compile(r"<article>.*</article>",re.DOTALL)
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
 	else:
+		metadata = print_meta(doc_id)
 		page=page.replace("**content**",text_content)
 		page=page.replace("**docname**",docname)
 		page=page.replace("**corpusname**",corpus)
@@ -403,5 +404,6 @@ def open_main_server():
 	user = userconfig["username"]
 	admin = userconfig["admin"]
 	print load_page(user,admin,theform).encode("utf8")
+
 
 open_main_server()

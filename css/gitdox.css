@@ -30,6 +30,11 @@ h1, h2{font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans",
 	top: 1px;
 }
 
+.disabledbutton {
+	background-color: gray;
+	pointer-events: none;
+}
+
 .slim{min-width:15px !important; padding: .3em .3em .3em !important; }
 
 select, input {
@@ -37,7 +42,7 @@ select, input {
     width: 120px;
     border-radius: 3px;
     overflow: hidden;
-    background: #fafafa url("img/icon-select.png") no-repeat 90% 50%;
+    background: #fafafa; /*url("img/icon-select.png") no-repeat 90% 50%;*/
     padding: 3px;
 }
 
@@ -83,4 +88,49 @@ table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sor
 .disabled:active {
 	position: relative;
 	top: 0px !important;
+}
+
+.report_container{
+
+padding: 10px;
+  border: solid 5px #c9c9c9;
+  background-color: white;
+  width: 50%;
+  vertical-align: top;
+  }
+
+.tooltip
+{
+  text-decoration:none;
+  position:relative;
+}
+
+.tooltip span
+{
+  display:none;
+  -moz-border-radius:6px;
+  -webkit-border-radius:6px;
+  border-radius:6px;
+  color:black;
+  background:white;
+}
+
+.tooltip:hover span
+{
+  display:block;
+  position:absolute;
+  top:-80;
+  left:0;
+  z-index:1000;
+  width:320px;
+  max-width:320px;
+  border:1px solid black;
+  margin-top:12px;
+  margin-left:32px;
+  overflow:hidden;
+  padding:8px;
+}
+
+.h128{
+	height: 12.8px;
 }

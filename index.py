@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 # Import modules for CGI handling
-import cgi, cgitb 
+import cgi, cgitb
 import os
 from os import listdir
 from modules.logintools import login
@@ -54,37 +54,33 @@ def get_max_id():
 
 
 def gen_meta_popup():
-	popup_meta_html="""
-	<HTML>
-	<HEAD>
-	<SCRIPT LANGUAGE="JavaScript"><!--
-	function copyForm() {
-		opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
-		opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
+	popup_meta_html="""<HTML>
+<HEAD>
+<SCRIPT LANGUAGE="JavaScript">
+function copyForm() {
+	opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
+	opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
 
-		opener.document.hiddenForm.submit();
-		window.close();
-		return false;
-	}
-	//--></SCRIPT>
-	</HEAD>
-	<BODY>
-	<FORM NAME="popupForm" onSubmit="return copyForm()">
-	meta key (e.g.,year):<br>
-	<input list="metakeys" name="metakey">
-	<datalist id="metakeys">
-		***options***
-	</datalist>
-	<br>
-	meta value(e.g.,200BC):<br>
-	<input type="text" name='metavalue'><br>
-	<INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
-	</FORM>
-	</BODY>
-	</HTML>
-
-
-	"""
+	opener.document.hiddenForm.submit();
+	window.close();
+	return false;
+}
+</SCRIPT>
+</HEAD>
+<BODY>
+<FORM NAME="popupForm" onSubmit="return copyForm()">
+field name (e.g., corpus):<br>
+<input list="metakeys" name="metakey">
+<datalist id="metakeys">
+***options***
+</datalist>
+<br>
+field value (e.g., shenoute.fox):<br>
+<input type="text" name='metavalue'><br>
+<INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
+</FORM>
+</BODY>
+</HTML>"""
 	options=make_options(file='metadata_fields.tab')
 	popup_meta_html=popup_meta_html.replace("***options***",options)
 	f=open(prefix+'popupPage.html','w')
@@ -112,7 +108,7 @@ def load_landing(user,admin,theform):
 
 	if selected_corpus != "" and selected_corpus != "all":
 		doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs where corpus=? ORDER BY corpus, name COLLATE NOCASE", (selected_corpus,))
-		if len(doc_list) == 0: # Restricted query produced no documents, switch back to all document display 
+		if len(doc_list) == 0: # Restricted query produced no documents, switch back to all document display
 			doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE", ())
 			selected_corpus = ""
 	else:
@@ -122,7 +118,7 @@ def load_landing(user,admin,theform):
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
 
-	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>corpus</th><th>document</th><th>status</th><th>assigned</th><th>mode</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
+	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>corpus</th><th>document</th><th>status</th><th>assigned</th><th>mode</th><th>validate</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
 
 	for doc in doc_list:
 		row="<tr>"
@@ -134,12 +130,19 @@ def load_landing(user,admin,theform):
 			elif "-" in str(item):
 				item = item.replace("-","&#8209;")  # Use non-breaking hyphens
 			row += cell(item)
-		id=str(doc[0])
-		#edit document
-		button_edit="""<form action="editor.py" method="post" id="form_edit_"""+id+"""">"""
-		id_code="""<input type="hidden" name="id"  value="""+id+">"
-		button_edit+=id_code
-		button_edit+="""<div onclick="document.getElementById('form_edit_"""+id+"""').submit();" class="button"> <i class="fa fa-pencil-square-o"></i> edit</div></form>"""
+		id = str(doc[0])
+
+		# validation icons
+		icons = """<div id="validate_""" + id + """">"""
+		icons += """<i class="fa fa-tags" style="display:inline-block"></i>"""
+		icons += """<i class="fa fa-table" style="display:inline-block"></i>"""
+		icons += """</div>"""
+
+		# edit document
+		button_edit = """<form action="editor.py" method="post" id="form_edit_""" + id + """">"""
+		id_code = """<input type="hidden" name="id"  value=""" + id + ">"
+		button_edit += id_code
+		button_edit += """<div onclick="document.getElementById('form_edit_""" + id + """').submit();" class="button"> <i class="fa fa-pencil-square-o"></i> edit</div></form>"""
 
 		#delete document
 		button_delete="""<form action="index.py" method="post" id="form_del_"""+id+"""">"""
@@ -147,11 +150,12 @@ def load_landing(user,admin,theform):
 		button_delete+="""<input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/><div onclick="document.getElementById('form_del_"""+id+"""').submit();" class="button"> <i class="fa fa-trash-o"></i> delete</div>
 		<input type="hidden" name="sel_corpus" value="**sel_corpus**"></form>"""
 
+		row += cell(icons)
 		row += cell(button_edit)
 		row += cell(button_delete)
 		row += "</tr>"
 		table += row
-		
+
 	table+="</table>"
 
 	page = ""
