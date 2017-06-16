@@ -134,3 +134,10 @@ padding: 10px;
 .h128{
 	height: 12.8px;
 }
+
+#ValidationTableContainer{
+width: 100%}
+
+.jtable td{
+    word-break: break-all;
+}
