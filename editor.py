@@ -133,9 +133,21 @@ def load_page(user,admin,theform):
 		else:
 			# Get previous values from DB
 			old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode = get_doc_info(doc_id)
-			# Assume new value are same, overwrite with different form values and update DB if new values found
+			# Assume new values are same, overwrite with different form values and update DB if new values found
 			docname, corpus, repo_name, status, assignee, mode = old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode
 			docname = old_docname
+
+			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
+			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet" and mode == "xml":
+				api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
+				nlp_user, nlp_password = get_nlp_credentials()
+				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
+				data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
+				resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
+				sgml=resp.text.encode("utf8")
+				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
+				mode = "ether"
+
 
 	if theform.getvalue('edit_docname'):
 		docname = theform.getvalue('edit_docname')
@@ -173,6 +185,9 @@ def load_page(user,admin,theform):
 				mode = theform.getvalue('edit_mode')
 				if mode != old_mode:
 					update_mode(doc_id,mode)
+			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet":  # mode has been changed to spreadsheet via NLP
+				update_mode(doc_id, "ether")
+				mode = "ether"
 			if old_docname != docname or old_corpus != corpus:
 				old_sheet_name = "gd" + "_" + old_corpus + "_" + old_docname
 				if sheet_exists(ether_url, old_sheet_name):  # Check if there is an ether sheet to copy
@@ -236,7 +251,7 @@ def load_page(user,admin,theform):
 			# Delete a subdirectory
 			shutil.rmtree(prefix+subdir)
 	
-	if theform.getvalue('nlp_service') == "do_nlp" and mode == "xml":
+	if theform.getvalue('nlp_tokenize') == "do_tokenize" and mode == "xml":
 		api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
 		nlp_user, nlp_password = get_nlp_credentials()
 		data = {"data":text_content, "lb":"line", "format":"pipes"}
@@ -250,7 +265,7 @@ def load_page(user,admin,theform):
 	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">"""
 	if git_2fa == "true":
 		push_git += """<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">"""
-	push_git += """<div name="push_git" class="button" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
+	push_git += """<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
 	"""
 
 	if git_status:
@@ -304,13 +319,22 @@ def load_page(user,admin,theform):
 		delete_meta(metaid)
 
 	nlp_service = """
-	<div class="button" name="nlp_button" onclick="document.getElementById('nlp_service').value='do_nlp'; document.getElementById('editor_form').submit();"> <i class="fa fa-cogs"></i> NLP </div>
-	"""
+	<div class="button h128" name="tokenize_button" onclick="document.getElementById('nlp_tokenize').value='do_tokenize'; document.getElementById('editor_form').submit();"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
+	<div class="button h128" name="nlp_button" onclick="nlp_spreadsheet();">
+		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
+  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
+ 			<i class="fa fa-table fa-stack-1x"></i>
+ 		</span> </i> NLP </div>
+	""".decode("utf8")
 
 	disabled_nlp_service = """
-	<div class="button disabled" name="nlp_button"> <i class="fa fa-cogs"></i> NLP </div>
-
-	"""
+	<div class="button disabled h128" name="tokenize_button"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
+	<div class="button disabled h128" name="nlp_button">
+		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
+  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
+ 			<i class="fa fa-table fa-stack-1x"></i>
+ 		</span> </i> NLP </div>
+	""".decode("utf8")
 
 
 	page= "Content-type:text/html\r\n\r\n"
@@ -380,5 +404,6 @@ def open_main_server():
 	user = userconfig["username"]
 	admin = userconfig["admin"]
 	print load_page(user,admin,theform).encode("utf8")
+
 
 open_main_server()
