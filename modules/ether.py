@@ -45,7 +45,8 @@ def number_to_letter(number):
 	else:
 		return None
 
-def sgml_to_ether(sgml):
+
+def sgml_to_ether(sgml, ignore_elements=False):
 	sgml = sgml.replace("\r","")
 	current_row = 2
 	open_annos = defaultdict(list)
@@ -97,7 +98,7 @@ version:1.5
 			anno_name = ""
 			anno_value = ""
 			for match in my_match:
-				if element != match[0]:
+				if element != match[0] and ignore_elements is False:
 					anno_name = element + "_" + match[0]
 				else:
 					anno_name = match[0]
@@ -297,9 +298,9 @@ def fix_colnames(socialcalc):
 	return socialcalc
 
 
-def make_spreadsheet(data,ether_path,format="sgml"):
+def make_spreadsheet(data, ether_path, format="sgml", ignore_elements=False):
 	if format=="sgml":
-		socialcalc_data = sgml_to_ether(data)
+		socialcalc_data = sgml_to_ether(data, ignore_elements)
 		socialcalc_data = fix_colnames(socialcalc_data)
 		ether_command = "curl --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	elif format=="socialcalc":
