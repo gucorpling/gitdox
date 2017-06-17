@@ -44,8 +44,8 @@ def setup_db():
 	conn.close()
 	
 
-def create_document(doc_id, name,corpus,status,assigned_username,filename,content):
-	generic_query("INSERT INTO docs(id, name,corpus,status,assignee_username,filename,content,mode) VALUES(?,?,?,?,?,?,?,'xml')", (int(doc_id),name,corpus,status,assigned_username,filename,content))
+def create_document(doc_id, name,corpus,status,assigned_username,filename,content,mode="xml"):
+	generic_query("INSERT INTO docs(id, name,corpus,status,assignee_username,filename,content,mode) VALUES(?,?,?,?,?,?,?,?)", (int(doc_id),name,corpus,status,assigned_username,filename,content,mode))
 
 
 def generic_query(sql,params):
@@ -64,6 +64,10 @@ def generic_query(sql,params):
 		rows = cur.fetchall()
 		return rows
 
+
+def doc_exists(doc,corpus):
+	res = generic_query("SELECT name from docs where name=? and corpus=?",(doc,corpus))
+	return len(res) > 0
 
 def save_changes(id,content):
 	"""save change from the editor"""
