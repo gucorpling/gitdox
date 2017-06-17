@@ -37,10 +37,10 @@ def harvest_meta(sgml):
 	if not sgml.startswith("<meta "):
 		return meta
 	else:
-		metatag = re.search(r'<meta ([^>]*)>',sgml).group(1)
-		matches = re.findall(r'([^ =>]+?)="([^">]+)"',metatag)
+		metatag = re.search(r'<meta ([^\n]*)>',sgml).group(1)
+		matches = re.findall(r'([^ =>]+?)="([^"]+)"',metatag)
 		for match in matches:
-			meta[match[0]] = match[1]
+			meta[match[0].strip()] = match[1].strip().replace("<","&lt;").replace(">","&gt;")
 	return meta
 
 
@@ -406,4 +406,5 @@ def open_main_server():
 	print load_page(user,admin,theform).encode("utf8")
 
 
-open_main_server()
+if __name__ == "__main__":
+	open_main_server()
