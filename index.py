@@ -125,8 +125,10 @@ def load_landing(user,admin,theform):
 		for item in doc:
 			if item == "xml":
 				item = '<i class="fa fa-code" title="xml">&nbsp;</i>'
+				mode = "xml"
 			elif item == "ether":
 				item = '<i class="fa fa-table" title="spreadsheet">&nbsp;</i>'
+				mode = "ether"
 			elif "-" in str(item):
 				item = item.replace("-","&#8209;")  # Use non-breaking hyphens
 			row += cell(item)
@@ -134,8 +136,11 @@ def load_landing(user,admin,theform):
 
 		# validation icons
 		icons = """<div id="validate_""" + id + """">"""
-		icons += """<i class="fa fa-tags" style="display:inline-block"></i>"""
-		icons += """<i class="fa fa-table" style="display:inline-block"></i>"""
+		if mode == "xml":
+			icons += """<i class="fa fa-code" title="xml">&nbsp;</i>"""
+		elif mode == "ether":
+			icons += """<i class="fa fa-table" title="spreadsheet">&nbsp;</i>"""
+		icons += """<i class="fa fa-tags" title="metadata" style="display:inline-block">&nbsp;</i>"""
 		icons += """</div>"""
 
 		# edit document

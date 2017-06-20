@@ -66,10 +66,11 @@ def load_page(user,admin,theform):
 	status = ""
 	assignee = ""
 	mode = "xml"
+	schema = ""
 	doc_id = ""  # Should only remain so if someone navigated directly to editor.py
 	docname = ""
 	mymsg = ""
-	old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode = ["","","","","",""]
+	old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema = ["", "", "", "", "", "", ""]
 
 	if int(admin) > 0:
 		git_username, git_password, git_2fa = get_git_credentials(user, admin, code_2fa)
@@ -85,6 +86,7 @@ def load_page(user,admin,theform):
 			status = "editing"
 			assignee = "default_user"
 			corpus = "default_corpus"
+			schema = ""
 			text_content = ""
 			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
 			if theform.getvalue('edit_docname'):
@@ -130,11 +132,21 @@ def load_page(user,admin,theform):
 						max_id = doc_id
 					else:
 						update_assignee(doc_id, assignee)
+
+			if theform.getvalue('edit_schema'):
+				schema = theform.getvalue('edit_schema')
+				if schema != "--none--":
+					if doc_id > max_id:
+						create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
+						max_id = doc_id
+					else:
+						update_schema(doc_id, schema)
+
 		else:
 			# Get previous values from DB
-			old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode = get_doc_info(doc_id)
+			old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema = get_doc_info(doc_id)
 			# Assume new values are same, overwrite with different form values and update DB if new values found
-			docname, corpus, repo_name, status, assignee, mode = old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode
+			docname, corpus, repo_name, status, assignee, mode, schema = old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema
 			docname = old_docname
 
 			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
@@ -185,6 +197,10 @@ def load_page(user,admin,theform):
 				mode = theform.getvalue('edit_mode')
 				if mode != old_mode:
 					update_mode(doc_id,mode)
+			if theform.getvalue('edit_schema'):
+				schema = theform.getvalue('edit_schema')
+				if schema != old_schema:
+					update_schema(doc_id, schema)
 			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet":  # mode has been changed to spreadsheet via NLP
 				update_mode(doc_id, "ether")
 				mode = "ether"
@@ -250,7 +266,7 @@ def load_page(user,admin,theform):
 		else:
 			# Delete a subdirectory
 			shutil.rmtree(prefix+subdir)
-	
+
 	if theform.getvalue('nlp_tokenize') == "do_tokenize" and mode == "xml":
 		api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
 		nlp_user, nlp_password = get_nlp_credentials()
@@ -285,6 +301,28 @@ def load_page(user,admin,theform):
 
 	edit_status += options+"</select>"
 
+	# Get XML schema list
+	schema_list = ['--none--']
+	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+	schemadir = scriptpath + "schemas" + os.sep
+
+	schemafiles = [f for f in listdir(schemadir) if isfile(join(schemadir, f))]
+	for schemafile in sorted(schemafiles):
+		if schemafile.endswith(".xsd"):
+			schemafile = schemafile.replace(".xsd", "")
+			schema_list.append(schemafile)
+
+	edit_schema = """<select name="edit_schema" onchange="this.form.submit()">"""
+	for schema_file in schema_list:
+		schema_select = ""
+		schema_name = schema_file
+		if schema_name == schema:
+			schema_select = "selected"
+		edit_schema += """<option value='""" + schema_name + "' %s>" + schema_name + """</option>"""
+		edit_schema = edit_schema % schema_select
+	edit_schema += "</select>"
+	# edit_schema = edit_schema.replace(schema+'"', schema+'" selected="selected"')
+
 	# Get user_list from the logintools
 	user_list=[]
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
@@ -302,7 +340,7 @@ def load_page(user,admin,theform):
 		user_name=user
 		if user_name==assignee:
 			assignee_select="selected"
-		edit_assignee+="""<option value='""" + user_name + "' %s>" + user_name + """</option>""" 
+		edit_assignee+="""<option value='""" + user_name + "' %s>" + user_name + """</option>"""
 		edit_assignee=edit_assignee%assignee_select
 	edit_assignee+="</select>"
 
@@ -379,12 +417,15 @@ def load_page(user,admin,theform):
 		page=page.replace("**corpusname**",corpus)
 		page=page.replace("**edit_status**",edit_status)
 		page=page.replace("**repo**",repo_name)
+		page=page.replace("**edit_schema**",edit_schema)
 		page=page.replace("**edit_assignee**",edit_assignee)
 		page=page.replace("**edit_mode**",edit_mode)
 		page=page.replace("**metadata**",metadata)
 		page=page.replace("**disabled_NLP**",disabled_nlp_service)
 		page=page.replace("**NLP**",nlp_service)
 		page=page.replace("**id**",doc_id)
+		page=page.replace("**mode**",mode)
+		page=page.replace("**schema**",schema)
 		if int(admin)>0:
 			page=page.replace("**github**",push_git)
 		else:
