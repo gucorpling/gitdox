@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 from gitdox_sql import *
-from ether import get_socialcalc, make_spreadsheet
+from ether import get_socialcalc, make_spreadsheet, exec_via_temp
 import re
 import cgi
 import json
@@ -63,17 +63,22 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 
 
 def validate_all_docs():
-	docs = generic_query("SELECT id FROM docs", None)
+	docs = generic_query("SELECT id, mode, schema FROM docs", None)
 	reports = {}
 
 	for doc in docs:
 		doc_id = doc[0]
-		reports[doc_id] = validate_doc(doc_id)
+		doc_mode = doc[1]
+		doc_schema = doc[2]
+		if doc_mode == "ether":
+			reports[doc_id] = validate_doc(doc_id)
+		elif doc_mode == "xml":
+			reports[doc_id] = validate_doc_xml(doc_id, doc_schema)
 
 	return json.dumps(reports)
 
 
-def validate_doc(doc_id, highlight=False):
+def validate_doc(doc_id, editor=False):
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
@@ -93,16 +98,16 @@ def validate_doc(doc_id, highlight=False):
 		rule_doc = rule[1]
 		rule_domain = rule[2]
 		if rule_corpus is not None:
-			if re.match(rule_corpus, doc_corpus) is None:
+			if re.search(rule_corpus, doc_corpus) is None:
 				rule_applies = False
 		if rule_doc is not None:
-			if re.match(rule_doc, doc_name) is None:
+			if re.search(rule_doc, doc_name) is None:
 				rule_applies = False
 
 		if rule_applies is True:
 			rule_report, rule_extra, rule_cells = apply_rule(doc_id, rule, ether, meta)
 			cells += rule_cells
-			if highlight is True and len(rule_extra) > 0:  # highlight is True iff it was called from editor page
+			if editor is True and len(rule_extra) > 0:
 				new_report = """<div class="tooltip">""" + rule_report[:-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
 			else:
 				new_report = rule_report
@@ -112,10 +117,10 @@ def validate_doc(doc_id, highlight=False):
 			elif rule_domain == "meta":
 				meta_report += new_report
 
-	if highlight == True:
+	if editor == True:
 		highlight_cells(cells, ether_url, ether_doc_name)
 
-	if highlight is True:  # editor page
+	if editor is True:
 		full_report = ether_report + meta_report
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
@@ -133,8 +138,6 @@ def validate_doc(doc_id, highlight=False):
 
 def apply_rule(doc_id, rule, ether, meta):
 	doc_info = get_doc_info(doc_id)
-	doc_name = doc_info[0]
-	doc_corpus = doc_info[1]
 
 	domain = rule[2]
 	name = rule[3]
@@ -144,6 +147,9 @@ def apply_rule(doc_id, rule, ether, meta):
 	report = ''
 	extra = ''
 	cells = []
+
+	if name is None:
+		return report, extra, cells
 
 	if domain == "ether":
 		ether_lines = ether.splitlines()
@@ -184,7 +190,7 @@ def apply_rule(doc_id, rule, ether, meta):
 							cell_content = re.search(r':t:([^:]*)(:|$)', other)
 							if cell_content is not None:
 								cell_content = cell_content.group(1)
-								match = re.match(argument, cell_content)
+								match = re.search(argument, cell_content)
 								if match is None:
 									report += "Cell " + col + row + ": content does not match pattern <br/>"
 									extra += "Cell " + col + row + ":<br/>" + "Content: " + cell_content + "<br/>" + "Pattern: " + argument + "<br/>"
@@ -237,25 +243,94 @@ def apply_rule(doc_id, rule, ether, meta):
 						cells.append(arg_letter + boundary)
 
 	elif domain == "meta":
-		# meta = get_doc_meta(doc_id)
-		if operator == "~":
-			for metadatum in meta:
-				if metadatum[2] == name:
-					value = metadatum[3]
-					match = re.match(argument, value)
-					if match is None:
-						report += "Metadata for " + name + " does not match pattern" + "<br/>"
-						extra += "Metadata: " + value + "<br/>" + "Pattern: " + argument + "<br/>"
-		elif operator == "exists":
-			exists = False
-			for metadatum in meta:
-				if metadatum[2] == name:
-					exists = True
-					break
-			if exists is False:
-				report += "No metadata for " + name + '<br/>'
+		meta_report, meta_extra = apply_meta_rule(doc_id, rule, meta)
+		report += meta_report
+		extra += meta_extra
 
 	return report, extra, cells
+
+
+def apply_meta_rule(doc_id, rule, meta):
+	name = rule[3]
+	operator = rule[4]
+	argument = rule[5]
+	report = ''
+	extra = ''
+	if operator == "~":
+		for metadatum in meta:
+			if metadatum[2] == name:
+				value = metadatum[3]
+				match = re.search(argument, value)
+				if match is None:
+					report += "Metadata for " + name + " does not match pattern" + "<br/>"
+					extra += "Metadata: " + value + "<br/>" + "Pattern: " + argument + "<br/>"
+	elif operator == "exists":
+		exists = False
+		for metadatum in meta:
+			if metadatum[2] == name:
+				exists = True
+				break
+		if exists is False:
+			report += "No metadata for " + name + '<br/>'
+	return report, extra
+
+
+def validate_doc_xml(doc_id, schema, editor=False):
+	xml_report = ''
+	# xml validation
+	if schema == "--none--":
+		xml_report += "No schema<br/>"
+	else:
+		command = "xmllint --schema " + "../schemas/" + schema + ".xsd" + " tempfilename"
+		xml = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+		xml = xml.encode("utf8")
+		out, err = exec_via_temp(xml, command)
+		err = err.strip()
+		err = re.sub(r'/tmp/[A-Za-z0-9]+:','XML schema: <br>',err)
+		err = re.sub(r'/tmp/[A-Za-z0-9]+','XML schema ',err)
+		err = re.sub(r'\n','<br/>',err)
+		xml_report += err + "<br/>"
+
+	# metadata validation
+	meta_report = ''
+	meta_rules = generic_query("SELECT * FROM validate WHERE domain = 'meta'", None)
+	meta = get_doc_meta(doc_id)
+	doc_info = get_doc_info(doc_id)
+	doc_name = doc_info[0]
+	doc_corpus = doc_info[1]
+	for rule in meta_rules:
+		rule_applies = True
+		rule_corpus = rule[0]
+		rule_doc = rule[1]
+		if rule_corpus is not None:
+			if re.search(rule_corpus, doc_corpus) is None:
+				rule_applies = False
+		if rule_doc is not None:
+			if re.search(rule_doc, doc_name) is None:
+				rule_applies = False
+		if rule_applies is True:
+			rule_report, rule_extra = apply_meta_rule(doc_id, rule, meta)
+			if editor is True and len(rule_extra) > 0:
+				meta_report += """<div class="tooltip">""" + rule_report[
+															 :-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
+			else:
+				meta_report += rule_report
+
+	# report
+	if editor is True:
+		full_report = xml_report + meta_report
+		if len(full_report) == 0:
+			full_report = "Document is valid!"
+		return full_report
+	else:
+		json_report = {}
+		if len(xml_report) == 0:
+			ether_report = "xml is valid"
+		if len(meta_report) == 0:
+			meta_report = "metadata is valid"
+		json_report['xml'] = xml_report
+		json_report['meta'] = meta_report
+		return json_report
 
 
 if __name__ == "__main__":
@@ -269,10 +344,15 @@ if __name__ == "__main__":
 
 	parameter = cgi.FieldStorage()
 	doc_id = parameter.getvalue("doc_id")
+	mode = parameter.getvalue("mode")
+	schema = parameter.getvalue("schema")
 
 	if doc_id == "all":
-		print "Content-type:application/json\r\n\r\n"
+		print "Content-type:application/json\n\n"
 		print validate_all_docs()
 	else:
-		print "Content-type:text/html\r\n\r\n"
-		print validate_doc(doc_id, highlight=True)
+		print "Content-type:text/html\n\n"
+		if mode == "ether":
+			print validate_doc(doc_id, editor=True)
+		elif mode == "xml":
+			print validate_doc_xml(doc_id, schema, editor=True)

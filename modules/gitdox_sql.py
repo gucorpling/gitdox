@@ -22,7 +22,7 @@ def setup_db():
 	cur.execute("DROP TABLE IF EXISTS validate")
 
 	conn.commit()
-	
+
 	# Create tables
 	#user table not used
 	#cur.execute('''CREATE TABLE IF NOT EXISTS users
@@ -33,7 +33,7 @@ def setup_db():
 	cur.execute('''CREATE TABLE IF NOT EXISTS docs
 				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text)''')
 	#metadata table
-	cur.execute('''CREATE TABLE IF NOT EXISTS metadata 
+	cur.execute('''CREATE TABLE IF NOT EXISTS metadata
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key, value) ON CONFLICT REPLACE)''')
 	#validation table
 	cur.execute('''CREATE TABLE IF NOT EXISTS validate
@@ -42,28 +42,33 @@ def setup_db():
 
 	conn.commit()
 	conn.close()
-	
-
-def create_document(doc_id, name,corpus,status,assigned_username,filename,content):
-	generic_query("INSERT INTO docs(id, name,corpus,status,assignee_username,filename,content,mode) VALUES(?,?,?,?,?,?,?,'xml')", (int(doc_id),name,corpus,status,assigned_username,filename,content))
 
 
-def generic_query(sql,params):
-	#generic_query("DELETE FROM rst_nodes WHERE doc=? and project=?",(doc,project))
-	
-	dbpath = os.path.dirname(os.path.realpath(__file__)) + os.sep +".."+os.sep+"gitdox.db"
+def create_document(doc_id, name, corpus, status, assigned_username, filename, content,mode="xml", schema='--none--'):
+	generic_query("INSERT INTO docs(id, name,corpus,status,assignee_username,filename,content,mode,schema) VALUES(?,?,?,?,?,?,?,'xml',?)",
+		(int(doc_id), name, corpus, status, assigned_username, filename, content, schema))
+
+
+def generic_query(sql, params):
+	# generic_query("DELETE FROM rst_nodes WHERE doc=? and project=?",(doc,project))
+
+	dbpath = os.path.dirname(os.path.realpath(__file__)) + os.sep + ".." + os.sep + "gitdox.db"
 	conn = sqlite3.connect(dbpath)
-	
+
 	with conn:
 		cur = conn.cursor()
 		if params is not None:
 			cur.execute(sql,params)
 		else:
 			cur.execute(sql)
-		
+
 		rows = cur.fetchall()
 		return rows
 
+
+def doc_exists(doc,corpus):
+	res = generic_query("SELECT name from docs where name=? and corpus=?",(doc,corpus))
+	return len(res) > 0
 
 def save_changes(id,content):
 	"""save change from the editor"""
@@ -86,6 +91,11 @@ def update_corpus(id,corpusname):
 
 def update_mode(id,mode):
 	generic_query("UPDATE docs SET mode=? WHERE id=?",(mode,id))
+
+
+def update_schema(id, schema):
+	generic_query("UPDATE docs SET schema=? WHERE id=?", (schema, id))
+
 
 def delete_doc(id):
 	generic_query("DELETE FROM docs WHERE id=?",(id,))
@@ -138,7 +148,9 @@ def delete_meta(metaid):
 	generic_query("DELETE FROM metadata WHERE metaid=?",(metaid,))
 
 def get_doc_info(doc_id):
-	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode FROM docs WHERE id=?", (int(doc_id),))[0]
+	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode,schema FROM docs WHERE id=?",
+						 (int(doc_id),))[0]
+
 
 def get_doc_meta(doc_id):
 	return generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE", (int(doc_id),))
@@ -148,3 +160,15 @@ def get_corpora():
 
 def get_validate_rules():
 	return generic_query("SELECT * FROM validate", None)
+
+def get_sorted_rules(sort):
+	return generic_query("SELECT * FROM validate ORDER BY " + sort, None)  # parameterization doesn't work for order by
+
+def create_validate_rule(doc, corpus, domain, name, operator, argument):
+	generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument))
+
+def delete_validate_rule(id):
+	generic_query("DELETE FROM validate WHERE id=?", (int(id),))
+
+def update_validate_rule(doc, corpus, domain, name, operator, argument, id):
+	generic_query("UPDATE validate SET doc = ?, corpus = ?, domain = ?, name = ?, operator = ?, argument = ? WHERE id = ?",(doc, corpus, domain, name, operator, argument, id))

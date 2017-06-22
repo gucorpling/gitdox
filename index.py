@@ -118,15 +118,27 @@ def load_landing(user,admin,theform):
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
 
-	table = """<table id="doctable" class="sortable"><tr><th>id</th><th>corpus</th><th>document</th><th>status</th><th>assigned</th><th>mode</th><th>validate</th><th colspan="2" class="sorttable_nosort">actions</th></tr>"""
+	table = """<script src="js/index.js"></script><table id="doctable" class="sortable">"""
+	table += """<thead><tr><th>id</th><th>corpus</th><th>document</th><th>status</th><th>assigned</th><th>mode</th><th>validate</th><th colspan="2" class="sorttable_nosort">actions</th></tr></thead>"""
+	table += """<tfoot><tr><td><input type="text" id="filter_id" onkeyup="filter()"></td>
+					<td><input type="text" id="filter_corpus" onkeyup="filter()"></td>
+					<td><input type="text" id="filter_document" onkeyup="filter()"></td>
+					<td><input type="text" id="filter_status" onkeyup="filter()"></td>
+					<td><input type="text" id="filter_assigned" onkeyup="filter()"></td>
+					<td><input type="text" id="filter_mode" onkeyup="filter()" placeholder="xml/spreadsheet"></td>
+					<td></td>
+					<td colspan="2"></td></tr></tfoot>"""
+	table += """<tbody>"""
 
 	for doc in doc_list:
 		row="<tr>"
 		for item in doc:
 			if item == "xml":
 				item = '<i class="fa fa-code" title="xml">&nbsp;</i>'
+				mode = "xml"
 			elif item == "ether":
 				item = '<i class="fa fa-table" title="spreadsheet">&nbsp;</i>'
+				mode = "ether"
 			elif "-" in str(item):
 				item = item.replace("-","&#8209;")  # Use non-breaking hyphens
 			row += cell(item)
@@ -134,8 +146,11 @@ def load_landing(user,admin,theform):
 
 		# validation icons
 		icons = """<div id="validate_""" + id + """">"""
-		icons += """<i class="fa fa-tags" style="display:inline-block"></i>"""
-		icons += """<i class="fa fa-table" style="display:inline-block"></i>"""
+		if mode == "xml":
+			icons += """<i class="fa fa-code" title="xml">&nbsp;</i>"""
+		elif mode == "ether":
+			icons += """<i class="fa fa-table" title="spreadsheet">&nbsp;</i>"""
+		icons += """<i class="fa fa-tags" title="metadata" style="display:inline-block">&nbsp;</i>"""
 		icons += """</div>"""
 
 		# edit document
@@ -156,20 +171,29 @@ def load_landing(user,admin,theform):
 		row += "</tr>"
 		table += row
 
-	table+="</table>"
+	table+="</tbody></table>"
+
+	if admin == "3":
+		validation_rules = """<form action='validation_rules.py' id="form_validation_rules" method="post" style="display:inline-block">
+		<div onclick="document.getElementById('form_validation_rules').submit();" class="button">
+  		<i class="fa fa-table"></i>
+		validation rules</div></form>"""
+	else:
+		validation_rules = ""
 
 	page = ""
 
 	menu = get_menu()
 	menu = menu.encode("utf8")
 
-	landing = open(prefix+"templates"+os.sep+"landing.html").read()
-	landing = landing.replace("**max_id_plus1**",str(max_id+1))
-	landing = landing.replace("**user**",user)
-	landing = landing.replace("**project**",project)
-	landing = landing.replace("**corpora**",corpus_list)
-	landing = landing.replace("**sel_corpus**",selected_corpus)
-	landing = landing.replace("**table**",table)
+	landing = open(prefix + "templates" + os.sep + "landing.html").read()
+	landing = landing.replace("**max_id_plus1**", str(max_id + 1))
+	landing = landing.replace("**user**", user)
+	landing = landing.replace("**project**", project)
+	landing = landing.replace("**validation_rules**", validation_rules)
+	landing = landing.replace("**corpora**", corpus_list)
+	landing = landing.replace("**sel_corpus**", selected_corpus)
+	landing = landing.replace("**table**", table)
 	landing = landing.replace("**navbar**", menu)
 	page += landing
 	print "Content-type:text/html\n\n"

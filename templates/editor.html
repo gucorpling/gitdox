@@ -5,7 +5,7 @@
 
 <head>
 <link rel="stylesheet" href="css/scriptorium.css" type="text/css" charset="utf-8"/>
-<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
+<link rel="stylesheet" href="css/gitdox.css?version=2" type="text/css" charset="utf-8"/>
 <link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=800">
@@ -85,6 +85,8 @@ td, th {
 
 <form name="hiddenForm" id="editor_form" method="post" action="editor.py" enctype="multipart/form-data">
 <input type="hidden" name="id" id="id" value="**id**">
+<input type="hidden" name="mode" id="mode" value="**mode**">
+<input type="hidden" name="schema" id="schema" value="**schema**">
 <input type="hidden" name="nlp_tokenize" id="nlp_tokenize">
 <input type="hidden" name="nlp_spreadsheet" id="nlp_spreadsheet">
     <h2>Editor | <a href="index.py">back to document list</a> </h2>
@@ -106,7 +108,7 @@ td, th {
 		<input type="text" id="edit_corpusname" name="edit_corpusname" defaultValue="**corpusname**" value="**corpusname**" onblur="validate_corpusname();">
 		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
 	</td>
-	<td rowspan="5" class="report_container">
+	<td rowspan="6" class="report_container">
 	<div id="validation_report">
 	</div>
 	</td>
@@ -117,6 +119,7 @@ td, th {
 		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
 	</td>
 </tr>
+<tr><td>XML Schema:</td><td>**edit_schema**</td></tr>
 <tr><td>Assigned to:</td><td>**edit_assignee**</td></tr>
 <tr><td>Status:</td><td>**edit_status**</td></tr>
 <tr><td>Mode:</td><td>**edit_mode**</td></tr>

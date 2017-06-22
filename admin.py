@@ -12,6 +12,8 @@ import urllib
 from modules.gitdox_sql import *
 from modules.dataenc import pass_dec, pass_enc
 from paths import get_menu
+from editor import harvest_meta
+from modules.ether import make_spreadsheet
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -129,6 +131,7 @@ def load_admin(user,admin,theform):
 		<link rel="stylesheet" href="css/scriptorium.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
+		<script src="js/validate.js"/>
 	<style>
 	table {
 		font-family: arial, sans-serif;
@@ -234,9 +237,61 @@ def load_admin(user,admin,theform):
 	if warn!="":
 		page+=warn
 
+	msg = ""
+	imported = 0
+	if "file" in theform:
+		fileitem = theform["file"]
+		if len(fileitem.filename) > 0:
+			#  strip leading path from file name to avoid directory traversal attacks
+			fn = os.path.basename(fileitem.filename)
+			msg = '<br><span style="color:green">The file "' + fn + '" was uploaded successfully</span><br>'
+			from zipfile import ZipFile
+			zip = ZipFile(fileitem.file)
+			file_list = [f for f in zip.namelist() if not os.path.isdir(f)]
+			for filename in file_list:
+				imported += 1
+				sgml = zip.open(filename).read()
+				meta_key_val = harvest_meta(sgml)
+				if "corpus" in meta_key_val:
+					corpus = meta_key_val["corpus"]
+				else:
+					corpus = "default_corpus"
+				docname = filename.replace(" ","_")
+				docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)
+				if not doc_exists(docname, corpus):
+					max_id = generic_query("SELECT MAX(id) AS max_id FROM docs", "")[0][0]
+					if not max_id:  # This is for the initial case after init db
+						max_id = 0
+					doc_id = int(max_id) + 1
+					create_document(doc_id, docname, corpus, "published", "default_user", "CopticScriptorium/shenoute-discourses5-dev/gitdox", "", "ether")
+				else:
+					# Document already exists, just overwrite spreadsheet and metadata and set mode to ether
+					doc_id = generic_query("SELECT id FROM docs where corpus=? and name=?", (corpus,docname))[0][0]
+					update_mode(doc_id, "ether")
 
+				make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
+				for key, value in meta_key_val.iteritems():
+					key = key.replace("@", "_")
+					save_meta(doc_id, key.decode("utf8"), value.decode("utf8"))
+	if imported > 0:
+		msg += '<span style="color:green">Imported '+str(imported)+' files from archive</span><br>'
 
+	page+="""
+	<h2>Batch upload</h2>
+<p>Import multiple spreadsheets data by uploading a zip archive with SGML files</p>
+<ul>
+	<li>Document names are generated from file names inside the zip, without their extension (e.g. .sgml, .tt)</li>
+	<li>Metadata is taken from the &lt;meta&gt; element surrounding the document</li>
+	<li>Corpus name is taken from a metadatum corpus inside meta, else 'default_corpus'</li>
+</ul>
+<form id="batch_upload" name="batch_upload" method="post" action="admin.py" enctype="multipart/form-data">
+<div style="display: inline-block">
+<input id="file" type="file" name="file" style="width: 200px"/>
+<button onclick="upload()">Upload</button>
+</form>
+"""
 	
+	page+=msg
 
 	page+="<br><br><h2>Database management</h2>"
 	#init database, setup_db, wipe all documents
