@@ -141,3 +141,7 @@ width: 100%}
 .jtable td{
     word-break: break-all;
 }
+
+tfoot {
+    display: table-row-group;
+}
