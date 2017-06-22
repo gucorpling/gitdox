@@ -1,39 +1,41 @@
-corpus	name of the corpus
-Coptic_edition	if the text has been published before, include publication information here
-Greek_source	optional, information about the Greek version of the text if it exists (e.g., Greek Alphabetical or Systematic Apophthegmata Patrum)
-title	title of this document (unique)
-msltem_title	the name or title of the conceptual work, e.g. Abraham Our Father, To Thieving Nuns; in the TEI export, if this is not available, the main title of the document is used (metadata field “title”)
-author	author of the conceptual work
-language	language in which the text is written
 annotation	names of annotators (transcribers, editors, annotators) in comma delimited sequence
-project	name of project supporting the transcription/annotation/publication (e.g., Coptic SCRIPTORIUM, KoMET, etc.)
-translation	use “none” if no translation; if English translation published by Coptic SCRIPTORIUM then name(s) of translator(s) inserted here in comma delimited sequence
+author	author of the conceptual work
+collection	collection or department in the current repository
+Coptic_edition	if the text has been published before, include publication information here
+corpus	name of the corpus
+country	country of origin of the text object; optional
+document_cts_urn	urn that applies to the document following data model created by Bridget Almas
+endnote	contains a note about the document that will appear in the HTML visualizations at the bottom of the visualization; optional
+facsimile_graphic_url	contains URL of open access image online
+Greek_source	optional, information about the Greek version of the text if it exists (e.g., Greek Alphabetical or Systematic Apophthegmata Patrum)
+idno	catalogue # of the manuscript in the current repository
+ignore:image	contains image filename of file stored on a local computer
+language	language in which the text is written
+license	use for copyright in Sahidica, CC-BY for everything else
+msContents_title@n	volume number of the thing in msContents_title@type; if this field has data then in order for it to be outputted to the TEI XML then msContents_title@type must have data
+msContents_title@type	used for things like Shenoute's Canons or Discourses; optional
+msltem_title	the name or title of the conceptual work, e.g. Abraham Our Father, To Thieving Nuns; in the TEI export, if this is not available, the main title of the document is used (metadata field “title”)
 msName	use CMCL code (e.g., MONB.YA); optional but must use msName, pages_from, pages_to all three or none at all
+next	contains the CTS urn for the next document in the corpus; optional
+note	optional
+objectType	codex, papyrus, ostracon, etc; optional
+origDate	prose about the date of the text object (e.g.Between 900 and 1200 C.E.); optional
+origDate_notAfter	date of the terminum ante quem (in four digits with leading zeros, e.g., 1200); be sure the format of the cell in Excel is text not number or date; optional
+origDate_notBefore	date of the terminum post quem (in four digits with leading zeros, e.g., 0900); be sure the format of the cell in Excel is text not number or date; optional
+origDate_precision	likelihood that the dating is accurate – usually “low”, “medium”, or “high”; optional
+origPlace	name of the place of the text object, not necessarily city/town/village name (e.g., White Monastery); optional
 pages_from	beginning of page sequence of document (original page number of scribe but written in arabic numerals) optional but must use msName, pages_from, pages_to all three or none at all
 pages_to	optional but must use msName, pages_from, pages_to all three or none at all
-msContents_title@type	used for things like Shenoute's Canons or Discourses; optional
-msContents_title@n	volume number of the thing in msContents_title@type; if this field has data then in order for it to be outputted to the TEI XML then msContents_title@type must have data
-repository	current museum/library/etc where the manuscript currently resides
-collection	collection or department in the current repository
-idno	catalogue # of the manuscript in the current repository
-version@n	version of this Coptic SCRIPTORIUM data
-version@date	version date of this Coptic SCRIPTORIUM data in YYYY-MM-DD format; format cell as text not as date format in excel
-source_info	
-license	use for copyright in Sahidica, CC-BY for everything else
-document_cts_urn	urn that applies to the document following data model created by Bridget Almas
-Trismegistos	[enter the trismegistos # if it exists/is known for the manuscript]; optional but should be included if a TM number exists
-objectType	codex, papyrus, ostracon, etc; optional
-country	country of origin of the text object; optional
 placeName	city or village or place name of the original location of the text object; should be recognizable name in gazetteer (note, see TEI guidelines and EpiDoc for how this can be linked to Pleiades); optional
-origPlace	name of the place of the text object, not necessarily city/town/village name (e.g., White Monastery); optional
-origDate	prose about the date of the text object (e.g.Between 900 and 1200 C.E.); optional
-origDate_precision	likelihood that the dating is accurate – usually “low”, “medium”, or “high”; optional
-origDate_notBefore	date of the terminum post quem (in four digits with leading zeros, e.g., 0900); be sure the format of the cell in Excel is text not number or date; optional
-origDate_notAfter	date of the terminum ante quem (in four digits with leading zeros, e.g., 1200); be sure the format of the cell in Excel is text not number or date; optional
-source	if the digitized text comes from another source, the editors of that source are listed here (used for Sahidica and other donated texts); optional
-note	optional
-witness	prose note about parallels; optional
-redundant	required: “yes” or “no” – tied to parallels: yes = file marked redundant (a parallel is the primary witness); no=this file is the primary witness (whether or not it has a parallel); any file with NO parallel witness should be marked redundant=no
 previous	contains the CTS urn for the previous document in the corpus; optional
-next	contains the CTS urn for the next document in the corpus; optional
-endnote	contains a note about the document that will appear in the HTML visualizations at the bottom of the visualization; optional
+project	name of project supporting the transcription/annotation/publication (e.g., Coptic SCRIPTORIUM, KoMET, etc.)
+redundant	required: “yes” or “no” – tied to parallels: yes = file marked redundant (a parallel is the primary witness); no=this file is the primary witness (whether or not it has a parallel); any file with NO parallel witness should be marked redundant=no
+repository	current museum/library/etc where the manuscript currently resides
+source	if the digitized text comes from another source, the editors of that source are listed here (used for Sahidica and other donated texts); optional
+source_info	
+title	title of this document (unique)
+translation	use “none” if no translation; if English translation published by Coptic SCRIPTORIUM then name(s) of translator(s) inserted here in comma delimited sequence
+Trismegistos	[enter the trismegistos # if it exists/is known for the manuscript]; optional but should be included if a TM number exists
+version@date	version date of this Coptic SCRIPTORIUM data in YYYY-MM-DD format; format cell as text not as date format in excel
+version@n	version of this Coptic SCRIPTORIUM data
+witness	prose note about parallels; optional
