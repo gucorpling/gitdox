@@ -351,7 +351,7 @@ def load_page(user,admin,theform):
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
 		metavalue = theform.getvalue('metavalue')
-		save_meta(int(doc_id),metakey.encode("utf8"),metavalue.encode("utf8"))
+		save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
 		delete_meta(metaid)
