@@ -285,7 +285,11 @@ def validate_doc_xml(doc_id, schema, editor=False):
 		xml = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
 		xml = xml.encode("utf8")
 		out, err = exec_via_temp(xml, command)
-		xml_report += err[:-1] + "<br/>"
+		err = err.strip()
+		err = re.sub(r'/tmp/[A-Za-z0-9]+:','XML schema: <br>',err)
+		err = re.sub(r'/tmp/[A-Za-z0-9]+','XML schema ',err)
+		err = re.sub(r'\n','<br/>',err)
+		xml_report += err + "<br/>"
 
 	# metadata validation
 	meta_report = ''

@@ -118,14 +118,14 @@ def load_landing(user,admin,theform):
 	if not max_id:  # This is for the initial case after init db
 		max_id = 0
 
-	table = """<table id="doctable" class="sortable">"""
+	table = """<script src="js/index.js"></script><table id="doctable" class="sortable">"""
 	table += """<thead><tr><th>id</th><th>corpus</th><th>document</th><th>status</th><th>assigned</th><th>mode</th><th>validate</th><th colspan="2" class="sorttable_nosort">actions</th></tr></thead>"""
 	table += """<tfoot><tr><td><input type="text" id="filter_id" onkeyup="filter()"></td>
 					<td><input type="text" id="filter_corpus" onkeyup="filter()"></td>
 					<td><input type="text" id="filter_document" onkeyup="filter()"></td>
 					<td><input type="text" id="filter_status" onkeyup="filter()"></td>
 					<td><input type="text" id="filter_assigned" onkeyup="filter()"></td>
-					<td><input type="text" id="filter_mode" onkeyup="filter()"></td>
+					<td><input type="text" id="filter_mode" onkeyup="filter()" placeholder="xml/spreadsheet"></td>
 					<td></td>
 					<td colspan="2"></td></tr></tfoot>"""
 	table += """<tbody>"""

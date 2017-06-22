@@ -38,7 +38,7 @@ function validate_all() {
     	     output2 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-tags" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
     	    }
     	    else if (k == "xml"){
-    	     if (v.endsWith(" validates<br/>")) {
+    	     if (v.indexOf("validates") !== -1) {
     	       color = 'green';
     	       sort1 = 'v';
     	     }
