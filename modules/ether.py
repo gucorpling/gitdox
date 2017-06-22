@@ -236,9 +236,10 @@ def ether_to_sgml(ether, doc_id):
 	# docid,metaid,key,value - four cols
 	for item in meta_rows:
 		key, value = item[2], item[3]
-		key = key.replace("=","&equals;")
-		value = value.replace('"',"&quot;")
-		meta_items.append(key + '="' + value + '"')
+		if not key.startswith("ignore:"):
+			key = key.replace("=","&equals;")
+			value = value.replace('"',"&quot;")
+			meta_items.append(key + '="' + value + '"')
 
 	meta_props = " ".join(meta_items)
 	if meta_props != "":
