@@ -431,6 +431,12 @@ def load_page(user,admin,theform):
 		else:
 			page = page.replace("**github**", '')
 
+		if int(admin) < 3:
+			page = page.replace('onblur="validate_docname();"','onblur="validate_docname();" disabled="disabled" class="disabled"')
+			page = page.replace('onblur="validate_corpusname();"','onblur="validate_corpusname();" disabled="disabled" class="disabled"')
+			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
+			page = page.replace('''<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
+
 	page = page.replace("**navbar**", get_menu())
 	return page
 
