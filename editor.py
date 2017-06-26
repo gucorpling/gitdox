@@ -278,7 +278,7 @@ def load_page(user,admin,theform):
 	# Docname
 	# Filename
 	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
-	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">"""
+	<input type="text" name="commit_msg" id="commit_msg" placeholder="commit message here" style="width:140px">"""
 	if git_2fa == "true":
 		push_git += """<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">"""
 	push_git += """<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>

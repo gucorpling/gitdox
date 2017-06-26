@@ -34,6 +34,12 @@ function validate_repo()
 
 function do_push()
 {
+
+    if (document.getElementById("commit_msg").value.length == 0){
+        var r = alert("Please enter a commit message!");
+        return;
+    }
+
     document.getElementById('push_git').value='push_git';
 
     // Check if 2fa is on
