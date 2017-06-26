@@ -233,10 +233,11 @@ def displaylogin(userdir, thisscript=None, action=None, failed=False):
 
     loginform = readfile(templatedir+form_nojs)
     loginform = loginform.replace('**script**', thisscript)
-    loginform = loginform.replace('**skin**', thisscript)
+    loginform = loginform.replace('**skin**', skin)
 
     loginpage = readfile(templatedir+logintemplate)  
     loginpage = loginpage.replace('**login form**', loginform)
+    loginpage = loginpage.replace('**skin**', skin)
 
     if failed:
         loginpage = loginpage.replace('**login failed**', '<b style="color:red">Wrong user name or password</b>')

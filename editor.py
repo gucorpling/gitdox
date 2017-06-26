@@ -8,6 +8,7 @@ from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
 from modules.gitdox_git import *
+from modules.configobj import ConfigObj
 from os.path import isfile, join
 import requests
 from requests.auth import HTTPBasicAuth
@@ -20,6 +21,15 @@ if platform.system() == "Windows":
 	prefix = "transc\\"
 else:
 	prefix = ""
+
+scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+userdir = scriptpath + "users" + os.sep
+templatedir = scriptpath + "templates" + os.sep
+config = ConfigObj(userdir + 'config.ini')
+skin = config["skin"]
+project = config["project"]
+editor_help_link = config["editor_help_link"]
+
 
 code_2fa = None
 
@@ -437,7 +447,13 @@ def load_page(user,admin,theform):
 			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
 			page = page.replace('''<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
 
+	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**", get_menu())
+	page = page.replace("**header**", header)
+	page = page.replace("**project**", project)
+	page = page.replace("**skin**", skin)
+	page = page.replace("**editor_help_link**",editor_help_link)
+
 	return page
 
 

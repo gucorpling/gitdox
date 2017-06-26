@@ -5,6 +5,7 @@ import cgi, cgitb
 import os, platform
 from modules.logintools import login
 from modules.gitdox_sql import *
+from modules.configobj import ConfigObj
 from paths import get_menu
 
 # Support IIS site prefix on Windows
@@ -13,6 +14,12 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
+scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+userdir = scriptpath + "users" + os.sep
+templatedir = scriptpath + "templates" + os.sep
+config = ConfigObj(userdir + 'config.ini')
+skin = config["skin"]
+project = config["project"]
 
 def load_validation_rules():
 
@@ -22,7 +29,7 @@ def load_validation_rules():
 	<!DOCTYPE html>
 	<html>
 	<head>
-		<link rel="stylesheet" href="css/scriptorium.css" type="text/css" charset="utf-8"/>
+		<link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
 		<link rel="stylesheet" href="js/jquery-ui-1.12.1/jquery-ui.min.css"/>
@@ -50,27 +57,10 @@ def load_validation_rules():
 	**navbar**
 	<div id="wrapper">
 		<div id="header">
-			<div id="copticlogo">
-				<a href="http://copticscriptorium.org/">
-					<img id="img1" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/copticlogo.png" width="210" height="101" alt="Coptic SCRIPTORIUM"/>
-				</a>
-			</div>
-			<div id="unicorn">
-				<a href="http://copticscriptorium.org/">
-					<img id="img2" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/unicorn.png" width="80" height="101" alt="Unicorn"/>
-				</a>
-			</div>
-			<div id="englishlogo">
-				<a href="http://copticscriptorium.org/">
-					<img id="img3" src="https://corpling.uis.georgetown.edu/coptic-nlp/img/englishlogo.png" width="199" height="101" alt="Coptic SCRIPTORIUM"/>
-				</a>
-			</div>
-			<img id="img4" src="img/ruleline.png" width="95%" height="14" alt=""/>
-			</br>
-			</br>
+		  **header**
 		</div>
 		<div id="content">
-	<h1 >Coptic XML transcription editor</h1> 
+	<h1>GitDox - Validation</h1>
 		<p style="border-bottom:groove;"><i>validation rule management</i> | <a href="index.py">back to document list</a> </p>
 	
 	
@@ -124,7 +114,11 @@ def load_validation_rules():
 
 
 	page+="</div></div></body></html>"
+	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
+	page = page.replace("**header**",header)
+	page = page.replace("**project**",project)
+	page = page.replace("**skin**",skin)
 
 	return page
 
