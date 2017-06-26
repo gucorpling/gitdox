@@ -8,6 +8,7 @@ from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
 from modules.gitdox_git import *
+from modules.configobj import ConfigObj
 from os.path import isfile, join
 import requests
 from requests.auth import HTTPBasicAuth
@@ -20,6 +21,15 @@ if platform.system() == "Windows":
 	prefix = "transc\\"
 else:
 	prefix = ""
+
+scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+userdir = scriptpath + "users" + os.sep
+templatedir = scriptpath + "templates" + os.sep
+config = ConfigObj(userdir + 'config.ini')
+skin = config["skin"]
+project = config["project"]
+editor_help_link = config["editor_help_link"]
+
 
 code_2fa = None
 
@@ -278,7 +288,7 @@ def load_page(user,admin,theform):
 	# Docname
 	# Filename
 	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
-	<input type="text" name="commit_msg" placeholder = "commit message here" style="width:140px">"""
+	<input type="text" name="commit_msg" id="commit_msg" placeholder="commit message here" style="width:140px">"""
 	if git_2fa == "true":
 		push_git += """<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">"""
 	push_git += """<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
@@ -437,7 +447,13 @@ def load_page(user,admin,theform):
 			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
 			page = page.replace('''<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
 
+	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**", get_menu())
+	page = page.replace("**header**", header)
+	page = page.replace("**project**", project)
+	page = page.replace("**skin**", skin)
+	page = page.replace("**editor_help_link**",editor_help_link)
+
 	return page
 
 

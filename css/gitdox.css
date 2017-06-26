@@ -145,3 +145,6 @@ width: 100%}
 tfoot {
     display: table-row-group;
 }
+
+#filter_id{width:30px}
+#filter_mode{width:60px}

@@ -63,17 +63,31 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 
 
 def validate_all_docs():
-	docs = generic_query("SELECT id, mode, schema FROM docs", None)
+	docs = generic_query("SELECT id, name, corpus, mode, schema, validation, timestamp FROM docs", None)
+	#doc_timestamps = get_timestamps()
+	doc_timestamps = {}
 	reports = {}
 
 	for doc in docs:
-		doc_id = doc[0]
-		doc_mode = doc[1]
-		doc_schema = doc[2]
+		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
 		if doc_mode == "ether":
-			reports[doc_id] = validate_doc(doc_id)
+			if doc_name in doc_timestamps:
+				if timestamp == doc_timestamps[doc_name]:
+					reports[doc_id] = json.loads(validation)
+				else:
+					reports[doc_id] = validate_doc(doc_id)
+					update_validation(doc_id, json.dumps(reports[doc_id]))
+					update_timestamp(doc_id, doc_timestamps[doc_name])
+			else:
+				reports[doc_id] = validate_doc(doc_id)
+				#reports[doc_id] = {"ether":"sample_ether","meta":"sample_meta"}
+				update_validation(doc_id, json.dumps(reports[doc_id]))
 		elif doc_mode == "xml":
-			reports[doc_id] = validate_doc_xml(doc_id, doc_schema)
+			if validation is None:
+				reports[doc_id] = validate_doc_xml(doc_id, doc_schema)
+				update_validation(doc_id,json.dumps(reports[doc_id]))
+			else:
+				reports[doc_id] = json.loads(validation)
 
 	return json.dumps(reports)
 

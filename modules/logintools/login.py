@@ -229,12 +229,15 @@ def displaylogin(userdir, thisscript=None, action=None, failed=False):
     config = ConfigObj(userdir + 'config.ini')
     templatedir = userdir + ".." + os.sep + config['templatedir'].replace("/",os.sep)
 
+    skin = config['skin']
 
     loginform = readfile(templatedir+form_nojs)
     loginform = loginform.replace('**script**', thisscript)
+    loginform = loginform.replace('**skin**', skin)
 
     loginpage = readfile(templatedir+logintemplate)  
     loginpage = loginpage.replace('**login form**', loginform)
+    loginpage = loginpage.replace('**skin**', skin)
 
     if failed:
         loginpage = loginpage.replace('**login failed**', '<b style="color:red">Wrong user name or password</b>')

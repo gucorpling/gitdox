@@ -31,7 +31,7 @@ def setup_db():
 
 	#docs table
 	cur.execute('''CREATE TABLE IF NOT EXISTS docs
-				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text)''')
+				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text timestamp text)''')
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key, value) ON CONFLICT REPLACE)''')
@@ -66,6 +66,12 @@ def generic_query(sql, params):
 		return rows
 
 
+def invalidate_doc_by_name(doc,corpus):
+	generic_query("UPDATE docs SET validation=NULL WHERE name=? and corpus=?", (doc, corpus))
+
+def invalidate_doc_by_id(id):
+	generic_query("UPDATE docs SET validation=NULL WHERE id=?", (id,))
+
 def doc_exists(doc,corpus):
 	res = generic_query("SELECT name from docs where name=? and corpus=?",(doc,corpus))
 	return len(res) > 0
@@ -73,6 +79,7 @@ def doc_exists(doc,corpus):
 def save_changes(id,content):
 	"""save change from the editor"""
 	generic_query("UPDATE docs SET content=? WHERE id=?",(content,id))
+	invalidate_doc_by_id(id)
 
 def update_assignee(doc_id,user_name):
 	generic_query("UPDATE docs SET assignee_username=? WHERE id=?",(user_name,doc_id))
@@ -82,20 +89,20 @@ def update_status(id,status):
 
 def update_docname(id,docname):
 	generic_query("UPDATE docs SET name=? WHERE id=?",(docname,id))
+	invalidate_doc_by_id(id)
 
 def update_filename(id,filename):
 	generic_query("UPDATE docs SET filename=? WHERE id=?",(filename,id))
 
 def update_corpus(id,corpusname):
 	generic_query("UPDATE docs SET corpus=? WHERE id=?",(corpusname,id))
+	invalidate_doc_by_id(id)
 
 def update_mode(id,mode):
 	generic_query("UPDATE docs SET mode=? WHERE id=?",(mode,id))
 
-
 def update_schema(id, schema):
 	generic_query("UPDATE docs SET schema=? WHERE id=?", (schema, id))
-
 
 def delete_doc(id):
 	generic_query("DELETE FROM docs WHERE id=?",(id,))
@@ -143,9 +150,11 @@ def print_meta(doc_id):
 
 def save_meta(doc_id,key,value):
 	generic_query("INSERT OR REPLACE INTO metadata(docid,key,value) VALUES(?,?,?)",(doc_id,key,value))
+	invalidate_doc_by_id(doc_id)
 
 def delete_meta(metaid):
 	generic_query("DELETE FROM metadata WHERE metaid=?",(metaid,))
+	invalidate_doc_by_id(doc_id)
 
 def get_doc_info(doc_id):
 	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode,schema FROM docs WHERE id=?",
@@ -166,9 +175,20 @@ def get_sorted_rules(sort):
 
 def create_validate_rule(doc, corpus, domain, name, operator, argument):
 	generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument))
+	if domain == "meta":
+		invalidate_doc_by_name("%","%")
 
 def delete_validate_rule(id):
 	generic_query("DELETE FROM validate WHERE id=?", (int(id),))
+	invalidate_doc_by_name("%", "%")
 
 def update_validate_rule(doc, corpus, domain, name, operator, argument, id):
 	generic_query("UPDATE validate SET doc = ?, corpus = ?, domain = ?, name = ?, operator = ?, argument = ? WHERE id = ?",(doc, corpus, domain, name, operator, argument, id))
+	if domain == "meta":
+		invalidate_doc_by_name("%", "%")
+
+def update_validation(doc_id,validation):
+	generic_query("UPDATE docs SET validation=? where id=?",(validation,doc_id))
+
+def update_timestamp(doc_id, timestamp):
+	generic_query("UPDATE docs SET timestamp=? where id=?", (timestamp, doc_id))

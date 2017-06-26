@@ -72,7 +72,7 @@ function copyForm() {
 field name (e.g., corpus):<br>
 <input list="metakeys" name="metakey">
 <datalist id="metakeys">
-***options***
+***options**
 </datalist>
 <br>
 field value (e.g., shenoute.fox):<br>
@@ -82,7 +82,7 @@ field value (e.g., shenoute.fox):<br>
 </BODY>
 </HTML>"""
 	options=make_options(file='metadata_fields.tab')
-	popup_meta_html=popup_meta_html.replace("***options***",options)
+	popup_meta_html=popup_meta_html.replace("***options**",options)
 	f=open(prefix+'popupPage.html','w')
 	f.write(popup_meta_html)
 
@@ -187,9 +187,19 @@ def load_landing(user,admin,theform):
 	menu = menu.encode("utf8")
 
 	landing = open(prefix + "templates" + os.sep + "landing.html").read()
+	header = open(prefix + "templates" + os.sep + "header.html").read()
+
+	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+	userdir = scriptpath + "users" + os.sep
+	config = ConfigObj(userdir + 'config.ini')
+	skin = config["skin"]
+	project = config["project"]
+
 	landing = landing.replace("**max_id_plus1**", str(max_id + 1))
 	landing = landing.replace("**user**", user)
 	landing = landing.replace("**project**", project)
+	landing = landing.replace("**header**", header)
+	landing = landing.replace("**skin**", skin)
 	landing = landing.replace("**validation_rules**", validation_rules)
 	landing = landing.replace("**corpora**", corpus_list)
 	landing = landing.replace("**sel_corpus**", selected_corpus)
@@ -207,6 +217,7 @@ def open_main_server():
 	theform = cgi.FieldStorage()
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	userdir = scriptpath + "users" + os.sep
+
 	action, userconfig = login(theform, userdir, thisscript, action)
 	user = userconfig["username"]
 	admin = userconfig["admin"]
