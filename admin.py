@@ -158,13 +158,9 @@ def load_admin(user,admin,theform):
 		<div id="header">
 		**header**
 		</div>
-	</div>
-	<div id="content">
-	<h1 >GitDox - Administration</h1>
-		<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a> </p>
-	
-	
-	
+		<div id="content">
+		<h1 >GitDox - Administration</h1>
+			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a> </p>
 
 	"""
 	page+="""<form id="form_del_user" action="admin.py" method='post'>"""
@@ -227,8 +223,9 @@ def load_admin(user,admin,theform):
 
 	msg = ""
 	imported = 0
-	if "file" in theform:
+	if "file" in theform and "mode" in theform:
 		fileitem = theform["file"]
+		mode = theform.getvalue("mode")
 		if len(fileitem.filename) > 0:
 			#  strip leading path from file name to avoid directory traversal attacks
 			fn = os.path.basename(fileitem.filename)
@@ -244,20 +241,25 @@ def load_admin(user,admin,theform):
 					corpus = meta_key_val["corpus"]
 				else:
 					corpus = "default_corpus"
-				docname = filename.replace(" ","_")
-				docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)
+				docname = filename.replace(" ","_")  # No spaces in document names
+				docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)  # Strip extension
 				if not doc_exists(docname, corpus):
 					max_id = generic_query("SELECT MAX(id) AS max_id FROM docs", "")[0][0]
 					if not max_id:  # This is for the initial case after init db
 						max_id = 0
 					doc_id = int(max_id) + 1
-					create_document(doc_id, docname, corpus, "published", "default_user", "CopticScriptorium/shenoute-discourses5-dev/gitdox", "", "ether")
+					create_document(doc_id, docname, corpus, "published", "default_user", "cligu/lirc/gitdox", "", mode)
 				else:
-					# Document already exists, just overwrite spreadsheet and metadata and set mode to ether
+					# Document already exists, just overwrite spreadsheet/xml and metadata and set mode
 					doc_id = generic_query("SELECT id FROM docs where corpus=? and name=?", (corpus,docname))[0][0]
-					update_mode(doc_id, "ether")
+					update_mode(doc_id, mode)
 
-				make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
+				if mode == "ether":
+					make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
+				else:
+					content = re.sub("</?meta ?[^>]*>[\r\n]*","",sgml)
+					content = unicode(content.decode("utf8"))
+					save_changes(doc_id, content)
 				for key, value in meta_key_val.iteritems():
 					key = key.replace("@", "_")
 					save_meta(doc_id, key.decode("utf8"), value.decode("utf8"))
@@ -271,12 +273,25 @@ def load_admin(user,admin,theform):
 	<li>Document names are generated from file names inside the zip, without their extension (e.g. .sgml, .tt)</li>
 	<li>Metadata is taken from the &lt;meta&gt; element surrounding the document</li>
 	<li>Corpus name is taken from a metadatum corpus inside meta, else 'default_corpus'</li>
+	<li>Select XML mode to import into XML editor, or Spreadsheet to convert SGML spans into a new spreadsheet</li>
 </ul>
 <form id="batch_upload" name="batch_upload" method="post" action="admin.py" enctype="multipart/form-data">
-<div style="display: inline-block">
-<input id="file" type="file" name="file" style="width: 200px"/>
-<button onclick="upload()">Upload</button>
-</form>
+<table>
+  <tbody><tr>
+    <td>Mode:
+  <select id="mode" name="mode" style="width: 120px;">
+	<option value="xml">XML</option>
+	<option value="ether">Spreadsheet</option>
+</select>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="file" type="file" name="file" style="width: 200px"></td></tr><tr>
+<td><button onclick="upload()">Upload</button>
+    </td>
+  </tr>
+  </tbody></table></form>
 """
 	
 	page+=msg
@@ -292,7 +307,7 @@ def load_admin(user,admin,theform):
 
 
 
-	page+="</div></div></body></html>"
+	page+="</div></div></div></body></html>"
 	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
 	page = page.replace("**header**",header)
@@ -377,7 +392,7 @@ def load_user_config(user,admin,theform):
 
 		page+="<input type='submit' value='change'> </form>"
 	
-	page+="</div></div></body></html>"
+	page+="</div></div></div></body></html>"
 
 	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
