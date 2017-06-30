@@ -368,7 +368,7 @@ def load_page(user,admin,theform):
 
 	nlp_service = """
 	<div class="button h128" name="tokenize_button" onclick="document.getElementById('nlp_tokenize').value='do_tokenize'; document.getElementById('editor_form').submit();"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
-	<div class="button h128" name="nlp_button" onclick="nlp_spreadsheet();">
+	<div class="button h128" name="nlp_button" onclick="document.getElementById('nlp_spreadsheet').value='do_spreadsheet'; document.getElementById('editor_form').submit();">
 		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
   			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
  			<i class="fa fa-table fa-stack-1x"></i>
