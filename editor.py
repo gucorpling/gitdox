@@ -22,6 +22,7 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
+# Read configuration
 scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 userdir = scriptpath + "users" + os.sep
 templatedir = scriptpath + "templates" + os.sep
@@ -29,7 +30,11 @@ config = ConfigObj(userdir + 'config.ini')
 skin = config["skin"]
 project = config["project"]
 editor_help_link = config["editor_help_link"]
-
+# Captions and API URLs for NLP buttons
+xml_nlp_button = config["xml_nlp_button"]
+spreadsheet_nlp_button = config["spreadsheet_nlp_button"]
+xml_nlp_api = config["xml_nlp_api"]
+spreadsheet_nlp_api = config["spreadsheet_nlp_api"]
 
 code_2fa = None
 
@@ -160,8 +165,8 @@ def load_page(user,admin,theform):
 			docname = old_docname
 
 			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
-			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet" and mode == "xml":
-				api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
+			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet" and mode == "xml":
+				api_call = spreadsheet_nlp_api
 				nlp_user, nlp_password = get_nlp_credentials()
 				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
 				data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
@@ -211,7 +216,7 @@ def load_page(user,admin,theform):
 				schema = theform.getvalue('edit_schema')
 				if schema != old_schema:
 					update_schema(doc_id, schema)
-			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet":  # mode has been changed to spreadsheet via NLP
+			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet":  # mode has been changed to spreadsheet via NLP
 				update_mode(doc_id, "ether")
 				mode = "ether"
 			if old_docname != docname or old_corpus != corpus:
@@ -277,8 +282,8 @@ def load_page(user,admin,theform):
 			# Delete a subdirectory
 			shutil.rmtree(prefix+subdir)
 
-	if theform.getvalue('nlp_tokenize') == "do_tokenize" and mode == "xml":
-		api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
+	if theform.getvalue('nlp_xml') == "do_nlp_xml" and mode == "xml":
+		api_call=xml_nlp_api
 		nlp_user, nlp_password = get_nlp_credentials()
 		data = {"data":text_content, "lb":"line", "format":"pipes"}
 		resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
@@ -366,27 +371,16 @@ def load_page(user,admin,theform):
 		metaid = theform.getvalue('metaid')
 		delete_meta(metaid)
 
-	nlp_service = """
-	<div class="button h128" name="tokenize_button" onclick="document.getElementById('nlp_tokenize').value='do_tokenize'; document.getElementById('editor_form').submit();"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
-	<div class="button h128" name="nlp_button" onclick="document.getElementById('nlp_spreadsheet').value='do_spreadsheet'; document.getElementById('editor_form').submit();">
-		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
-  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
- 			<i class="fa fa-table fa-stack-1x"></i>
- 		</span> </i> NLP </div>
-	""".decode("utf8")
+	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; document.getElementById('editor_form').submit();"> """ + xml_nlp_button + """</div>""" + \
+				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; document.getElementById('editor_form').submit();">"""+ spreadsheet_nlp_button + """</div>"""
+	nlp_service = nlp_service.decode("utf8")
 
-	disabled_nlp_service = """
-	<div class="button disabled h128" name="tokenize_button"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
-	<div class="button disabled h128" name="nlp_button">
-		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
-  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
- 			<i class="fa fa-table fa-stack-1x"></i>
- 		</span> </i> NLP </div>
-	""".decode("utf8")
+	disabled_nlp_service = """<div class="button disabled h128" name="nlp_xml_button">"""+xml_nlp_button+"""</div>""" + \
+						   """<div class="button disabled h128" name="nlp_ether_button">""" +spreadsheet_nlp_button + """</div>"""
+	disabled_nlp_service = disabled_nlp_service.decode("utf8")
 
 
 	page= "Content-type:text/html\r\n\r\n"
-	#page += str(theform)
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
