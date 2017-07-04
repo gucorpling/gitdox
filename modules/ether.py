@@ -13,7 +13,7 @@ from collections import defaultdict
 from collections import OrderedDict
 from operator import itemgetter
 from gitdox_sql import *
-
+import json
 import cgi
 
 __version__ = "2.0.0"
@@ -345,6 +345,17 @@ def get_socialcalc(ether_path, name):
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
 	return stdout.decode("utf8")
+
+
+def get_timestamps(ether_path):
+	command = "curl -X GET " + ether_path + "_roomtimes"
+	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+	(stdout, stderr) = proc.communicate()
+	times = json.loads(stdout)
+	output = {}
+	for room in times:
+		output[room.replace("timestamp-","")] = times[room]
+	return output
 
 
 if __name__  == "__main__":

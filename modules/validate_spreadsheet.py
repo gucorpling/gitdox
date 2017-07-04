@@ -2,7 +2,8 @@
 # -*- coding: UTF-8 -*-
 
 from gitdox_sql import *
-from ether import get_socialcalc, make_spreadsheet, exec_via_temp
+from ether import get_socialcalc, make_spreadsheet, exec_via_temp, get_timestamps
+from collections import defaultdict
 import re
 import cgi
 import json
@@ -64,14 +65,16 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 
 def validate_all_docs():
 	docs = generic_query("SELECT id, name, corpus, mode, schema, validation, timestamp FROM docs", None)
-	#doc_timestamps = get_timestamps()
-	doc_timestamps = {}
+	doc_timestamps = defaultdict(str)
+	doc_timestamps.update(get_timestamps(ether_url))
+	#doc_timestamps = {}
 	reports = {}
 
 	for doc in docs:
 		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
 		if doc_mode == "ether":
-			if doc_name in doc_timestamps:
+			ether_name = "_".join(["gd",corpus,doc_name])
+			if ether_name in doc_timestamps:
 				if timestamp == doc_timestamps[doc_name]:
 					reports[doc_id] = json.loads(validation)
 				else:
