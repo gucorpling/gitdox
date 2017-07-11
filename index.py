@@ -28,7 +28,6 @@ def make_options(**kwargs):
 	if "file" in kwargs:
 		kwargs["file"] = prefix + kwargs["file"]
 		names = open(kwargs["file"],'r').read().replace("\r","").split("\n")
-		#print len(names)
 		names = list(name[:name.find("\t")] for name in names)
 	elif "names" in kwargs:
 		names = kwargs[names]
@@ -81,13 +80,13 @@ field value (e.g., superman):<br>
 </FORM>
 </BODY>
 </HTML>"""
-	options=make_options(file='metadata_fields.tab')
-	popup_meta_html=popup_meta_html.replace("***options**",options)
-	f=open(prefix+'popupPage.html','w')
+	options = make_options(file='metadata_fields.tab')
+	popup_meta_html = popup_meta_html.replace("***options**",options)
+	f = open(prefix + 'popupPage.html', 'w')
 	f.write(popup_meta_html)
 
 
-def load_landing(user,admin,theform):
+def load_landing(user, admin, theform):
 	gen_meta_popup()
 
 	if theform.getvalue('deletedoc'):
@@ -214,7 +213,7 @@ def load_landing(user,admin,theform):
 	else:
 		landing = landing.replace("**create_doc**",'''class="button disabled"''')
 	page += landing
-	print "Content-type:text/html\n\n"
+	print("Content-type:text/html\n\n")
 
 	return page
 
@@ -229,7 +228,7 @@ def open_main_server():
 	action, userconfig = login(theform, userdir, thisscript, action)
 	user = userconfig["username"]
 	admin = userconfig["admin"]
-	print load_landing(user,admin,theform)
+	print(load_landing(user,admin,theform))
 
 
 open_main_server()
