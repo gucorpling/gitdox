@@ -361,10 +361,10 @@ def load_admin(user,admin,theform):
 
 
 def load_user_config(user,admin,theform):
-	if theform.getvalue('new_pass'):
+	if theform.getvalue('new_pass') and user != "demo":
 		new_pass=theform.getvalue('new_pass')
 		update_password(user,new_pass)
-	if theform.getvalue('new_git_password'):
+	if theform.getvalue('new_git_password') and user != "demo":
 
 		new_git_password=theform.getvalue('new_git_password')
 		new_git_username=theform.getvalue('new_git_username')
@@ -408,34 +408,30 @@ def load_user_config(user,admin,theform):
 		<p style="border-bottom:groove;"><i>edit user info</i> | <a href="index.py">back to document list</a> </p>
 	
 	<h2>Edit your account information</h2>
-	
-	
 	"""
 	#edit user password
 	username_info="""<table><tr><td>username</td><td>%s</td></tr>"""%user
 	username_info+="""
 	<form action='admin.py' method='post'>
 	<tr><td>new password</td><td><input type='password' name='new_pass'></td></tr></table>
-	
 	"""
 	
 
-
 	page+=username_info
-	page+="<input type='submit' value='change'> </form>"
-	page+="</br><p>note: after you changed your password you'll be logged out and you need to log in using your new password again</p>"
+	page+="<input type='submit' value='change'> </form>\n"
+	page+="</br><p>note: after you changed your password you'll be logged out and you need to log in using your new password again</p>\n"
 
 	#edit git info
 	if admin=="1":
 		page+="""<form action='admin.py' method='post'><table><tr><td>new git username</td><td><input type='text' name='new_git_username'></td></tr>
 		<tr><td>new git password</td><td><input type='password' name='new_git_password'></td></tr>
 		<tr><td>use two-factor auth</td><td><input type='checkbox' name='new_git_2fa' value='true'></td></tr>
-		</table>"""
+		</table>\n"""
 
 
-		page+="<input type='submit' value='change'> </form>"
+		page+="<input type='submit' value='change'> </form>\n"
 	
-	page+="</div></div></div></body></html>"
+	page += "\t\t\t</div>\t\t\n</div>\t\n</div>\n</body>\n</html>"
 
 	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
@@ -456,9 +452,9 @@ def open_main_server():
 	user = userconfig["username"]
 	admin = userconfig["admin"]
 	if admin == "3":
-		print load_admin(user,admin,theform)
+		print(load_admin(user,admin,theform))
 	elif admin == "0" or admin=="1":
-		print load_user_config(user,admin,theform)
+		print(load_user_config(user,admin,theform))
 
 
 open_main_server()

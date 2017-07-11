@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+from six import iteritems
 import cgi, cgitb
 import os, shutil
 from os import listdir
@@ -104,7 +105,7 @@ def load_page(user,admin,theform):
 			schema = ""
 			text_content = ""
 			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
-			if theform.getvalue('edit_docname'):
+			if theform.getvalue('edit_docname') and user != "demo":
 				if docname != 'new_document':
 					if doc_id > max_id:
 						create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
@@ -112,7 +113,7 @@ def load_page(user,admin,theform):
 					else:
 						update_docname(doc_id, docname)
 
-			if theform.getvalue('edit_filename'):
+			if theform.getvalue('edit_filename') and user != "demo":
 				repo_name = theform.getvalue('edit_filename')
 				if repo_name != 'account/repo_name':
 					if doc_id > max_id:
@@ -121,7 +122,7 @@ def load_page(user,admin,theform):
 					else:
 						update_filename(doc_id, repo_name)
 
-			if theform.getvalue('edit_corpusname'):
+			if theform.getvalue('edit_corpusname') and user != "demo":
 				corpus = theform.getvalue('edit_corpusname')
 				if corpus != 'default_corpus':
 					if doc_id > max_id:
@@ -130,7 +131,7 @@ def load_page(user,admin,theform):
 					else:
 						update_corpus(doc_id, corpus)
 
-			if theform.getvalue('edit_status'):
+			if theform.getvalue('edit_status') and user != "demo":
 				status = theform.getvalue('edit_status')
 				if status != 'editing':
 					if doc_id > max_id:
@@ -139,7 +140,7 @@ def load_page(user,admin,theform):
 					else:
 						update_status(doc_id, status)
 
-			if theform.getvalue('edit_assignee'):
+			if theform.getvalue('edit_assignee') and user != "demo":
 				assignee = theform.getvalue('edit_assignee')
 				if assignee != "default_user":
 					if doc_id > max_id:
@@ -148,7 +149,7 @@ def load_page(user,admin,theform):
 					else:
 						update_assignee(doc_id, assignee)
 
-			if theform.getvalue('edit_schema'):
+			if theform.getvalue('edit_schema') and user != "demo":
 				schema = theform.getvalue('edit_schema')
 				if schema != "--none--":
 					if doc_id > max_id:
@@ -165,7 +166,7 @@ def load_page(user,admin,theform):
 			docname = old_docname
 
 			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
-			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet" and mode == "xml":
+			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet" and mode == "xml" and user != "demo":
 				api_call = spreadsheet_nlp_api
 				nlp_user, nlp_password = get_nlp_credentials()
 				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
@@ -190,31 +191,31 @@ def load_page(user,admin,theform):
 		# After clicking edit in landing page, editing existing doc case, get the values from the db. pull the content from db to be displayed in the editor window.
 			if theform.getvalue('edit_docname'):
 				docname = theform.getvalue('edit_docname')
-				if docname != old_docname:
+				if docname != old_docname and user != "demo":
 					update_docname(doc_id,docname)
 			if theform.getvalue('edit_filename'):
 				repo_name=theform.getvalue('edit_filename')
-				if repo_name != old_repo:
+				if repo_name != old_repo and user != "demo":
 					update_filename(doc_id,repo_name)
 			if theform.getvalue('edit_corpusname'):
 				corpus = theform.getvalue('edit_corpusname')
-				if corpus != old_corpus:
+				if corpus != old_corpus and user != "demo":
 					update_corpus(doc_id,corpus)
 			if theform.getvalue('edit_status'):
 				status = theform.getvalue('edit_status')
-				if status != old_status:
+				if status != old_status and user != "demo":
 					update_status(doc_id,status)
 			if theform.getvalue('edit_assignee'):
 				assignee = theform.getvalue('edit_assignee')
-				if assignee != old_assignee:
+				if assignee != old_assignee and user != "demo":
 					update_assignee(doc_id,assignee)
 			if theform.getvalue('edit_mode'):
 				mode = theform.getvalue('edit_mode')
-				if mode != old_mode:
+				if mode != old_mode and user != "demo":
 					update_mode(doc_id,mode)
 			if theform.getvalue('edit_schema'):
 				schema = theform.getvalue('edit_schema')
-				if schema != old_schema:
+				if schema != old_schema and user != "demo":
 					update_schema(doc_id, schema)
 			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet":  # mode has been changed to spreadsheet via NLP
 				update_mode(doc_id, "ether")
@@ -237,10 +238,11 @@ def load_page(user,admin,theform):
 		text_content = theform.getvalue('code')
 		text_content = text_content.replace("\r","")
 		text_content = unicode(text_content.decode("utf8"))
-		if int(doc_id)>int(max_id):
-			create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
-		else:
-			save_changes(doc_id,text_content)
+		if user != "demo":
+			if int(doc_id)>int(max_id):
+				create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
+			else:
+				save_changes(doc_id,text_content)
 
 	git_status=False
 
@@ -350,9 +352,9 @@ def load_page(user,admin,theform):
 			user_list.append(userfile)
 
 	edit_assignee="""<select name="edit_assignee" onchange="this.form.submit()">"""
-	for user in user_list:
+	for list_user in user_list:
 		assignee_select=""
-		user_name=user
+		user_name=list_user
 		if user_name==assignee:
 			assignee_select="selected"
 		edit_assignee+="""<option value='""" + user_name + "' %s>" + user_name + """</option>"""
@@ -366,10 +368,12 @@ def load_page(user,admin,theform):
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
 		metavalue = theform.getvalue('metavalue')
-		save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
+		if user != "demo":
+			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
-		delete_meta(metaid)
+		if user != "demo":
+			delete_meta(metaid, doc_id)
 
 	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; document.getElementById('editor_form').submit();"> """ + xml_nlp_button + """</div>""" + \
 				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; document.getElementById('editor_form').submit();">"""+ spreadsheet_nlp_button + """</div>"""
@@ -379,13 +383,16 @@ def load_page(user,admin,theform):
 						   """<div class="button disabled h128" name="nlp_ether_button">""" +spreadsheet_nlp_button + """</div>"""
 	disabled_nlp_service = disabled_nlp_service.decode("utf8")
 
+	# Disable NLP services in demo
+	if user == "demo":
+		nlp_service = disabled_nlp_service
 
 	page= "Content-type:text/html\r\n\r\n"
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
 
-		if "file" in theform:
+		if "file" in theform and user != "demo":
 			fileitem = theform["file"]
 			if len(fileitem.filename) > 0:
 				#  strip leading path from file name to avoid directory traversal attacks
@@ -397,7 +404,7 @@ def load_page(user,admin,theform):
 					sgml = fileitem.file.read()
 					meta_key_val = harvest_meta(sgml)
 					make_spreadsheet(sgml,"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname)
-					for key, value in meta_key_val.iteritems():
+					for (key, value) in iteritems(meta_key_val):
 						key = key.replace("@","_")
 						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
 		else:
@@ -460,7 +467,7 @@ def open_main_server():
 	action, userconfig = login(theform, userdir, thisscript, action)
 	user = userconfig["username"]
 	admin = userconfig["admin"]
-	print load_page(user,admin,theform).encode("utf8")
+	print(load_page(user,admin,theform).encode("utf8"))
 
 
 if __name__ == "__main__":
