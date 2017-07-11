@@ -296,6 +296,49 @@ def load_admin(user,admin,theform):
 	
 	page+=msg
 
+	msg = ""
+	sql_statements = 0
+	if "sqltab" in theform:
+		fileitem = theform["sqltab"]
+		if len(fileitem.filename) > 0:
+			#  strip leading path from file name to avoid directory traversal attacks
+			fn = os.path.basename(fileitem.filename)
+			msg = '<br><span style="color:green">The file "' + fn + '" was uploaded successfully</span><br>'
+			rows = fileitem.file.read().replace("\r","").split("\n")
+			c1, c2 = ["",""]
+			for i, row in enumerate(rows):
+				if row.count("\t") == 1:
+					f1, f2 = row.split("\t")
+				if i == 0:
+					c1, c2 = f1, f2
+				else:
+					if c1 in ["corpus", "name"]:
+						sql = "update docs set " + c2 + " = ? where " + c1 + " = ? ;"
+						generic_query(sql, (f2, f1))
+						sql_statements += 1
+
+	if sql_statements > 0:
+		msg += '<span style="color:green">Executed ' + str(sql_statements) + ' DB updates</span><br>'
+
+	page += """
+		<h2>Batch update DB</h2>
+	<p>Execute multiple SQL updates, e.g. to assign documents to users from a list</p>
+	<ul>
+		<li>The uploaded file should be a tab delimited, two column text file</li>
+		<li>The first rwo contains the headers:
+			<ul><li>in column 1, the criterion, one of 'corpus' or 'name' (=document name)</li>
+			<li>in column 2, the docs table column to update, e.g. 'assignee_username'</li></ul></li>
+		<li>Subsequent rows give pairs of criterion-value, e.g. 'doc001   user1'</li>
+	</ul>
+	<form id="batch_sql" name="batch_sql" method="post" action="admin.py" enctype="multipart/form-data">
+	      <input id="sqltab" type="file" name="sqltab" style="width: 200px">
+	      <button onclick="upload()">Upload</button>
+	</form>
+	"""
+
+	page += msg
+
+
 	page+="<br><br><h2>Database management</h2>"
 	#init database, setup_db, wipe all documents
 
@@ -336,7 +379,7 @@ def load_user_config(user,admin,theform):
 	<!DOCTYPE html>
 	<html>
 	<head>
-		<link rel="stylesheet" href="css/scriptorium.css" type="text/css" charset="utf-8"/>
+		<link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
 	<style>
