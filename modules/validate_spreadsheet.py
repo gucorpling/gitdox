@@ -74,7 +74,7 @@ def validate_all_docs():
 		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
 		if doc_mode == "ether":
 			ether_name = "_".join(["gd",corpus,doc_name])
-			if ether_name in doc_timestamps:
+			if ether_name in doc_timestamps and validation is not None:
 				if timestamp == doc_timestamps[doc_name]:
 					reports[doc_id] = json.loads(validation)
 				else:
