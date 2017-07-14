@@ -155,9 +155,7 @@ def load_admin(user,admin,theform):
 	<body>
 	**navbar**
 	<div id="wrapper">
-		<div id="header">
 		**header**
-		</div>
 		<div id="content">
 		<h1 >GitDox - Administration</h1>
 			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a> </p>

@@ -56,9 +56,7 @@ def load_validation_rules():
 	<body>
 	**navbar**
 	<div id="wrapper">
-		<div id="header">
 		  **header**
-		</div>
 		<div id="content">
 	<h1>GitDox - Validation</h1>
 		<p style="border-bottom:groove;"><i>validation rule management</i> | <a href="index.py">back to document list</a> </p>
