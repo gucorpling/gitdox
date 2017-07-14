@@ -314,7 +314,7 @@ def load_page(user,admin,theform):
 		options +='<option value="'+stat+'">'+stat+'</option>\n'
 	options = options.replace('">'+status, '" selected="selected">'+status)
 
-	edit_status="""<select name="edit_status" onchange='this.form.submit()'>"""
+	edit_status="""<select name="edit_status" onchange='do_save();'>"""
 
 	edit_status += options+"</select>"
 
@@ -329,7 +329,7 @@ def load_page(user,admin,theform):
 			schemafile = schemafile.replace(".xsd", "")
 			schema_list.append(schemafile)
 
-	edit_schema = """<select name="edit_schema" onchange="this.form.submit()">"""
+	edit_schema = """<select name="edit_schema" onchange="do_save();">"""
 	for schema_file in schema_list:
 		schema_select = ""
 		schema_name = schema_file
@@ -351,7 +351,7 @@ def load_page(user,admin,theform):
 			userfile = userfile.replace(".ini","")
 			user_list.append(userfile)
 
-	edit_assignee="""<select name="edit_assignee" onchange="this.form.submit()">"""
+	edit_assignee="""<select name="edit_assignee" onchange="do_save();">"""
 	for list_user in user_list:
 		assignee_select=""
 		user_name=list_user
@@ -361,7 +361,7 @@ def load_page(user,admin,theform):
 		edit_assignee=edit_assignee%assignee_select
 	edit_assignee+="</select>"
 
-	edit_mode = '''<select name="edit_mode" onchange="this.form.submit()">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
+	edit_mode = '''<select name="edit_mode" id="edit_mode" onchange="do_save();">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
 	edit_mode = edit_mode.replace(mode+'"', mode+'" selected="selected"')
 
 	# Metadata
@@ -375,8 +375,8 @@ def load_page(user,admin,theform):
 		if user != "demo":
 			delete_meta(metaid, doc_id)
 
-	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; document.getElementById('editor_form').submit();"> """ + xml_nlp_button + """</div>""" + \
-				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; document.getElementById('editor_form').submit();">"""+ spreadsheet_nlp_button + """</div>"""
+	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();"> """ + xml_nlp_button + """</div>""" + \
+				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">"""+ spreadsheet_nlp_button + """</div>"""
 	nlp_service = nlp_service.decode("utf8")
 
 	disabled_nlp_service = """<div class="button disabled h128" name="nlp_xml_button">"""+xml_nlp_button+"""</div>""" + \
@@ -446,7 +446,7 @@ def load_page(user,admin,theform):
 			page = page.replace('onblur="validate_docname();"','onblur="validate_docname();" disabled="disabled" class="disabled"')
 			page = page.replace('onblur="validate_corpusname();"','onblur="validate_corpusname();" disabled="disabled" class="disabled"')
 			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
-			page = page.replace('''<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
+			page = page.replace('''<div onclick="do_save();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
 
 	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**", get_menu())
