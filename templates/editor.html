@@ -68,7 +68,7 @@ td, th {
 <input type="hidden" name="id" id="id" value="**id**">
 <input type="hidden" name="mode" id="mode" value="**mode**">
 <input type="hidden" name="schema" id="schema" value="**schema**">
-<input type="hidden" name="nlp_tokenize" id="nlp_tokenize">
+<input type="hidden" name="nlp_xml" id="nlp_xml">
 <input type="hidden" name="nlp_spreadsheet" id="nlp_spreadsheet">
     <h2>Editor | <a href="index.py">back to document list</a> </h2>
 
@@ -82,7 +82,7 @@ td, th {
 		<input type="text" id="edit_docname" name="edit_docname" defaultValue="**docname**" value="**docname**" onblur="validate_docname();">
 		<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
 	</td>
-	<td><div class="button h128" id="validate_editor" onclick="validate_doc();">Validate</div></td>
+	<td><div class="button" id="validate_editor" onclick="validate_doc();">Validate</div></td>
 </tr>
 <tr><td>Corpus Name: </td>
 	<td>
@@ -115,7 +115,7 @@ td, th {
 **metadata**
 
 
-<div class="button h128" onClick="openPopup('popupPage.html')"><i class="fa fa-info-circle"> </i> Add meta</div>
+<div class="button" onClick="openPopup('popupPage.html')"><i class="fa fa-info-circle"> </i> Add meta</div>
 
 
 <INPUT TYPE="HIDDEN" NAME="metakey">

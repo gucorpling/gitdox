@@ -19,7 +19,6 @@
 	table {
 		font-family: arial, sans-serif;
 		border-collapse: collapse;
-		width:400pt;
 	}
 
 	td, th {
@@ -33,9 +32,7 @@
 	<body>
 	**navbar**
 	<div id="wrapper">
-		<div id="header">
 		**header**
-		</div>
 		<div id="content">
 	<h1>GitDox: Project **project**</h1>
 			<p>For help getting started see the <a target="_wiki" href="http://wiki.copticscriptorium.org/doku.php?id=gitdox_workflow">wiki</a></p>
@@ -68,11 +65,12 @@
 <br/>
 <input type="hidden" name="newdoc" value="true">
 <form id="form_new" action='editor.py'><input type="hidden" name="id" value="**max_id_plus1**">
-<div onclick="document.getElementById('form_new').submit();" class="button">
+<div **create_doc**>
   		<i class="fa fa-plus-circle"></i>
 		New
 </div> </form>
 
 		</div></div>
-</body>
+		<script>window.onload = validate_all();</script>
+	</body>
 </html>

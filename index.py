@@ -28,7 +28,6 @@ def make_options(**kwargs):
 	if "file" in kwargs:
 		kwargs["file"] = prefix + kwargs["file"]
 		names = open(kwargs["file"],'r').read().replace("\r","").split("\n")
-		#print len(names)
 		names = list(name[:name.find("\t")] for name in names)
 	elif "names" in kwargs:
 		names = kwargs[names]
@@ -69,25 +68,25 @@ function copyForm() {
 </HEAD>
 <BODY>
 <FORM NAME="popupForm" onSubmit="return copyForm()">
-field name (e.g., corpus):<br>
+field name (e.g., short_name):<br>
 <input list="metakeys" name="metakey">
 <datalist id="metakeys">
 ***options**
 </datalist>
 <br>
-field value (e.g., shenoute.fox):<br>
+field value (e.g., superman):<br>
 <input type="text" name='metavalue'><br>
 <INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
 </FORM>
 </BODY>
 </HTML>"""
-	options=make_options(file='metadata_fields.tab')
-	popup_meta_html=popup_meta_html.replace("***options**",options)
-	f=open(prefix+'popupPage.html','w')
+	options = make_options(file='metadata_fields.tab')
+	popup_meta_html = popup_meta_html.replace("***options**",options)
+	f = open(prefix + 'popupPage.html', 'w')
 	f.write(popup_meta_html)
 
 
-def load_landing(user,admin,theform):
+def load_landing(user, admin, theform):
 	gen_meta_popup()
 
 	if theform.getvalue('deletedoc'):
@@ -162,8 +161,12 @@ def load_landing(user,admin,theform):
 		#delete document
 		button_delete="""<form action="index.py" method="post" id="form_del_"""+id+"""">"""
 		button_delete+=id_code
-		button_delete+="""<input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/><div onclick="document.getElementById('form_del_"""+id+"""').submit();" class="button"> <i class="fa fa-trash-o"></i> delete</div>
-		<input type="hidden" name="sel_corpus" value="**sel_corpus**"></form>"""
+		if int(admin) > 0:
+			button_delete+="""<input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/><div onclick="document.getElementById('form_del_"""+id+"""').submit();" class="button"> <i class="fa fa-trash-o"></i> delete</div>
+			<input type="hidden" name="sel_corpus" value="**sel_corpus**"></form>"""
+		else:
+			button_delete += """<input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/><div class="button disabled"> <i class="fa fa-trash-o"></i> delete</div>
+		    <input type="hidden" name="sel_corpus" value="**sel_corpus**"></form>"""
 
 		row += cell(icons)
 		row += cell(button_edit)
@@ -205,8 +208,12 @@ def load_landing(user,admin,theform):
 	landing = landing.replace("**sel_corpus**", selected_corpus)
 	landing = landing.replace("**table**", table)
 	landing = landing.replace("**navbar**", menu)
+	if int(admin) > 0:
+		landing = landing.replace("**create_doc**",'''onclick="document.getElementById('form_new').submit();" class="button"''')
+	else:
+		landing = landing.replace("**create_doc**",'''class="button disabled"''')
 	page += landing
-	print "Content-type:text/html\n\n"
+	print("Content-type:text/html\n\n")
 
 	return page
 
@@ -221,7 +228,7 @@ def open_main_server():
 	action, userconfig = login(theform, userdir, thisscript, action)
 	user = userconfig["username"]
 	admin = userconfig["admin"]
-	print load_landing(user,admin,theform)
+	print(load_landing(user,admin,theform))
 
 
 open_main_server()

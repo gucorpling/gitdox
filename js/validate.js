@@ -59,7 +59,7 @@ function do_push()
 
 function upload()
 {
-    var r = confirm("Really upload a file? This will overwrite existing spreadsheet data!");
+    var r = confirm("Really upload a file? This will overwrite existing data!");
     if (r == true) {
         this.form.submit();
     }

@@ -155,16 +155,10 @@ def load_admin(user,admin,theform):
 	<body>
 	**navbar**
 	<div id="wrapper">
-		<div id="header">
 		**header**
-		</div>
-	</div>
-	<div id="content">
-	<h1 >GitDox - Administration</h1>
-		<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a> </p>
-	
-	
-	
+		<div id="content">
+		<h1 >GitDox - Administration</h1>
+			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a> </p>
 
 	"""
 	page+="""<form id="form_del_user" action="admin.py" method='post'>"""
@@ -227,8 +221,9 @@ def load_admin(user,admin,theform):
 
 	msg = ""
 	imported = 0
-	if "file" in theform:
+	if "file" in theform and "mode" in theform:
 		fileitem = theform["file"]
+		mode = theform.getvalue("mode")
 		if len(fileitem.filename) > 0:
 			#  strip leading path from file name to avoid directory traversal attacks
 			fn = os.path.basename(fileitem.filename)
@@ -244,20 +239,25 @@ def load_admin(user,admin,theform):
 					corpus = meta_key_val["corpus"]
 				else:
 					corpus = "default_corpus"
-				docname = filename.replace(" ","_")
-				docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)
+				docname = filename.replace(" ","_")  # No spaces in document names
+				docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)  # Strip extension
 				if not doc_exists(docname, corpus):
 					max_id = generic_query("SELECT MAX(id) AS max_id FROM docs", "")[0][0]
 					if not max_id:  # This is for the initial case after init db
 						max_id = 0
 					doc_id = int(max_id) + 1
-					create_document(doc_id, docname, corpus, "published", "default_user", "CopticScriptorium/shenoute-discourses5-dev/gitdox", "", "ether")
+					create_document(doc_id, docname, corpus, "published", "default_user", "cligu/lirc/gitdox", "", mode)
 				else:
-					# Document already exists, just overwrite spreadsheet and metadata and set mode to ether
+					# Document already exists, just overwrite spreadsheet/xml and metadata and set mode
 					doc_id = generic_query("SELECT id FROM docs where corpus=? and name=?", (corpus,docname))[0][0]
-					update_mode(doc_id, "ether")
+					update_mode(doc_id, mode)
 
-				make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
+				if mode == "ether":
+					make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
+				else:
+					content = re.sub("</?meta ?[^>]*>[\r\n]*","",sgml)
+					content = unicode(content.decode("utf8"))
+					save_changes(doc_id, content)
 				for key, value in meta_key_val.iteritems():
 					key = key.replace("@", "_")
 					save_meta(doc_id, key.decode("utf8"), value.decode("utf8"))
@@ -271,15 +271,71 @@ def load_admin(user,admin,theform):
 	<li>Document names are generated from file names inside the zip, without their extension (e.g. .sgml, .tt)</li>
 	<li>Metadata is taken from the &lt;meta&gt; element surrounding the document</li>
 	<li>Corpus name is taken from a metadatum corpus inside meta, else 'default_corpus'</li>
+	<li>Select XML mode to import into XML editor, or Spreadsheet to convert SGML spans into a new spreadsheet</li>
 </ul>
 <form id="batch_upload" name="batch_upload" method="post" action="admin.py" enctype="multipart/form-data">
-<div style="display: inline-block">
-<input id="file" type="file" name="file" style="width: 200px"/>
-<button onclick="upload()">Upload</button>
-</form>
+<table>
+  <tbody><tr>
+    <td>Mode:
+  <select id="mode" name="mode" style="width: 120px;">
+	<option value="xml">XML</option>
+	<option value="ether">Spreadsheet</option>
+</select>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="file" type="file" name="file" style="width: 200px"></td></tr><tr>
+<td><button onclick="upload()">Upload</button>
+    </td>
+  </tr>
+  </tbody></table></form>
 """
 	
 	page+=msg
+
+	msg = ""
+	sql_statements = 0
+	if "sqltab" in theform:
+		fileitem = theform["sqltab"]
+		if len(fileitem.filename) > 0:
+			#  strip leading path from file name to avoid directory traversal attacks
+			fn = os.path.basename(fileitem.filename)
+			msg = '<br><span style="color:green">The file "' + fn + '" was uploaded successfully</span><br>'
+			rows = fileitem.file.read().replace("\r","").split("\n")
+			c1, c2 = ["",""]
+			for i, row in enumerate(rows):
+				if row.count("\t") == 1:
+					f1, f2 = row.split("\t")
+				if i == 0:
+					c1, c2 = f1, f2
+				else:
+					if c1 in ["corpus", "name"]:
+						sql = "update docs set " + c2 + " = ? where " + c1 + " = ? ;"
+						generic_query(sql, (f2, f1))
+						sql_statements += 1
+
+	if sql_statements > 0:
+		msg += '<span style="color:green">Executed ' + str(sql_statements) + ' DB updates</span><br>'
+
+	page += """
+		<h2>Batch update DB</h2>
+	<p>Execute multiple SQL updates, e.g. to assign documents to users from a list</p>
+	<ul>
+		<li>The uploaded file should be a tab delimited, two column text file</li>
+		<li>The first rwo contains the headers:
+			<ul><li>in column 1, the criterion, one of 'corpus' or 'name' (=document name)</li>
+			<li>in column 2, the docs table column to update, e.g. 'assignee_username'</li></ul></li>
+		<li>Subsequent rows give pairs of criterion-value, e.g. 'doc001   user1'</li>
+	</ul>
+	<form id="batch_sql" name="batch_sql" method="post" action="admin.py" enctype="multipart/form-data">
+	      <input id="sqltab" type="file" name="sqltab" style="width: 200px">
+	      <button onclick="upload()">Upload</button>
+	</form>
+	"""
+
+	page += msg
+
 
 	page+="<br><br><h2>Database management</h2>"
 	#init database, setup_db, wipe all documents
@@ -292,7 +348,7 @@ def load_admin(user,admin,theform):
 
 
 
-	page+="</div></div></body></html>"
+	page+="</div></div></div></body></html>"
 	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
 	page = page.replace("**header**",header)
@@ -303,10 +359,10 @@ def load_admin(user,admin,theform):
 
 
 def load_user_config(user,admin,theform):
-	if theform.getvalue('new_pass'):
+	if theform.getvalue('new_pass') and user != "demo":
 		new_pass=theform.getvalue('new_pass')
 		update_password(user,new_pass)
-	if theform.getvalue('new_git_password'):
+	if theform.getvalue('new_git_password') and user != "demo":
 
 		new_git_password=theform.getvalue('new_git_password')
 		new_git_username=theform.getvalue('new_git_username')
@@ -321,7 +377,7 @@ def load_user_config(user,admin,theform):
 	<!DOCTYPE html>
 	<html>
 	<head>
-		<link rel="stylesheet" href="css/scriptorium.css" type="text/css" charset="utf-8"/>
+		<link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
 	<style>
@@ -350,34 +406,30 @@ def load_user_config(user,admin,theform):
 		<p style="border-bottom:groove;"><i>edit user info</i> | <a href="index.py">back to document list</a> </p>
 	
 	<h2>Edit your account information</h2>
-	
-	
 	"""
 	#edit user password
 	username_info="""<table><tr><td>username</td><td>%s</td></tr>"""%user
 	username_info+="""
 	<form action='admin.py' method='post'>
 	<tr><td>new password</td><td><input type='password' name='new_pass'></td></tr></table>
-	
 	"""
 	
 
-
 	page+=username_info
-	page+="<input type='submit' value='change'> </form>"
-	page+="</br><p>note: after you changed your password you'll be logged out and you need to log in using your new password again</p>"
+	page+="<input type='submit' value='change'> </form>\n"
+	page+="</br><p>note: after you changed your password you'll be logged out and you need to log in using your new password again</p>\n"
 
 	#edit git info
 	if admin=="1":
 		page+="""<form action='admin.py' method='post'><table><tr><td>new git username</td><td><input type='text' name='new_git_username'></td></tr>
 		<tr><td>new git password</td><td><input type='password' name='new_git_password'></td></tr>
 		<tr><td>use two-factor auth</td><td><input type='checkbox' name='new_git_2fa' value='true'></td></tr>
-		</table>"""
+		</table>\n"""
 
 
-		page+="<input type='submit' value='change'> </form>"
+		page+="<input type='submit' value='change'> </form>\n"
 	
-	page+="</div></div></body></html>"
+	page += "\t\t\t</div>\t\t\n</div>\t\n</div>\n</body>\n</html>"
 
 	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
@@ -398,9 +450,9 @@ def open_main_server():
 	user = userconfig["username"]
 	admin = userconfig["admin"]
 	if admin == "3":
-		print load_admin(user,admin,theform)
+		print(load_admin(user,admin,theform))
 	elif admin == "0" or admin=="1":
-		print load_user_config(user,admin,theform)
+		print(load_user_config(user,admin,theform))
 
 
 open_main_server()

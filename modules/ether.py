@@ -13,7 +13,7 @@ from collections import defaultdict
 from collections import OrderedDict
 from operator import itemgetter
 from gitdox_sql import *
-
+import json
 import cgi
 
 __version__ = "2.0.0"
@@ -303,13 +303,13 @@ def make_spreadsheet(data, ether_path, format="sgml", ignore_elements=False):
 	if format=="sgml":
 		socialcalc_data = sgml_to_ether(data, ignore_elements)
 		socialcalc_data = fix_colnames(socialcalc_data)
-		ether_command = "curl --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
+		ether_command = "curl --netrc --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	elif format=="socialcalc":
 		socialcalc_data = data.encode("utf8")
-		ether_command = "curl --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
+		ether_command = "curl --netrc --request PUT --header 'Content-Type: text/x-socialcalc' --data-binary @tempfilename " + ether_path  # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	else:
 		socialcalc_data = data
-		ether_command = "curl -i -X PUT --data-binary @tempfilename " + ether_path # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
+		ether_command = "curl --netrc -i -X PUT --data-binary @tempfilename " + ether_path # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	#ether_command = ["curl","--request","PUT","--header","'Content-Type: text/x-socialcalc'", "--data-binary", "@" + "tempfilename",
 	#				 ether_path] # e.g. ether_path "http://127.0.0.1:8000/_/nlp_snippet"
 	#ether_command = ["less","tempfilename",">","/var/www/html/gitdox/out.eth"]
@@ -328,7 +328,7 @@ def delete_spreadsheet(ether_url, name):
 	:return: void
 	"""
 
-	ether_command = "curl -X DELETE " + ether_url + "_/" + name
+	ether_command = "curl --netrc -X DELETE " + ether_url + "_/" + name
 	del_proc = subprocess.Popen(ether_command,shell=True)
 
 	(stdout, stderr) = del_proc.communicate()
@@ -341,10 +341,21 @@ def sheet_exists(ether_path, name):
 
 
 def get_socialcalc(ether_path, name):
-	command = "curl -X GET " + ether_path + "_/" + name
+	command = "curl --netrc -X GET " + ether_path + "_/" + name
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
 	return stdout.decode("utf8")
+
+
+def get_timestamps(ether_path):
+	command = "curl --netrc -X GET " + ether_path + "_roomtimes"
+	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+	(stdout, stderr) = proc.communicate()
+	times = json.loads(stdout)
+	output = {}
+	for room in times:
+		output[room.replace("timestamp-","")] = times[room]
+	return output
 
 
 if __name__  == "__main__":
@@ -359,4 +370,4 @@ if __name__  == "__main__":
 	data = re.sub('</', '\n</', data)
 	data = re.sub('\n+', '\n', data)
 	ether_out = sgml_to_ether(data)
-	print ether_out
+	print(ether_out)

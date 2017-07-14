@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+from six import iteritems
 import cgi, cgitb
 import os, shutil
 from os import listdir
@@ -22,6 +23,7 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
+# Read configuration
 scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 userdir = scriptpath + "users" + os.sep
 templatedir = scriptpath + "templates" + os.sep
@@ -29,7 +31,11 @@ config = ConfigObj(userdir + 'config.ini')
 skin = config["skin"]
 project = config["project"]
 editor_help_link = config["editor_help_link"]
-
+# Captions and API URLs for NLP buttons
+xml_nlp_button = config["xml_nlp_button"]
+spreadsheet_nlp_button = config["spreadsheet_nlp_button"]
+xml_nlp_api = config["xml_nlp_api"]
+spreadsheet_nlp_api = config["spreadsheet_nlp_api"]
 
 code_2fa = None
 
@@ -99,7 +105,7 @@ def load_page(user,admin,theform):
 			schema = ""
 			text_content = ""
 			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
-			if theform.getvalue('edit_docname'):
+			if theform.getvalue('edit_docname') and user != "demo":
 				if docname != 'new_document':
 					if doc_id > max_id:
 						create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
@@ -107,7 +113,7 @@ def load_page(user,admin,theform):
 					else:
 						update_docname(doc_id, docname)
 
-			if theform.getvalue('edit_filename'):
+			if theform.getvalue('edit_filename') and user != "demo":
 				repo_name = theform.getvalue('edit_filename')
 				if repo_name != 'account/repo_name':
 					if doc_id > max_id:
@@ -116,7 +122,7 @@ def load_page(user,admin,theform):
 					else:
 						update_filename(doc_id, repo_name)
 
-			if theform.getvalue('edit_corpusname'):
+			if theform.getvalue('edit_corpusname') and user != "demo":
 				corpus = theform.getvalue('edit_corpusname')
 				if corpus != 'default_corpus':
 					if doc_id > max_id:
@@ -125,7 +131,7 @@ def load_page(user,admin,theform):
 					else:
 						update_corpus(doc_id, corpus)
 
-			if theform.getvalue('edit_status'):
+			if theform.getvalue('edit_status') and user != "demo":
 				status = theform.getvalue('edit_status')
 				if status != 'editing':
 					if doc_id > max_id:
@@ -134,7 +140,7 @@ def load_page(user,admin,theform):
 					else:
 						update_status(doc_id, status)
 
-			if theform.getvalue('edit_assignee'):
+			if theform.getvalue('edit_assignee') and user != "demo":
 				assignee = theform.getvalue('edit_assignee')
 				if assignee != "default_user":
 					if doc_id > max_id:
@@ -143,7 +149,7 @@ def load_page(user,admin,theform):
 					else:
 						update_assignee(doc_id, assignee)
 
-			if theform.getvalue('edit_schema'):
+			if theform.getvalue('edit_schema') and user != "demo":
 				schema = theform.getvalue('edit_schema')
 				if schema != "--none--":
 					if doc_id > max_id:
@@ -160,8 +166,8 @@ def load_page(user,admin,theform):
 			docname = old_docname
 
 			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
-			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet" and mode == "xml":
-				api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
+			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet" and mode == "xml" and user != "demo":
+				api_call = spreadsheet_nlp_api
 				nlp_user, nlp_password = get_nlp_credentials()
 				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
 				data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
@@ -185,33 +191,33 @@ def load_page(user,admin,theform):
 		# After clicking edit in landing page, editing existing doc case, get the values from the db. pull the content from db to be displayed in the editor window.
 			if theform.getvalue('edit_docname'):
 				docname = theform.getvalue('edit_docname')
-				if docname != old_docname:
+				if docname != old_docname and user != "demo":
 					update_docname(doc_id,docname)
 			if theform.getvalue('edit_filename'):
 				repo_name=theform.getvalue('edit_filename')
-				if repo_name != old_repo:
+				if repo_name != old_repo and user != "demo":
 					update_filename(doc_id,repo_name)
 			if theform.getvalue('edit_corpusname'):
 				corpus = theform.getvalue('edit_corpusname')
-				if corpus != old_corpus:
+				if corpus != old_corpus and user != "demo":
 					update_corpus(doc_id,corpus)
 			if theform.getvalue('edit_status'):
 				status = theform.getvalue('edit_status')
-				if status != old_status:
+				if status != old_status and user != "demo":
 					update_status(doc_id,status)
 			if theform.getvalue('edit_assignee'):
 				assignee = theform.getvalue('edit_assignee')
-				if assignee != old_assignee:
+				if assignee != old_assignee and user != "demo":
 					update_assignee(doc_id,assignee)
 			if theform.getvalue('edit_mode'):
 				mode = theform.getvalue('edit_mode')
-				if mode != old_mode:
+				if mode != old_mode and user != "demo":
 					update_mode(doc_id,mode)
 			if theform.getvalue('edit_schema'):
 				schema = theform.getvalue('edit_schema')
-				if schema != old_schema:
+				if schema != old_schema and user != "demo":
 					update_schema(doc_id, schema)
-			if theform.getvalue('nlp_spreadsheet') == "do_spreadsheet":  # mode has been changed to spreadsheet via NLP
+			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet":  # mode has been changed to spreadsheet via NLP
 				update_mode(doc_id, "ether")
 				mode = "ether"
 			if old_docname != docname or old_corpus != corpus:
@@ -232,10 +238,11 @@ def load_page(user,admin,theform):
 		text_content = theform.getvalue('code')
 		text_content = text_content.replace("\r","")
 		text_content = unicode(text_content.decode("utf8"))
-		if int(doc_id)>int(max_id):
-			create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
-		else:
-			save_changes(doc_id,text_content)
+		if user != "demo":
+			if int(doc_id)>int(max_id):
+				create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
+			else:
+				save_changes(doc_id,text_content)
 
 	git_status=False
 
@@ -277,8 +284,8 @@ def load_page(user,admin,theform):
 			# Delete a subdirectory
 			shutil.rmtree(prefix+subdir)
 
-	if theform.getvalue('nlp_tokenize') == "do_tokenize" and mode == "xml":
-		api_call="https://corpling.uis.georgetown.edu/coptic-nlp/api"
+	if theform.getvalue('nlp_xml') == "do_nlp_xml" and mode == "xml":
+		api_call=xml_nlp_api
 		nlp_user, nlp_password = get_nlp_credentials()
 		data = {"data":text_content, "lb":"line", "format":"pipes"}
 		resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
@@ -307,7 +314,7 @@ def load_page(user,admin,theform):
 		options +='<option value="'+stat+'">'+stat+'</option>\n'
 	options = options.replace('">'+status, '" selected="selected">'+status)
 
-	edit_status="""<select name="edit_status" onchange='this.form.submit()'>"""
+	edit_status="""<select name="edit_status" onchange='do_save();'>"""
 
 	edit_status += options+"</select>"
 
@@ -322,7 +329,7 @@ def load_page(user,admin,theform):
 			schemafile = schemafile.replace(".xsd", "")
 			schema_list.append(schemafile)
 
-	edit_schema = """<select name="edit_schema" onchange="this.form.submit()">"""
+	edit_schema = """<select name="edit_schema" onchange="do_save();">"""
 	for schema_file in schema_list:
 		schema_select = ""
 		schema_name = schema_file
@@ -344,54 +351,48 @@ def load_page(user,admin,theform):
 			userfile = userfile.replace(".ini","")
 			user_list.append(userfile)
 
-	edit_assignee="""<select name="edit_assignee" onchange="this.form.submit()">"""
-	for user in user_list:
+	edit_assignee="""<select name="edit_assignee" onchange="do_save();">"""
+	for list_user in user_list:
 		assignee_select=""
-		user_name=user
+		user_name=list_user
 		if user_name==assignee:
 			assignee_select="selected"
 		edit_assignee+="""<option value='""" + user_name + "' %s>" + user_name + """</option>"""
 		edit_assignee=edit_assignee%assignee_select
 	edit_assignee+="</select>"
 
-	edit_mode = '''<select name="edit_mode" onchange="this.form.submit()">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
+	edit_mode = '''<select name="edit_mode" id="edit_mode" onchange="do_save();">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
 	edit_mode = edit_mode.replace(mode+'"', mode+'" selected="selected"')
 
 	# Metadata
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
 		metavalue = theform.getvalue('metavalue')
-		save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
+		if user != "demo":
+			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
 	if theform.getvalue('metaid'):
 		metaid = theform.getvalue('metaid')
-		delete_meta(metaid)
+		if user != "demo":
+			delete_meta(metaid, doc_id)
 
-	nlp_service = """
-	<div class="button h128" name="tokenize_button" onclick="document.getElementById('nlp_tokenize').value='do_tokenize'; document.getElementById('editor_form').submit();"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
-	<div class="button h128" name="nlp_button" onclick="nlp_spreadsheet();">
-		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
-  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
- 			<i class="fa fa-table fa-stack-1x"></i>
- 		</span> </i> NLP </div>
-	""".decode("utf8")
+	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();"> """ + xml_nlp_button + """</div>""" + \
+				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">"""+ spreadsheet_nlp_button + """</div>"""
+	nlp_service = nlp_service.decode("utf8")
 
-	disabled_nlp_service = """
-	<div class="button disabled h128" name="tokenize_button"> <i class="fa" style="font-family: antinoouRegular">ⲁ|ϥ</i> Tokenize </div>
-	<div class="button disabled h128" name="nlp_button">
-		<span class="fa fa-stack" style="line-height: 1em; height: 1em">
-  			<i class="fa fa-arrow-right fa-stack-1x" style="left: -8px;"></i>
- 			<i class="fa fa-table fa-stack-1x"></i>
- 		</span> </i> NLP </div>
-	""".decode("utf8")
+	disabled_nlp_service = """<div class="button disabled h128" name="nlp_xml_button">"""+xml_nlp_button+"""</div>""" + \
+						   """<div class="button disabled h128" name="nlp_ether_button">""" +spreadsheet_nlp_button + """</div>"""
+	disabled_nlp_service = disabled_nlp_service.decode("utf8")
 
+	# Disable NLP services in demo
+	if user == "demo":
+		nlp_service = disabled_nlp_service
 
 	page= "Content-type:text/html\r\n\r\n"
-	#page += str(theform)
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
 
-		if "file" in theform:
+		if "file" in theform and user != "demo":
 			fileitem = theform["file"]
 			if len(fileitem.filename) > 0:
 				#  strip leading path from file name to avoid directory traversal attacks
@@ -403,7 +404,7 @@ def load_page(user,admin,theform):
 					sgml = fileitem.file.read()
 					meta_key_val = harvest_meta(sgml)
 					make_spreadsheet(sgml,"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname)
-					for key, value in meta_key_val.iteritems():
+					for (key, value) in iteritems(meta_key_val):
 						key = key.replace("@","_")
 						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
 		else:
@@ -445,7 +446,7 @@ def load_page(user,admin,theform):
 			page = page.replace('onblur="validate_docname();"','onblur="validate_docname();" disabled="disabled" class="disabled"')
 			page = page.replace('onblur="validate_corpusname();"','onblur="validate_corpusname();" disabled="disabled" class="disabled"')
 			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
-			page = page.replace('''<div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
+			page = page.replace('''<div onclick="do_save();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
 
 	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**", get_menu())
@@ -466,7 +467,7 @@ def open_main_server():
 	action, userconfig = login(theform, userdir, thisscript, action)
 	user = userconfig["username"]
 	admin = userconfig["admin"]
-	print load_page(user,admin,theform).encode("utf8")
+	print(load_page(user,admin,theform).encode("utf8"))
 
 
 if __name__ == "__main__":

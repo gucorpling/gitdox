@@ -28,3 +28,12 @@ function validate_doc() {
        	}
     });
 }
+
+function do_save(){
+    if (document.getElementById('code')!=null){
+        val = document.getElementById('code').value.replace('&','&amp;');
+        document.getElementById('code').value = val;
+        editor.getDoc().setValue(val);
+    }
+    document.getElementById('editor_form').submit();
+}

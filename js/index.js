@@ -1,5 +1,6 @@
 function validate_all() {
 	$("#validate_landing").addClass("disabledbutton");
+	$("#validate_landing").html('<i class="fa fa-spinner fa-spin"></i> validating...')
     $.ajax({
     	url: 'modules/validate_spreadsheet.py',
     	type: 'post',
@@ -57,10 +58,12 @@ function validate_all() {
     	   $("#validate_"+key).html(output1 + output2);
     	  });
     	 $("#validate_landing").removeClass("disabledbutton");
-       	},
+      	 $("#validate_landing").html('<i class="fa fa-check"></i> re-validate');
+      	},
        	error: function( jqXHR, textStatus, errorThrown) {
        	 alert(errorThrown);
        	 $("#validate_landing").removeClass("disabledbutton");
+    	 $("#validate_landing").html('<i class="fa fa-check"></i> re-validate');
        	}
 
     });

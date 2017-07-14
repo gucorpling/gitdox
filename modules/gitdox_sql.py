@@ -31,7 +31,7 @@ def setup_db():
 
 	#docs table
 	cur.execute('''CREATE TABLE IF NOT EXISTS docs
-				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text timestamp text)''')
+				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text)''')
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key, value) ON CONFLICT REPLACE)''')
@@ -152,7 +152,7 @@ def save_meta(doc_id,key,value):
 	generic_query("INSERT OR REPLACE INTO metadata(docid,key,value) VALUES(?,?,?)",(doc_id,key,value))
 	invalidate_doc_by_id(doc_id)
 
-def delete_meta(metaid):
+def delete_meta(metaid, doc_id):
 	generic_query("DELETE FROM metadata WHERE metaid=?",(metaid,))
 	invalidate_doc_by_id(doc_id)
 

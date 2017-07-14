@@ -3,7 +3,7 @@ from modules.configobj import ConfigObj
 
 # URL for ethercalc spreadsheets, possible including authentication
 # e.g. http://mydomain.com/ethercalc/
-# or with basic auth https://user:password@mydomain.com/ethercalc/
+# to use password authentication, use a netrc file called .netrc in the project root
 ether_url = "http://mydomain.com/ethercalc/"
 
 # Support IIS site prefix on Windows

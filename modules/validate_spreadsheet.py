@@ -2,7 +2,8 @@
 # -*- coding: UTF-8 -*-
 
 from gitdox_sql import *
-from ether import get_socialcalc, make_spreadsheet, exec_via_temp
+from ether import get_socialcalc, make_spreadsheet, exec_via_temp, get_timestamps
+from collections import defaultdict
 import re
 import cgi
 import json
@@ -64,24 +65,26 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 
 def validate_all_docs():
 	docs = generic_query("SELECT id, name, corpus, mode, schema, validation, timestamp FROM docs", None)
-	#doc_timestamps = get_timestamps()
-	doc_timestamps = {}
+	doc_timestamps = get_timestamps(ether_url)
 	reports = {}
 
 	for doc in docs:
 		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
 		if doc_mode == "ether":
-			if doc_name in doc_timestamps:
-				if timestamp == doc_timestamps[doc_name]:
+			ether_name = "_".join(["gd",corpus,doc_name])
+			if ether_name in doc_timestamps and validation is not None and len(validation) > 0:
+				if timestamp == doc_timestamps[ether_name]:
 					reports[doc_id] = json.loads(validation)
 				else:
 					reports[doc_id] = validate_doc(doc_id)
 					update_validation(doc_id, json.dumps(reports[doc_id]))
-					update_timestamp(doc_id, doc_timestamps[doc_name])
+					update_timestamp(doc_id, doc_timestamps[ether_name])
 			else:
 				reports[doc_id] = validate_doc(doc_id)
 				#reports[doc_id] = {"ether":"sample_ether","meta":"sample_meta"}
 				update_validation(doc_id, json.dumps(reports[doc_id]))
+				if ether_name in doc_timestamps:
+					update_timestamp(doc_id, doc_timestamps[ether_name])
 		elif doc_mode == "xml":
 			if validation is None:
 				reports[doc_id] = validate_doc_xml(doc_id, doc_schema)
