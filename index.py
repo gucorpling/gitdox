@@ -68,13 +68,13 @@ function copyForm() {
 </HEAD>
 <BODY>
 <FORM NAME="popupForm" onSubmit="return copyForm()">
-field name (e.g., short_name):<br>
+field name (e.g., author):<br>
 <input list="metakeys" name="metakey">
 <datalist id="metakeys">
 ***options**
 </datalist>
 <br>
-field value (e.g., superman):<br>
+field value (e.g., Besa):<br>
 <input type="text" name='metavalue'><br>
 <INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
 </FORM>
