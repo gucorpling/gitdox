@@ -157,9 +157,10 @@ def delete_meta(metaid, doc_id):
 	invalidate_doc_by_id(doc_id)
 
 def get_doc_info(doc_id):
-	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode,schema FROM docs WHERE id=?",
-						 (int(doc_id),))[0]
+	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode,schema FROM docs WHERE id=?", (int(doc_id),))[0]
 
+def get_all_docs():
+	return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
 
 def get_doc_meta(doc_id):
 	return generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE", (int(doc_id),))

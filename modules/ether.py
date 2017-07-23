@@ -19,6 +19,25 @@ import cgi
 __version__ = "2.0.0"
 
 
+def build_meta_tag(doc_id):
+	meta = "<meta"
+	meta_items = []
+	meta_rows = get_doc_meta(doc_id)
+	# docid,metaid,key,value - four cols
+	for item in meta_rows:
+		key, value = item[2], item[3]
+		if not key.startswith("ignore:"):
+			key = key.replace("=", "&equals;")
+			value = value.replace('"', "&quot;")
+			meta_items.append(key + '="' + value + '"')
+
+	meta_props = " ".join(meta_items)
+	if meta_props != "":
+		meta_props = " " + meta_props
+	output = meta + meta_props + ">\n"
+	return output
+
+
 def flush_open(annos, row_num, colmap):
 	flushed = ""
 	for anno in annos:
@@ -230,21 +249,7 @@ def ether_to_sgml(ether, doc_id):
 		open_tag_order[last_row].append(element)
 	open_tag_order[last_row].sort(key=lambda x: (open_tag_length[x], x), reverse=True)
 
-	meta = "<meta"
-	meta_items = []
-	meta_rows = get_doc_meta(doc_id)
-	# docid,metaid,key,value - four cols
-	for item in meta_rows:
-		key, value = item[2], item[3]
-		if not key.startswith("ignore:"):
-			key = key.replace("=","&equals;")
-			value = value.replace('"',"&quot;")
-			meta_items.append(key + '="' + value + '"')
-
-	meta_props = " ".join(meta_items)
-	if meta_props != "":
-		meta_props = " " + meta_props
-	output = meta + meta_props + ">\n"
+	output = build_meta_tag(doc_id)
 
 	for r in xrange(2,len(toks)+3):
 		if r == 30:
