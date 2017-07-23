@@ -39,6 +39,7 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 	f.write('admin='+str(admin)+'\n')
 	f.write('email='+email+'\n')
 	f.write('max-age=0'+'\n')
+	f.write('editable=Yes'+'\n')
 	f.write('numlogins = 85\nnumused = 2869\n')
 	f.write('git_username='+git_username+'\n')
 	f.write('git_password='+pass_enc(git_password)+'\n')
@@ -107,18 +108,14 @@ def load_admin(user,admin,theform):
 	if theform.getvalue('create_user'):
 		username=theform.getvalue('username')
 		password=theform.getvalue('password')
-		realname=theform.getvalue('realname') if theform.getvalue('realname') is not None else ""
-		email=theform.getvalue('email') if theform.getvalue('email') is not None else ""
+		realname=theform.getvalue('realname') if theform.getvalue('realname') is not None else "anonymous"
+		email=theform.getvalue('email') if theform.getvalue('email') is not None else "a@b.com"
 		admin=theform.getvalue('admin')
 		git_username=theform.getvalue('git_username') if theform.getvalue('git_username') is not None else "none"
 		git_password=theform.getvalue('git_password') if theform.getvalue('git_password') is not None else "none"
 		git_2fa=theform.getvalue('git_2fa') if theform.getvalue('git_2fa') is not None else "false"
 
 		if username!=None and password!=None:
-
-			#create user in database
-			#create_user(username)
-			#need to write a user file for login tools
 			write_user_file(username,password,admin,email,realname,git_username,git_password,git_2fa)
 		else:
 			warn="</br><b style='color:red;'>ERROR: username or password missing; user cannot be created.</b></br>"
@@ -336,6 +333,20 @@ def load_admin(user,admin,theform):
 
 	page += msg
 
+
+	page += """
+		<h2>Batch download</h2>
+	<p>Download all documents</p>
+	<ul>
+		<li>Documents will be downloaded in a zip file</li>
+		<li>The format of each format will depend on its active mode:
+			<ul>
+			<li>Metadata is added in a wrapping tag &lt;meta key="value"&gt;</li>
+			<li>Documents in XML mode are downloaded as .xml, as they appear in the editor</li>
+			<li>Documents in spreadsheet mode are downloaded as .sgml to preserve potential span hierarchy conflicts</li></ul></li>
+	</ul>
+	<div onclick="window.open('modules/gitdox_export.py', '_blank');" class="button"> <i class="fa fa-cloud-download"></i> download</div>
+	"""
 
 	page+="<br><br><h2>Database management</h2>"
 	#init database, setup_db, wipe all documents
