@@ -312,7 +312,7 @@ def load_page(user,admin,theform):
 	options = ""
 	for stat in status_list:
 		options +='<option value="'+stat+'">'+stat+'</option>\n'
-	options = options.replace('">'+status, '" selected="selected">'+status)
+	options = options.replace('">'+status +'<', '" selected="selected">'+status+'<')
 
 	edit_status="""<select name="edit_status" onchange='do_save();'>"""
 
