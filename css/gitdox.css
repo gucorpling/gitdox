@@ -3,6 +3,18 @@
 
 h1, h2{font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;-webkit-font-smoothing: subpixel-antialiased;}
 
+
+	table {
+		font-family: arial, sans-serif;
+		border-collapse: collapse;
+	}
+
+	td, th {
+		border: 1px solid #dddddd;
+		text-align: left;
+		padding: 8px;
+	}
+	
 .button {
 	display: inline-block;
 	outline: none;
@@ -140,6 +152,11 @@ width: 100%}
 
 .jtable td{
     word-break: break-all;
+}
+
+#validation_report{
+	    max-height: 300px;
+    overflow-y: scroll;
 }
 
 tfoot {
