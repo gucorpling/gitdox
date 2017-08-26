@@ -67,7 +67,10 @@ def generic_query(sql, params):
 
 
 def invalidate_doc_by_name(doc,corpus):
-	generic_query("UPDATE docs SET validation=NULL WHERE name=? and corpus=?", (doc, corpus))
+	generic_query("UPDATE docs SET validation=NULL WHERE name like ? and corpus like ?", (doc, corpus))
+
+def invalidate_ether_docs(doc,corpus):
+	generic_query("UPDATE docs SET validation=NULL WHERE name like ? and corpus like ? and mode = 'ether'", (doc, corpus))
 
 def invalidate_doc_by_id(id):
 	generic_query("UPDATE docs SET validation=NULL WHERE id=?", (id,))
@@ -178,6 +181,8 @@ def create_validate_rule(doc, corpus, domain, name, operator, argument):
 	generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument))
 	if domain == "meta":
 		invalidate_doc_by_name("%","%")
+	else:
+		invalidate_ether_docs("%","%")
 
 def delete_validate_rule(id):
 	generic_query("DELETE FROM validate WHERE id=?", (int(id),))
@@ -187,6 +192,9 @@ def update_validate_rule(doc, corpus, domain, name, operator, argument, id):
 	generic_query("UPDATE validate SET doc = ?, corpus = ?, domain = ?, name = ?, operator = ?, argument = ? WHERE id = ?",(doc, corpus, domain, name, operator, argument, id))
 	if domain == "meta":
 		invalidate_doc_by_name("%", "%")
+	else:
+		invalidate_ether_docs("%", "%")
+
 
 def update_validation(doc_id,validation):
 	generic_query("UPDATE docs SET validation=? where id=?",(validation,doc_id))
