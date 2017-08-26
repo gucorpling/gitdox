@@ -249,6 +249,13 @@ def load_admin(user,admin,theform):
 					doc_id = generic_query("SELECT id FROM docs where corpus=? and name=?", (corpus,docname))[0][0]
 					update_mode(doc_id, mode)
 
+				if "repo" in meta_key_val:
+					update_filename(doc_id,meta_key_val["repo"])
+					del meta_key_val["repo"]
+				if "schema" in meta_key_val:
+					update_schema(doc_id,meta_key_val["schema"])
+					del meta_key_val["schema"]
+
 				if mode == "ether":
 					make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
 				else:
