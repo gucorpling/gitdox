@@ -267,6 +267,8 @@ def ether_to_sgml(ether, doc_id):
 			tag += '>\n'
 			output += tag
 
+		if r not in toks:
+			toks[r] = ""  # Caution - empty token!
 		output += toks[r] + '\n'
 
 	output = output.replace('\c', ':')
