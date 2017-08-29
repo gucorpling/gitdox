@@ -18,8 +18,8 @@ def list_rules():
 		json_rules = []
 		for rule in rules:
 			new_json_rule = {}
-			new_json_rule['doc'] = rule[0]
-			new_json_rule['corpus'] = rule[1]
+			new_json_rule['corpus'] = rule[0]
+			new_json_rule['doc'] = rule[1]
 			new_json_rule['domain'] = rule[2]
 			new_json_rule['name'] = rule[3]
 			new_json_rule['operator'] = rule[4]

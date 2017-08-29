@@ -342,7 +342,7 @@ def validate_doc_xml(doc_id, schema, editor=False):
 
 	# metadata validation
 	meta_report = ''
-	meta_rules = generic_query("SELECT * FROM validate WHERE domain = 'meta'", None)
+	meta_rules = generic_query("SELECT  corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'meta'", None)
 	meta = get_doc_meta(doc_id)
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
