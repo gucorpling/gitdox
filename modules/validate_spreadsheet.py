@@ -36,6 +36,13 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 		new_color_number = old_color_numbers[0]
 
 	for line in old_ether_lines:
+
+		parts = line.split(":")
+		# Check for pure formatting cells, e.g. cell:K15:f:1
+		if len(parts) == 4:
+			if parts[2] == "f":  # Pure formatting cell, no content
+				continue
+
 		parsed_cell = re.match(r'cell:([A-Z]+\d+)(:.*)$', line)
 		if parsed_cell is not None:
 			col_row = parsed_cell.group(1)
@@ -97,7 +104,12 @@ def validate_all_docs():
 		elif doc_mode == "xml":
 			if validation is None:
 				reports[doc_id] = validate_doc_xml(doc_id, doc_schema)
-				update_validation(doc_id,json.dumps(reports[doc_id]))
+				try:
+					validation_report = json.dumps(reports[doc_id])
+				except UnicodeDecodeError:
+					reports[doc_id]["xml"] = "UnicodeDecodeError; unable to print XML validation report for " + doc_name
+					validation_report = json.dumps(reports[doc_id])
+				update_validation(doc_id,validation_report)
 			else:
 				reports[doc_id] = json.loads(validation)
 
@@ -111,7 +123,7 @@ def validate_doc(doc_id, editor=False):
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
 	ether = get_socialcalc(ether_url, ether_doc_name)
-	parsed_ether = parse_ether(ether)
+	parsed_ether = parse_ether(ether, doc_name, doc_corpus)
 	meta = get_doc_meta(doc_id)
 
 	ether_report = ''
@@ -163,7 +175,7 @@ def validate_doc(doc_id, editor=False):
 		return json_report
 
 
-def parse_ether(ether):
+def parse_ether(ether, doc, corpus):
 	ether_lines = ether.splitlines()
 
 	# find col letter corresponding to col name
@@ -176,7 +188,7 @@ def parse_ether(ether):
 			# A maximal row looks like this incl. span: cell:F2:t:LIRC2014_chw0oir:f:1:rowspan:289
 			# A minimal row without formatting: cell:C2:t:JJ:f:1
 			parts = line.split(":")
-			if len(parts) > 5:  # Otherwise invalid row
+			if len(parts) > 3:  # Otherwise invalid row
 				cell_id = parts[1]
 				cell_row = cell_id[1:]
 				cell_col = cell_id[0]
@@ -197,7 +209,11 @@ def parse_ether(ether):
 				all_cells.append(Cell(cell_col,cell_row,cell_content,cell_span))
 
 	for cell in all_cells:
-		cell.header = rev_colmap[cell.col]
+		try:
+			cell.header = rev_colmap[cell.col]
+		except KeyError:
+			raise KeyError("KeyError: " + cell.col + "; Document: " + corpus + " :: " + doc + "")
+
 		parsed[cell.header].append(cell)
 
 	parsed["__colmap__"] = colmap  # Save colmap for apply_rule
@@ -279,7 +295,10 @@ def apply_rule(rule, parsed_ether, meta):
 				for row in name_content:
 					if row in arg_content:
 						if arg_content[row] != name_content[row]:
-							cells.append(name_letter + row)
+							cells.append(arg_letter + row)
+				for boundary in arg_boundaries:
+					if boundary not in name_boundaries:
+						cells.append(arg_letter + boundary)
 			else:
 				for boundary in name_boundaries:
 					if boundary not in arg_boundaries:
@@ -330,11 +349,11 @@ def validate_doc_xml(doc_id, schema, editor=False):
 	if schema == "--none--":
 		xml_report += "No schema<br/>"
 	else:
-		command = "xmllint --schema " + "../schemas/" + schema + ".xsd" + " tempfilename"
+		command = "xmllint --htmlout --schema " + "../schemas/" + schema + ".xsd" + " tempfilename"
 		xml = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
-		xml = xml.encode("utf8")
-		out, err = exec_via_temp(xml, command)
+		out, err = exec_via_temp(xml.encode("utf8"), command)
 		err = err.strip()
+		err = err.replace("<br>","").replace("\n","").replace('<h1 align="center">xmllint output</h1>',"")
 		err = re.sub(r'/tmp/[A-Za-z0-9]+:','XML schema: <br>',err)
 		err = re.sub(r'/tmp/[A-Za-z0-9]+','XML schema ',err)
 		err = re.sub(r'\n','<br/>',err)
@@ -367,7 +386,11 @@ def validate_doc_xml(doc_id, schema, editor=False):
 
 	# report
 	if editor is True:
-		full_report = xml_report + meta_report
+		try:
+			#full_report = xml_report.decode("utf8") + meta_report.decode("utf8")
+			full_report = xml_report + meta_report
+		except Exception as e:
+			full_report = "[Encoding error: " + str(e) + "]"
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
 		return full_report
@@ -398,10 +421,10 @@ if __name__ == "__main__":
 
 	if doc_id == "all":
 		print "Content-type:application/json\n\n"
-		print validate_all_docs()
+		print validate_all_docs().encode("utf8")
 	else:
 		print "Content-type:text/html\n\n"
 		if mode == "ether":
-			print validate_doc(doc_id, editor=True)
+			print validate_doc(doc_id, editor=True).encode("utf8")
 		elif mode == "xml":
-			print validate_doc_xml(doc_id, schema, editor=True)
+			print validate_doc_xml(doc_id, schema, editor=True).encode("utf8")
