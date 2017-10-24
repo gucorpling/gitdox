@@ -34,7 +34,7 @@ def setup_db():
 				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text)''')
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata
-				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key, value) ON CONFLICT REPLACE)''')
+				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, FOREIGN KEY (docid) REFERENCES users(id), UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key) ON CONFLICT REPLACE)''')
 	#validation table
 	cur.execute('''CREATE TABLE IF NOT EXISTS validate
 				 (doc text, corpus text, domain text, name text, operator text, argument text, id INTEGER PRIMARY KEY AUTOINCREMENT)''')
