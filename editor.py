@@ -4,18 +4,17 @@
 from six import iteritems
 import cgi, cgitb
 import os, shutil
-from os import listdir
 from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
 from modules.gitdox_git import *
 from modules.configobj import ConfigObj
-from os.path import isfile, join
 import requests
 from requests.auth import HTTPBasicAuth
 import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
-from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml
+from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
+	build_meta_tag, get_ether_stylesheet_select, get_file_list
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -268,12 +267,14 @@ def load_page(user,admin,theform):
 
 		if mode == "xml":
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+			serializable_content = build_meta_tag(doc_id) + text_content.strip() + "\n</meta>\n"
 			file_name = file_name.replace(" ","_") + ".xml"
 		else: # (mode == "ether")
 			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
+			serializable_content = text_content
 			file_name = file_name.replace(" ","_") + "_ether.sgml"
 		saved_file = subdir + file_name
-		serialize_file(text_content, saved_file)
+		serialize_file(serializable_content, saved_file)
 		git_status = push_update_to_git(git_username, git_password, saved_file, git_account, git_repo, commit_message)
 
 		# File system cleanup
@@ -323,11 +324,7 @@ def load_page(user,admin,theform):
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	schemadir = scriptpath + "schemas" + os.sep
 
-	schemafiles = [f for f in listdir(schemadir) if isfile(join(schemadir, f))]
-	for schemafile in sorted(schemafiles):
-		if schemafile.endswith(".xsd"):
-			schemafile = schemafile.replace(".xsd", "")
-			schema_list.append(schemafile)
+	schema_list += get_file_list(schemadir,"xsd",hide_extension=True)
 
 	edit_schema = """<select name="edit_schema" onchange="do_save();">"""
 	for schema_file in schema_list:
@@ -345,11 +342,7 @@ def load_page(user,admin,theform):
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	userdir = scriptpath + "users" + os.sep
 
-	userfiles = [ f for f in listdir(userdir) if isfile(join(userdir,f)) ]
-	for userfile in sorted(userfiles):
-		if userfile != "config.ini" and userfile != "default.ini" and userfile != "admin.ini" and userfile.endswith(".ini"):
-			userfile = userfile.replace(".ini","")
-			user_list.append(userfile)
+	user_list = get_file_list(userdir,"ini",forbidden=["admin","default","config"],hide_extension=True)
 
 	edit_assignee="""<select name="edit_assignee" onchange="do_save();">"""
 	for list_user in user_list:
@@ -391,6 +384,9 @@ def load_page(user,admin,theform):
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
+
+		stylesheet_select = get_ether_stylesheet_select()
+		embedded_editor = embedded_editor.replace("**stylesheet_select**",stylesheet_select)
 
 		if "file" in theform and user != "demo":
 			fileitem = theform["file"]

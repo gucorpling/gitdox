@@ -13,7 +13,7 @@ from modules.gitdox_sql import *
 from modules.dataenc import pass_dec, pass_enc
 from paths import get_menu
 from editor import harvest_meta
-from modules.ether import make_spreadsheet
+from modules.ether import make_spreadsheet, get_ether_stylesheet_select, get_corpus_select
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -89,7 +89,7 @@ def update_git_info(user,new_git_username,new_git_password,new_git_2fa=False):
 			else:
 				new_file.append(line)
 	open(prefix + 'users'+os.sep+user+'.ini', 'w').close()
-	g=open(prefix+ 'users'+os.sep+user+'.ini','a')
+	g = open(prefix+ 'users'+os.sep+user+'.ini','a')
 	for l in new_file:
 		g.write(l+'\n')
 	g.close()
@@ -132,12 +132,12 @@ def load_admin(user,admin,theform):
 		<link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
-		<script src="js/validate.js"/>
+		<script src="js/validate.js"></script>
+		<script src="js/admin.js"></script>
 	<style>
 	table {
 		font-family: arial, sans-serif;
 		border-collapse: collapse;
-		width:400pt;
 	}
 
 	td, th {
@@ -215,6 +215,38 @@ def load_admin(user,admin,theform):
 	</form>"""
 	if warn!="":
 		page+=warn
+
+
+	page += """
+		<h2>Batch download</h2>
+	<p>Download all documents</p>
+	<ul>
+		<li>Documents will be downloaded in a zip file</li>
+		<li>The format of each document will depend on its active mode:
+			<ul>
+			<li>Metadata is added to XML files in a wrapping tag &lt;meta key="value"&gt;</li>
+			<li>Documents in XML mode are downloaded as .xml, as they appear in the editor</li>
+			<li>Documents in spreadsheet mode are downloaded as .sgml to preserve potential span hierarchy conflicts</li></ul></li>
+			<li>You can choose custom configurations for exporting spreadsheet data if .ini files are available in the schemas/ directory</li>
+	</ul>
+	<div>Corpora to export:</div>
+	    **corpus_select**
+	<br/><br/>
+	<div>Extension for spreadsheet files:</div>
+	    <select id="extension_select">
+	    	<option>sgml</option>
+	    	<option>xml</option>
+	    </select>
+	<br/><br/>
+	<div>Export configuration for spreadsheets:</div>
+	    **stylesheet_select**
+	<br/><br/>
+	<div onclick="export_all();" class="button"> <i class="fa fa-cloud-download"></i> download</div>
+	"""
+
+	page = page.replace("**corpus_select**",get_corpus_select())
+	page = page.replace("**stylesheet_select**",get_ether_stylesheet_select())
+
 
 	msg = ""
 	imported = 0
@@ -340,21 +372,6 @@ def load_admin(user,admin,theform):
 
 	page += msg
 
-
-	page += """
-		<h2>Batch download</h2>
-	<p>Download all documents</p>
-	<ul>
-		<li>Documents will be downloaded in a zip file</li>
-		<li>The format of each format will depend on its active mode:
-			<ul>
-			<li>Metadata is added in a wrapping tag &lt;meta key="value"&gt;</li>
-			<li>Documents in XML mode are downloaded as .xml, as they appear in the editor</li>
-			<li>Documents in spreadsheet mode are downloaded as .sgml to preserve potential span hierarchy conflicts</li></ul></li>
-	</ul>
-	<div onclick="window.open('modules/gitdox_export.py', '_blank');" class="button"> <i class="fa fa-cloud-download"></i> download</div>
-	"""
-
 	page+="<br><br><h2>Database management</h2>"
 	#init database, setup_db, wipe all documents
 
@@ -398,6 +415,7 @@ def load_user_config(user,admin,theform):
 		<link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
+		<script src="js/admin.js"></script>
 	<style>
 	table {
 		font-family: arial, sans-serif;
