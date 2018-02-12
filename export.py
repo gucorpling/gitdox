@@ -101,6 +101,10 @@ if __name__ == "__main__":
 		export_stylesheet = theform.getvalue("stylesheet")
 	else:
 		export_stylesheet = None
+	if "status" in theform:
+		status = theform.getvalue("status")
+	else:
+		status = None
 	if "corpus" in theform:
 		corpus = theform.getvalue("corpus")
 	else:
@@ -108,10 +112,12 @@ if __name__ == "__main__":
 
 	if corpus == "--ALL--":
 		corpus = None
+	if status == "--ALL--":
+		status = None
 
 	if "docs" in theform:
 		docs = theform.getvalue("docs")
 		if docs == "%all%":
-			export_all_docs(export_stylesheet,corpus_filter=corpus,extension=extension)
+			export_all_docs(export_stylesheet,corpus_filter=corpus,extension=extension,status=status)
 		else:
 			export_doc(docs, export_stylesheet)

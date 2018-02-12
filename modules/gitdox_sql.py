@@ -162,11 +162,17 @@ def delete_meta(metaid, doc_id):
 def get_doc_info(doc_id):
 	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode,schema FROM docs WHERE id=?", (int(doc_id),))[0]
 
-def get_all_docs(corpus=None):
+def get_all_docs(corpus=None, status=None):
 	if corpus is None:
-		return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
+		if status is None:
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
+		else:
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs where status=?", (status,))
 	else:
-		return generic_query("SELECT id, name, corpus, mode, content FROM docs where corpus=?", (corpus,))
+		if status is None:
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs where corpus=?", (corpus,))
+		else:
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs where corpus=? and status=?", (corpus, status))
 
 def get_doc_meta(doc_id):
 	return generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE", (int(doc_id),))
