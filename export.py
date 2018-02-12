@@ -9,22 +9,28 @@ import zipfile
 from StringIO import StringIO
 from shutil import copyfileobj
 import sys, tempfile
-
+from collections import defaultdict
 
 def create_zip(content_name_pairs):
 	io_file = StringIO()
 	zf = zipfile.ZipFile(io_file, mode='w', compression=zipfile.ZIP_DEFLATED)
 
 	for content, name in content_name_pairs:
-		zf.writestr(name, content.encode("utf8"))
+		zf.writestr(name, content)#.encode("utf8"))
 
 	return io_file
 
-def export_all_docs(config=None, corpus_filter=None, extension="sgml"):
-	docs = get_all_docs(corpus_filter)
+def export_all_docs(config=None, corpus_filter=None, status=None, extension="sgml"):
+	docs = get_all_docs(corpus_filter,status)
 	files = []
+	all_corpus_meta = defaultdict(dict)
 	for doc in docs:
 		doc_id, docname, corpus, mode, content = doc
+		if corpus not in all_corpus_meta:
+			corpus_meta = get_doc_meta(doc_id, corpus=True)
+			for md in corpus_meta:
+				key, val = md[2], md[3]
+				all_corpus_meta[corpus][key] = val
 		if corpus_filter is None:  # All documents exported, use corpus prefix to avoid name clashes
 			filename = corpus + "_" + docname
 		else:  # Only exporting one user specified corpus, name documents without prefix
@@ -36,6 +42,12 @@ def export_all_docs(config=None, corpus_filter=None, extension="sgml"):
 			ether_name = "_".join(["gd",corpus,docname])
 			sgml = ether_to_sgml(get_socialcalc(ether_url, ether_name),doc_id,config=config)
 			files.append((sgml, filename + "." + extension))
+
+	for corp in all_corpus_meta:
+		serialized_meta = ""
+		for key in all_corpus_meta[corp]:
+			serialized_meta += key + "\t" + all_corpus_meta[corp][key] + "\n"
+		files.append((serialized_meta.encode("utf8"), "_meta_" + corp + ".tab"))
 
 	zip_io = create_zip(files)
 
@@ -78,6 +90,8 @@ def export_doc(doc_id, stylesheet=None):
 
 
 if __name__ == "__main__":
+	#print("Content-type:text/html\r\n\r\n")
+
 	import cgitb
 	cgitb.enable()
 	from paths import ether_url
