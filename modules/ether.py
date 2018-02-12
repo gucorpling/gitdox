@@ -40,6 +40,7 @@ class ExportConfig:
 			self.priorities = kwargs.get("priorities",[])
 			self.milestones = kwargs.get("milestones",[])
 			self.no_content = kwargs.get("no_content",[])
+			self.no_ignore = kwargs.get("no_ignore",True)
 			self.tok_annos = kwargs.get("tok_annos",[])
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
 		else:
@@ -380,7 +381,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 				colmap[cell[0]] = colname
 			# Make sure that everything that should be exported has some priority
 			if colname not in config.priorities and config.export_all:
-				if not colname.lower().startswith("ignore:"):  # Never export columns prefixed with "ignore:"
+				if not colname.lower().startswith("ignore\\c"):  # Never export columns prefixed with "ignore:"
 					if "@" in colname:
 						elem = colname.split("@",1)[0]
 					else:
@@ -409,7 +410,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 			else:
 				sec_element = ""
 
-			if element not in config.priorities:  # Guaranteed to be in priorities if it should be included
+			if element not in config.priorities or (element.startswith("ignore\\c") and config.no_ignore):  # Guaranteed to be in priorities if it should be included
 				continue  # Move on to next cell if this is not a desired column
 			if row != last_row:  # New row starting, sort previous lists for opening and closing orders
 				#close_tags[row].sort(key=lambda x: (-last_open_index[x],x))
@@ -425,11 +426,15 @@ def ether_to_sgml(ether, doc_id,config=None):
 					if e_prim in open_tags[last_row] and e_prim in open_tag_length:
 						if span == open_tag_length[e_prim]:
 							open_tags[last_row][e_prim].append((attr, val))
+							if e_prim not in close_tags[last_row + span]:
+								close_tags[last_row+span-1].append(e_prim)
 							prim_found = True
 					if not prim_found:
 						if e_sec in open_tags[last_row] and e_sec in open_tag_length:
 							if span == open_tag_length[e_sec]:
 								open_tags[last_row][e_sec].append((attr, val))
+								if e_sec not in close_tags[last_row + span]:
+									close_tags[last_row + span - 1].append(e_sec)
 				sec_element_checklist = []  # Purge sec_elements
 
 				last_row = row
