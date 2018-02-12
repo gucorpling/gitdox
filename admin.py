@@ -13,7 +13,7 @@ from modules.gitdox_sql import *
 from modules.dataenc import pass_dec, pass_enc
 from paths import get_menu
 from editor import harvest_meta
-from modules.ether import make_spreadsheet
+from modules.ether import make_spreadsheet, get_ether_stylesheet_select, get_corpus_select
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -21,12 +21,29 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
+
 scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 userdir = scriptpath + "users" + os.sep
 templatedir = scriptpath + "templates" + os.sep
 config = ConfigObj(userdir + 'config.ini')
 skin = config["skin"]
 project = config["project"]
+
+
+def get_status_select():
+
+	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
+
+	select = """<select name="status_select" id="status_select">\n"""
+	options = ""
+	for stat in status_list:
+		options += '\t<option value="'+stat+'">'+stat+'</option>\n'
+
+	select += '\t<option value="--ALL--">[all statuses]</option>\n'
+
+	select += options + "</select>\n"
+	return select
+
 
 def write_user_file(username,password,admin,email,realname,git_username,git_password,git_2fa=False):
 	#this is used to write information into a text file to serve as a debugging tool and log
@@ -39,6 +56,7 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 	f.write('admin='+str(admin)+'\n')
 	f.write('email='+email+'\n')
 	f.write('max-age=0'+'\n')
+	f.write('editable=Yes'+'\n')
 	f.write('numlogins = 85\nnumused = 2869\n')
 	f.write('git_username='+git_username+'\n')
 	f.write('git_password='+pass_enc(git_password)+'\n')
@@ -88,7 +106,7 @@ def update_git_info(user,new_git_username,new_git_password,new_git_2fa=False):
 			else:
 				new_file.append(line)
 	open(prefix + 'users'+os.sep+user+'.ini', 'w').close()
-	g=open(prefix+ 'users'+os.sep+user+'.ini','a')
+	g = open(prefix+ 'users'+os.sep+user+'.ini','a')
 	for l in new_file:
 		g.write(l+'\n')
 	g.close()
@@ -107,18 +125,14 @@ def load_admin(user,admin,theform):
 	if theform.getvalue('create_user'):
 		username=theform.getvalue('username')
 		password=theform.getvalue('password')
-		realname=theform.getvalue('realname') if theform.getvalue('realname') is not None else ""
-		email=theform.getvalue('email') if theform.getvalue('email') is not None else ""
+		realname=theform.getvalue('realname') if theform.getvalue('realname') is not None else "anonymous"
+		email=theform.getvalue('email') if theform.getvalue('email') is not None else "a@b.com"
 		admin=theform.getvalue('admin')
 		git_username=theform.getvalue('git_username') if theform.getvalue('git_username') is not None else "none"
 		git_password=theform.getvalue('git_password') if theform.getvalue('git_password') is not None else "none"
 		git_2fa=theform.getvalue('git_2fa') if theform.getvalue('git_2fa') is not None else "false"
 
 		if username!=None and password!=None:
-
-			#create user in database
-			#create_user(username)
-			#need to write a user file for login tools
 			write_user_file(username,password,admin,email,realname,git_username,git_password,git_2fa)
 		else:
 			warn="</br><b style='color:red;'>ERROR: username or password missing; user cannot be created.</b></br>"
@@ -135,12 +149,16 @@ def load_admin(user,admin,theform):
 		<link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
-		<script src="js/validate.js"/>
+		<script src="js/validate.js"></script>
+		<script src="js/admin.js?version=2"></script>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=800">
+		<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+		<link rel="icon" href="favicon.ico" type="image/x-icon">
 	<style>
 	table {
 		font-family: arial, sans-serif;
 		border-collapse: collapse;
-		width:400pt;
 	}
 
 	td, th {
@@ -158,14 +176,10 @@ def load_admin(user,admin,theform):
 		**header**
 		<div id="content">
 		<h1 >GitDox - Administration</h1>
-			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a> </p>
-
+			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a></p>
 	"""
 	page+="""<form id="form_del_user" action="admin.py" method='post'>"""
 
-	#page+="""<h2> User Management </h2>"""
-
-	#a list of all users
 	page += '''<h2>User Management</h2>
 	
 	
@@ -219,6 +233,43 @@ def load_admin(user,admin,theform):
 	if warn!="":
 		page+=warn
 
+
+	page += """
+		<h2>Batch download</h2>
+	<p>Download all documents</p>
+	<ul>
+		<li>Documents will be downloaded in a zip file</li>
+		<li>The format of each document will depend on its active mode:
+			<ul>
+			<li>Metadata is added to XML files in a wrapping tag &lt;meta key="value"&gt;</li>
+			<li>Documents in XML mode are downloaded as .xml, as they appear in the editor</li>
+			<li>Documents in spreadsheet mode are downloaded as .sgml to preserve potential span hierarchy conflicts</li></ul></li>
+			<li>You can choose custom configurations for exporting spreadsheet data if .ini files are available in the schemas/ directory</li>
+	</ul>
+	<div>Corpora to export:</div>
+	    **corpus_select**
+	<br/><br/>
+	<div>Filter by status:</div>
+	    **status_select**
+	<br/><br/>
+	<div>Extension for spreadsheet files:</div>
+	    <select id="extension_select">
+	    	<option>sgml</option>
+	    	<option>tt</option>
+	    	<option>xml</option>
+	    </select>
+	<br/><br/>
+	<div>Export configuration for spreadsheets:</div>
+	    **stylesheet_select**
+	<br/><br/>
+	<div onclick="export_all();" class="button"> <i class="fa fa-cloud-download"></i> download</div>
+	"""
+
+	page = page.replace("**corpus_select**",get_corpus_select())
+	page = page.replace("**status_select**",get_status_select())
+	page = page.replace("**stylesheet_select**",get_ether_stylesheet_select())
+
+
 	msg = ""
 	imported = 0
 	if "file" in theform and "mode" in theform:
@@ -251,6 +302,13 @@ def load_admin(user,admin,theform):
 					# Document already exists, just overwrite spreadsheet/xml and metadata and set mode
 					doc_id = generic_query("SELECT id FROM docs where corpus=? and name=?", (corpus,docname))[0][0]
 					update_mode(doc_id, mode)
+
+				if "repo" in meta_key_val:
+					update_filename(doc_id,meta_key_val["repo"])
+					del meta_key_val["repo"]
+				if "schema" in meta_key_val:
+					update_schema(doc_id,meta_key_val["schema"])
+					del meta_key_val["schema"]
 
 				if mode == "ether":
 					make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
@@ -336,7 +394,6 @@ def load_admin(user,admin,theform):
 
 	page += msg
 
-
 	page+="<br><br><h2>Database management</h2>"
 	#init database, setup_db, wipe all documents
 
@@ -380,6 +437,11 @@ def load_user_config(user,admin,theform):
 		<link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
+		<script src="js/admin.js"></script>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=800">
+		<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+		<link rel="icon" href="favicon.ico" type="image/x-icon">
 	<style>
 	table {
 		font-family: arial, sans-serif;

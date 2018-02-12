@@ -97,7 +97,7 @@ def load_validation_rules():
                 },
                 operator: {
                     title: 'Operator',
-                    options: ['~', '|', '=', '>', 'exists']
+                    options: ['~', '|', '=', '==', '>', 'exists']
                 },
                 argument: {
                     title: 'Argument'

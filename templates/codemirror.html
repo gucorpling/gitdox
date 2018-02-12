@@ -5,76 +5,280 @@
 
 
       var tags = {
-        "!top": ["TEI"],
-        "!attrs": {
-        },
-        TEI: {
-          children:['add','figure','gap','note','p','pb','supplied']
-        },
-        cb: {
-          attrs: {n:null
-          },
-          children: ["lb","hi","note","gap","p"]
-        },
-
-        figure: {
-          attrs: {rend:null
-          },
-          children: []
-        },
-
-        gap: {
-          attrs: {
-            extent:null,
-            quantity:null,
-            reason:null,
-            unit:null
-
-          },
-          children: []
-
-        },
-
-        hi: {
-          attrs: {rend:null
-          },
-		  children: []
-        },
-
-        lb: {
-          attrs: {n:null
-          },
-          children: []
-        },
-
-        note: {
-          attrs: {note:null
-          },
-          children: ["hi"]
-        },
-
-        p: {
-          attrs: {n:null
-          },
-          children: ["lb",'hi','note','gap']
-        },
-
-        pb: {
-          attrs: {"xml:id":null
-          },
-          children: ["cb",'lb','p']
-        },
-
-        supplied: {
-          attrs: {evidence:null,
-            reason:null
-          },
-          children: ['note']
-        },
-
-
-
-      };
+  "!top": [
+    "text",
+    "head",
+    "lg",
+    "sp",
+    "s",
+    "incident",
+    "date",
+    "gap",
+    "measure",
+    "sic",
+    "w",
+    "time",
+    "quote",
+    "figure",
+    "caption",
+    "p",
+    "list",
+    "item",
+    "add",
+    "l",
+    "hi",
+    "q",
+    "ref"
+  ],
+  "text": {
+    "attrs": {
+      "id": null,
+      "type": [
+        "interview",
+        "news",
+        "voyage",
+        "whow",
+        "academic",
+        "bio",
+        "reddit",
+        "fiction"
+      ]
+    },
+    "children": [
+      "figure",
+      "list",
+      "p",
+      "quote",
+      "s",
+      "head",
+      "sp",
+      "incident"
+    ]
+  },
+  "head": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "s"
+    ]
+  },
+  "lg": {
+    "attrs": {
+      "type": null,
+      "n": null
+    },
+    "children": [
+      "s"
+    ]
+  },
+  "sp": {
+    "attrs": {
+      "who": null
+    },
+    "children": [
+      "s",
+      "list",
+      "p",
+      "hi"
+    ]
+  },
+  "s": {
+    "attrs": {
+      "type": [
+        "decl",
+        "sub",
+        "imp",
+        "q",
+        "wh",
+        "inf",
+        "ger",
+        "intj",
+        "frag",
+        "other"
+      ]
+    },
+    "children": [
+      "add",
+      "figure",
+      "hi",
+      "sp",
+      "q",
+      "w",
+      "quote",
+      "ref",
+      "date",
+      "gap",
+      "incident",
+      "l",
+      "list",
+      "measure",
+      "sic",
+      "time"
+    ]
+  },
+  "incident": {
+    "attrs": {
+      "type": null,
+      "who": null
+    }
+  },
+  "date": {
+    "attrs": {
+      "from": null,
+      "notAfter": null,
+      "notBefore": null,
+      "rend": null,
+      "to": null,
+      "when": null
+    }
+  },
+  "gap": {
+    "attrs": {
+      "reason": null
+    }
+  },
+  "measure": {
+    "attrs": {
+      "type": null
+    }
+  },
+  "sic": {
+    "children": [
+      "ref",
+      "w"
+    ]
+  },
+  "w": {},
+  "time": {
+    "attrs": {
+      "when": null,
+      "from": null,
+      "to": null
+    }
+  },
+  "quote": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "add",
+      "q",
+      "ref",
+      "s",
+      "sic"
+    ]
+  },
+  "figure": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "caption"
+    ]
+  },
+  "caption": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "quote",
+      "s"
+    ]
+  },
+  "p": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "add",
+      "figure",
+      "hi",
+      "lg",
+      "quote",
+      "list",
+      "s",
+      "sp"
+    ]
+  },
+  "list": {
+    "attrs": {
+      "type": [
+        "ordered",
+        "unordered"
+      ]
+    },
+    "children": [
+      "figure",
+      "item"
+    ]
+  },
+  "item": {
+    "attrs": {
+      "n": null
+    },
+    "children": [
+      "head",
+      "figure",
+      "ref",
+      "hi",
+      "list",
+      "p",
+      "s"
+    ]
+  },
+  "add": {
+    "children": [
+      "s",
+      "ref"
+    ]
+  },
+  "l": {
+    "attrs": {
+      "n": null
+    },
+    "children": [
+      "s",
+      "date"
+    ]
+  },
+  "hi": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "ref",
+      "incident",
+      "w",
+      "lg",
+      "s",
+      "caption",
+      "q",
+      "sic"
+    ]
+  },
+  "q": {
+    "children": [
+      "figure",
+      "hi",
+      "sic",
+      "ref"
+    ]
+  },
+  "ref": {
+    "attrs": {
+      "target": null,
+      "rend": null
+    },
+    "children": [
+      "add",
+      "hi",
+      "sic",
+      "date"
+    ]
+  }
+}
+;
 
       function completeAfter(cm, pred) {
         var cur = cm.getCursor();

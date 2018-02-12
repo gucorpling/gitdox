@@ -9,6 +9,15 @@ import cgi
 import json
 
 
+class Cell:
+	def __init__(self, col, row, content, span):
+		self.col = col
+		self.row = row
+		self.header = ""
+		self.content = content
+		self.span = span
+
+
 def highlight_cells(cells, ether_url, ether_doc_name):
 	old_ether = get_socialcalc(ether_url, ether_doc_name)
 	old_ether_lines = old_ether.splitlines()
@@ -27,6 +36,13 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 		new_color_number = old_color_numbers[0]
 
 	for line in old_ether_lines:
+
+		parts = line.split(":")
+		# Check for pure formatting cells, e.g. cell:K15:f:1
+		if len(parts) == 4:
+			if parts[2] == "f":  # Pure formatting cell, no content
+				continue
+
 		parsed_cell = re.match(r'cell:([A-Z]+\d+)(:.*)$', line)
 		if parsed_cell is not None:
 			col_row = parsed_cell.group(1)
@@ -88,7 +104,12 @@ def validate_all_docs():
 		elif doc_mode == "xml":
 			if validation is None:
 				reports[doc_id] = validate_doc_xml(doc_id, doc_schema)
-				update_validation(doc_id,json.dumps(reports[doc_id]))
+				try:
+					validation_report = json.dumps(reports[doc_id])
+				except UnicodeDecodeError:
+					reports[doc_id]["xml"] = "UnicodeDecodeError; unable to print XML validation report for " + doc_name
+					validation_report = json.dumps(reports[doc_id])
+				update_validation(doc_id,validation_report)
 			else:
 				reports[doc_id] = json.loads(validation)
 
@@ -102,6 +123,7 @@ def validate_doc(doc_id, editor=False):
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
 	ether = get_socialcalc(ether_url, ether_doc_name)
+	parsed_ether = parse_ether(ether, doc_name, doc_corpus)
 	meta = get_doc_meta(doc_id)
 
 	ether_report = ''
@@ -122,7 +144,7 @@ def validate_doc(doc_id, editor=False):
 				rule_applies = False
 
 		if rule_applies is True:
-			rule_report, rule_extra, rule_cells = apply_rule(doc_id, rule, ether, meta)
+			rule_report, rule_extra, rule_cells = apply_rule(rule, parsed_ether, meta)
 			cells += rule_cells
 			if editor is True and len(rule_extra) > 0:
 				new_report = """<div class="tooltip">""" + rule_report[:-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
@@ -153,9 +175,52 @@ def validate_doc(doc_id, editor=False):
 		return json_report
 
 
-def apply_rule(doc_id, rule, ether, meta):
-	doc_info = get_doc_info(doc_id)
+def parse_ether(ether, doc, corpus):
+	ether_lines = ether.splitlines()
 
+	# find col letter corresponding to col name
+	parsed = defaultdict(list)
+	rev_colmap = {}
+	colmap = {}
+	all_cells = []
+	for line in ether_lines:
+		if line.startswith("cell:"):  # Cell row
+			# A maximal row looks like this incl. span: cell:F2:t:LIRC2014_chw0oir:f:1:rowspan:289
+			# A minimal row without formatting: cell:C2:t:JJ:f:1
+			parts = line.split(":")
+			if len(parts) > 3:  # Otherwise invalid row
+				cell_id = parts[1]
+				cell_row = cell_id[1:]
+				cell_col = cell_id[0]
+				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
+				#for c in cell_id:
+				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
+				#		cell_row += c
+				#	else:
+				#		cell_col += c
+				cell_content = parts[3]
+				if "rowspan:" in line:
+					cell_span = parts[-1]
+				else:
+					cell_span = "1"
+				if cell_row == "1":  # Header row
+					colmap[cell_content] = cell_col
+					rev_colmap[cell_col] = cell_content
+				all_cells.append(Cell(cell_col,cell_row,cell_content,cell_span))
+
+	for cell in all_cells:
+		try:
+			cell.header = rev_colmap[cell.col]
+		except KeyError:
+			raise KeyError("KeyError: " + cell.col + "; Document: " + corpus + " :: " + doc + "")
+
+		parsed[cell.header].append(cell)
+
+	parsed["__colmap__"] = colmap  # Save colmap for apply_rule
+	return parsed
+
+
+def apply_rule(rule, parsed_ether, meta):
 	domain = rule[2]
 	name = rule[3]
 	operator = rule[4]
@@ -169,105 +234,91 @@ def apply_rule(doc_id, rule, ether, meta):
 		return report, extra, cells
 
 	if domain == "ether":
-		ether_lines = ether.splitlines()
 
 		if operator in ["~", "|", "exists"]:
 
 			# find col letter corresponding to col name
-			col_letter = None
-			for line in ether_lines:
-				if re.search(r'[A-Z]+1:t:' + name + r'(:|$)', line) is not None:
-					parsed_cell = re.match(r'cell:([A-Z]+)(\d+)(:.*)$', line)
-					col_letter = parsed_cell.group(1)
-					break
-			if col_letter is None:
-				report += "Column named " + name + " not found<br/>"
+			if name in parsed_ether:
+				col = parsed_ether[name]
+			else:
+				if operator in ["|","exists"]:
+					report += "Column named " + name + " not found<br/>"
 				return report, extra, cells
 
-			for line in ether_lines:
-				parsed_cell = re.match(r'cell:([A-Z]+)(\d+)(:.*)$', line)
-				if parsed_cell is not None:
-					col = parsed_cell.group(1)
-					row = parsed_cell.group(2)
-					other = parsed_cell.group(3)
+			for cell in col:
+				if cell.row != "1":
+					if operator == "|":  # rowspan
+						if argument == "1":
+							if cell.span != "1":
+								report += "Cell " + cell.col + cell.row + ": row span is not 1<br/>"
+								cells.append(cell.col + cell.row)
+						else:
+							if cell.span != "" and cell.span is not None:
+								report += "Cell " + cell.col + cell.row + ": row span is not " + argument + "<br/>"
+								cells.append(cell.col + cell.row)
 
-					if col == col_letter and row != "1":
-						if operator == "|":  # rowspan
-							if argument == '1':
-								if ':rowspan:' in other:
-									report += "Cell " + col + row + ": row span is not 1<br/>"
-									cells.append(col + row)
-							else:
-								rowspan = re.search(r':rowspan:' + str(argument) + r'\b', other)
-								if rowspan is None:
-									report += "Cell " + col + row + ": row span is not " + argument + "<br/>"
-									cells.append(col + row)
+					elif operator == "~":  # regex
+						match = re.search(argument, cell.content)
+						if match is None:
+							report += "Cell " + cell.col + cell.row + ": content does not match pattern <br/>"
+							extra += "Cell " + cell.col + cell.row + ":<br/>" + "Content: " + cell.content + "<br/>" + "Pattern: " + argument + "<br/>"
+							cells.append(cell.col + cell.row)
 
-						elif operator == "~":  # regex
-							cell_content = re.search(r':t:([^:]*)(:|$)', other)
-							if cell_content is not None:
-								cell_content = cell_content.group(1)
-								match = re.search(argument, cell_content)
-								if match is None:
-									report += "Cell " + col + row + ": content does not match pattern <br/>"
-									extra += "Cell " + col + row + ":<br/>" + "Content: " + cell_content + "<br/>" + "Pattern: " + argument + "<br/>"
-									cells.append(col + row)
-
-		elif operator in ["=", ">"]:  # care about two cols: name and argument
+		elif operator in ["=", ">","=="]:  # care about two cols: name and argument
 
 			# find col letters corresponding to col names
-			name_letter = None
-			arg_letter = None
-			for line in ether_lines:
-				if re.search(r'[A-Z]+1:t:' + name + r'(:|$)', line) is not None:
-					parsed_cell = re.match(r'cell:([A-Z]+)(\d+)(:.*)$', line)
-					name_letter = parsed_cell.group(1)
-				elif re.search(r'[A-Z]+1:t:' + argument + r'(:|$)', line) is not None:
-					parsed_cell = re.match(r'cell:([A-Z]+)(\d+)(:.*)$', line)
-					arg_letter = parsed_cell.group(1)
+			name_letter = parsed_ether["__colmap__"][name] if name in parsed_ether["__colmap__"] else None
+			arg_letter = parsed_ether["__colmap__"][argument] if argument in parsed_ether["__colmap__"] else None
 			if name_letter is None:
-				report += "Column named " + name + " not found<br/>"
+				if operator != "==":
+					report += "Column named " + name + " not found<br/>"
 				return report, extra, cells
 			if arg_letter is None:
-				report += "Column named " + argument + " not found<br/>"
+				if operator != "==":
+					report += "Column named " + argument + " not found<br/>"
 				return report, extra, cells
 
 			name_boundaries = []
 			arg_boundaries = []
+			name_content = {}
+			arg_content = {}
 
 			# find boundary rows
-			for line in ether_lines:
-				parsed_cell = re.match(r'cell:([A-Z]+)(\d+)(:.*)$', line)
-				if parsed_cell is not None:
-					col = parsed_cell.group(1)
-					row = parsed_cell.group(2)
+			for cell in parsed_ether[name]:
+				name_boundaries.append(cell.row)
+				name_content[cell.row] = cell.content
+			for cell in parsed_ether[argument]:
+				arg_boundaries.append(cell.row)
+				arg_content[cell.row] = cell.content
 
-					if col == name_letter:
-						name_boundaries.append(row)
-					elif col == arg_letter:
-						arg_boundaries.append(row)
-
-			for boundary in name_boundaries:
-				if boundary not in arg_boundaries:
-					report += "Span break on line " + boundary + " in column " + name + " but not " \
-							  + argument + "<br/>"
-					cells.append(name_letter + boundary)
-			if operator == "=":
+			if operator == "==":
+				for row in name_content:
+					if row in arg_content:
+						if arg_content[row] != name_content[row]:
+							cells.append(arg_letter + row)
 				for boundary in arg_boundaries:
 					if boundary not in name_boundaries:
-						report += "Span break on line " + boundary + " in column " + argument + " but not " \
-								  + name + "<br/>"
 						cells.append(arg_letter + boundary)
+			else:
+				for boundary in name_boundaries:
+					if boundary not in arg_boundaries:
+						report += "Span break on line " + boundary + " in column " + name + " but not " \
+								  + argument + "<br/>"
+						cells.append(name_letter + boundary)
+				if operator == "=":
+					for boundary in arg_boundaries:
+						if boundary not in name_boundaries:
+							cells.append(arg_letter + boundary)
 
 	elif domain == "meta":
-		meta_report, meta_extra = apply_meta_rule(doc_id, rule, meta)
+		meta_report, meta_extra = apply_meta_rule(rule, meta)
 		report += meta_report
 		extra += meta_extra
 
 	return report, extra, cells
 
 
-def apply_meta_rule(doc_id, rule, meta):
+def apply_meta_rule(rule, meta):
 	name = rule[3]
 	operator = rule[4]
 	argument = rule[5]
@@ -298,11 +349,11 @@ def validate_doc_xml(doc_id, schema, editor=False):
 	if schema == "--none--":
 		xml_report += "No schema<br/>"
 	else:
-		command = "xmllint --schema " + "../schemas/" + schema + ".xsd" + " tempfilename"
+		command = "xmllint --htmlout --schema " + "../schemas/" + schema + ".xsd" + " tempfilename"
 		xml = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
-		xml = xml.encode("utf8")
-		out, err = exec_via_temp(xml, command)
+		out, err = exec_via_temp(xml.encode("utf8"), command)
 		err = err.strip()
+		err = err.replace("<br>","").replace("\n","").replace('<h1 align="center">xmllint output</h1>',"")
 		err = re.sub(r'/tmp/[A-Za-z0-9]+:','XML schema: <br>',err)
 		err = re.sub(r'/tmp/[A-Za-z0-9]+','XML schema ',err)
 		err = re.sub(r'\n','<br/>',err)
@@ -310,7 +361,7 @@ def validate_doc_xml(doc_id, schema, editor=False):
 
 	# metadata validation
 	meta_report = ''
-	meta_rules = generic_query("SELECT * FROM validate WHERE domain = 'meta'", None)
+	meta_rules = generic_query("SELECT  corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'meta'", None)
 	meta = get_doc_meta(doc_id)
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
@@ -326,7 +377,7 @@ def validate_doc_xml(doc_id, schema, editor=False):
 			if re.search(rule_doc, doc_name) is None:
 				rule_applies = False
 		if rule_applies is True:
-			rule_report, rule_extra = apply_meta_rule(doc_id, rule, meta)
+			rule_report, rule_extra = apply_meta_rule(rule, meta)
 			if editor is True and len(rule_extra) > 0:
 				meta_report += """<div class="tooltip">""" + rule_report[
 															 :-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
@@ -335,7 +386,11 @@ def validate_doc_xml(doc_id, schema, editor=False):
 
 	# report
 	if editor is True:
-		full_report = xml_report + meta_report
+		try:
+			#full_report = xml_report.decode("utf8") + meta_report.decode("utf8")
+			full_report = xml_report + meta_report
+		except Exception as e:
+			full_report = "[Encoding error: " + str(e) + "]"
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
 		return full_report
@@ -366,10 +421,10 @@ if __name__ == "__main__":
 
 	if doc_id == "all":
 		print "Content-type:application/json\n\n"
-		print validate_all_docs()
+		print validate_all_docs().encode("utf8")
 	else:
 		print "Content-type:text/html\n\n"
 		if mode == "ether":
-			print validate_doc(doc_id, editor=True)
+			print validate_doc(doc_id, editor=True).encode("utf8")
 		elif mode == "xml":
-			print validate_doc_xml(doc_id, schema, editor=True)
+			print validate_doc_xml(doc_id, schema, editor=True).encode("utf8")

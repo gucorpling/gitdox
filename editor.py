@@ -1,21 +1,22 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+#print("Content-type:text/html\r\n\r\n")
+
 from six import iteritems
 import cgi, cgitb
 import os, shutil
-from os import listdir
 from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
 from modules.gitdox_git import *
 from modules.configobj import ConfigObj
-from os.path import isfile, join
 import requests
 from requests.auth import HTTPBasicAuth
 import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
-from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml
+from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
+	build_meta_tag, get_ether_stylesheet_select, get_file_list
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -62,7 +63,7 @@ def harvest_meta(sgml):
 
 def serialize_file(text_content,file_name):
 	f=open(prefix+file_name,'w')
-	f.write(text_content.encode("utf8"))
+	f.write(text_content)#.encode("utf8"))
 	f.close()
 
 
@@ -268,12 +269,15 @@ def load_page(user,admin,theform):
 
 		if mode == "xml":
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
+			serializable_content = build_meta_tag(doc_id) + text_content.strip() + "\n</meta>\n"
+			serializable_content = serializable_content.encode('utf8')
 			file_name = file_name.replace(" ","_") + ".xml"
 		else: # (mode == "ether")
 			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
+			serializable_content = text_content
 			file_name = file_name.replace(" ","_") + "_ether.sgml"
 		saved_file = subdir + file_name
-		serialize_file(text_content, saved_file)
+		serialize_file(serializable_content, saved_file)
 		git_status = push_update_to_git(git_username, git_password, saved_file, git_account, git_repo, commit_message)
 
 		# File system cleanup
@@ -312,7 +316,7 @@ def load_page(user,admin,theform):
 	options = ""
 	for stat in status_list:
 		options +='<option value="'+stat+'">'+stat+'</option>\n'
-	options = options.replace('">'+status, '" selected="selected">'+status)
+	options = options.replace('">'+status +'<', '" selected="selected">'+status+'<')
 
 	edit_status="""<select name="edit_status" onchange='do_save();'>"""
 
@@ -323,11 +327,7 @@ def load_page(user,admin,theform):
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	schemadir = scriptpath + "schemas" + os.sep
 
-	schemafiles = [f for f in listdir(schemadir) if isfile(join(schemadir, f))]
-	for schemafile in sorted(schemafiles):
-		if schemafile.endswith(".xsd"):
-			schemafile = schemafile.replace(".xsd", "")
-			schema_list.append(schemafile)
+	schema_list += get_file_list(schemadir,"xsd",hide_extension=True)
 
 	edit_schema = """<select name="edit_schema" onchange="do_save();">"""
 	for schema_file in schema_list:
@@ -345,11 +345,7 @@ def load_page(user,admin,theform):
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	userdir = scriptpath + "users" + os.sep
 
-	userfiles = [ f for f in listdir(userdir) if isfile(join(userdir,f)) ]
-	for userfile in sorted(userfiles):
-		if userfile != "config.ini" and userfile != "default.ini" and userfile != "admin.ini" and userfile.endswith(".ini"):
-			userfile = userfile.replace(".ini","")
-			user_list.append(userfile)
+	user_list = get_file_list(userdir,"ini",forbidden=["admin","default","config"],hide_extension=True)
 
 	edit_assignee="""<select name="edit_assignee" onchange="do_save();">"""
 	for list_user in user_list:
@@ -374,6 +370,15 @@ def load_page(user,admin,theform):
 		metaid = theform.getvalue('metaid')
 		if user != "demo":
 			delete_meta(metaid, doc_id)
+	if theform.getvalue('corpus_metakey'):
+		metakey = theform.getvalue('corpus_metakey')
+		metavalue = theform.getvalue('corpus_metavalue')
+		if user != "demo":
+			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"),corpus=True)
+	if theform.getvalue('corpus_metaid'):
+		metaid = theform.getvalue('corpus_metaid')
+		if user != "demo":
+			delete_meta(metaid, doc_id, corpus=True)
 
 	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();"> """ + xml_nlp_button + """</div>""" + \
 				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">"""+ spreadsheet_nlp_button + """</div>"""
@@ -391,6 +396,9 @@ def load_page(user,admin,theform):
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
+
+		stylesheet_select = get_ether_stylesheet_select()
+		embedded_editor = embedded_editor.replace("**stylesheet_select**",stylesheet_select)
 
 		if "file" in theform and user != "demo":
 			fileitem = theform["file"]
@@ -423,6 +431,8 @@ def load_page(user,admin,theform):
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
 	else:
 		metadata = print_meta(doc_id)
+		corpus_metadata = print_meta(doc_id,corpus=True)
+		#corpus_metadata = ""
 		page=page.replace("**content**",text_content)
 		page=page.replace("**docname**",docname)
 		page=page.replace("**corpusname**",corpus)
@@ -432,6 +442,7 @@ def load_page(user,admin,theform):
 		page=page.replace("**edit_assignee**",edit_assignee)
 		page=page.replace("**edit_mode**",edit_mode)
 		page=page.replace("**metadata**",metadata)
+		page=page.replace("**corpus_metadata**",corpus_metadata)
 		page=page.replace("**disabled_NLP**",disabled_nlp_service)
 		page=page.replace("**NLP**",nlp_service)
 		page=page.replace("**id**",doc_id)
@@ -462,6 +473,7 @@ def open_main_server():
 	thisscript = os.environ.get('SCRIPT_NAME', '')
 	action = None
 	theform = cgi.FieldStorage()
+	#print(theform)
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	userdir = scriptpath + "users" + os.sep
 	action, userconfig = login(theform, userdir, thisscript, action)

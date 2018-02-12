@@ -37,3 +37,10 @@ function do_save(){
     }
     document.getElementById('editor_form').submit();
 }
+
+function export_ether(){
+    doc_id = document.getElementById('doc_id').value;
+    stylesheet = document.getElementById('ether_stylesheet').value;
+
+    window.open('export.py?docs=' + doc_id + '&stylesheet=' + stylesheet, '_new');
+}
