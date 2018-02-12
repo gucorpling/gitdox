@@ -85,6 +85,10 @@ class ExportConfig:
 			self.tok_annos = []
 		if config.has_key("export_all"):
 			self.export_all = config["export_all"].lower() == "true"
+		if config.has_key("no_ignore"):
+			self.no_ignore = config["no_ignore"].lower() == "true"
+		else:
+			self.no_ignore = True
 		if config.has_key("template"):
 			self.template = config["template"]
 		else:
