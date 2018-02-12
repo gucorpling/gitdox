@@ -14,7 +14,12 @@ h1, h2{font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans",
 		text-align: left;
 		padding: 8px;
 	}
+
+.corpusbutton{
+	background-color: #23d83c !important;
 	
+}
+
 .button {
 	display: inline-block;
 	outline: none;
@@ -86,7 +91,9 @@ select select:focus {
     box-shadow: inset 0 1px 1px rgba(0,0,0,.05);
     max-width:400px}
 
-#meta_table{width:800px;  table-layout: fixed;}
+#meta_table, #meta_table_corpus{width:800px;  table-layout: fixed;}
+
+#meta_table_corpus{background-color: #cefbce}
 
 table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after { 
     content: "\00a0\25B4\25BE" 
