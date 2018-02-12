@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+#print("Content-type:text/html\r\n\r\n")
+
 from six import iteritems
 import cgi, cgitb
 import os, shutil
@@ -61,7 +63,7 @@ def harvest_meta(sgml):
 
 def serialize_file(text_content,file_name):
 	f=open(prefix+file_name,'w')
-	f.write(text_content.encode("utf8"))
+	f.write(text_content)#.encode("utf8"))
 	f.close()
 
 
@@ -268,6 +270,7 @@ def load_page(user,admin,theform):
 		if mode == "xml":
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
 			serializable_content = build_meta_tag(doc_id) + text_content.strip() + "\n</meta>\n"
+			serializable_content = serializable_content.encode('utf8')
 			file_name = file_name.replace(" ","_") + ".xml"
 		else: # (mode == "ether")
 			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
@@ -367,6 +370,15 @@ def load_page(user,admin,theform):
 		metaid = theform.getvalue('metaid')
 		if user != "demo":
 			delete_meta(metaid, doc_id)
+	if theform.getvalue('corpus_metakey'):
+		metakey = theform.getvalue('corpus_metakey')
+		metavalue = theform.getvalue('corpus_metavalue')
+		if user != "demo":
+			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"),corpus=True)
+	if theform.getvalue('corpus_metaid'):
+		metaid = theform.getvalue('corpus_metaid')
+		if user != "demo":
+			delete_meta(metaid, doc_id, corpus=True)
 
 	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();"> """ + xml_nlp_button + """</div>""" + \
 				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">"""+ spreadsheet_nlp_button + """</div>"""
@@ -419,6 +431,8 @@ def load_page(user,admin,theform):
 		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
 	else:
 		metadata = print_meta(doc_id)
+		corpus_metadata = print_meta(doc_id,corpus=True)
+		#corpus_metadata = ""
 		page=page.replace("**content**",text_content)
 		page=page.replace("**docname**",docname)
 		page=page.replace("**corpusname**",corpus)
@@ -428,6 +442,7 @@ def load_page(user,admin,theform):
 		page=page.replace("**edit_assignee**",edit_assignee)
 		page=page.replace("**edit_mode**",edit_mode)
 		page=page.replace("**metadata**",metadata)
+		page=page.replace("**corpus_metadata**",corpus_metadata)
 		page=page.replace("**disabled_NLP**",disabled_nlp_service)
 		page=page.replace("**NLP**",nlp_service)
 		page=page.replace("**id**",doc_id)
@@ -458,6 +473,7 @@ def open_main_server():
 	thisscript = os.environ.get('SCRIPT_NAME', '')
 	action = None
 	theform = cgi.FieldStorage()
+	#print(theform)
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	userdir = scriptpath + "users" + os.sep
 	action, userconfig = login(theform, userdir, thisscript, action)
