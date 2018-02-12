@@ -21,12 +21,29 @@ if platform.system() == "Windows":
 else:
 	prefix = ""
 
+
 scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 userdir = scriptpath + "users" + os.sep
 templatedir = scriptpath + "templates" + os.sep
 config = ConfigObj(userdir + 'config.ini')
 skin = config["skin"]
 project = config["project"]
+
+
+def get_status_select():
+
+	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
+
+	select = """<select name="status_select" id="status_select">\n"""
+	options = ""
+	for stat in status_list:
+		options += '\t<option value="'+stat+'">'+stat+'</option>\n'
+
+	select += '\t<option value="--ALL--">[all statuses]</option>\n'
+
+	select += options + "</select>\n"
+	return select
+
 
 def write_user_file(username,password,admin,email,realname,git_username,git_password,git_2fa=False):
 	#this is used to write information into a text file to serve as a debugging tool and log
@@ -133,7 +150,11 @@ def load_admin(user,admin,theform):
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
 		<script src="js/validate.js"></script>
-		<script src="js/admin.js"></script>
+		<script src="js/admin.js?version=2"></script>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=800">
+		<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+		<link rel="icon" href="favicon.ico" type="image/x-icon">
 	<style>
 	table {
 		font-family: arial, sans-serif;
@@ -155,14 +176,10 @@ def load_admin(user,admin,theform):
 		**header**
 		<div id="content">
 		<h1 >GitDox - Administration</h1>
-			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a> </p>
-
+			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a></p>
 	"""
 	page+="""<form id="form_del_user" action="admin.py" method='post'>"""
 
-	#page+="""<h2> User Management </h2>"""
-
-	#a list of all users
 	page += '''<h2>User Management</h2>
 	
 	
@@ -232,9 +249,13 @@ def load_admin(user,admin,theform):
 	<div>Corpora to export:</div>
 	    **corpus_select**
 	<br/><br/>
+	<div>Filter by status:</div>
+	    **status_select**
+	<br/><br/>
 	<div>Extension for spreadsheet files:</div>
 	    <select id="extension_select">
 	    	<option>sgml</option>
+	    	<option>tt</option>
 	    	<option>xml</option>
 	    </select>
 	<br/><br/>
@@ -245,6 +266,7 @@ def load_admin(user,admin,theform):
 	"""
 
 	page = page.replace("**corpus_select**",get_corpus_select())
+	page = page.replace("**status_select**",get_status_select())
 	page = page.replace("**stylesheet_select**",get_ether_stylesheet_select())
 
 
@@ -416,6 +438,10 @@ def load_user_config(user,admin,theform):
 		<link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
 		<link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
 		<script src="js/admin.js"></script>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=800">
+		<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+		<link rel="icon" href="favicon.ico" type="image/x-icon">
 	<style>
 	table {
 		font-family: arial, sans-serif;
