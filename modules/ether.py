@@ -519,6 +519,9 @@ def ether_to_sgml(ether, doc_id,config=None):
 	#output += "</meta>\n"
 	if "%%body%%" in template:
 		output = template.replace("%%body%%",output.strip())
+
+	output = re.sub("%%[^%]+%%", "none", output)
+
 	return output
 
 
