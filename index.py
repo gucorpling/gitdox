@@ -76,13 +76,45 @@ field name (e.g., author):<br>
 <br>
 field value (e.g., Besa):<br>
 <input type="text" name='metavalue'><br>
-<INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
+<input TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
 </FORM>
 </BODY>
 </HTML>"""
 	options = make_options(file='metadata_fields.tab')
 	popup_meta_html = popup_meta_html.replace("***options**",options)
 	f = open(prefix + 'popupPage.html', 'w')
+	f.write(popup_meta_html)
+
+	popup_meta_html="""<HTML>
+<HEAD>
+<SCRIPT LANGUAGE="JavaScript">
+function copyForm() {
+	opener.document.hiddenForm.corpus_metakey.value = document.popupForm.metakey.value;
+	opener.document.hiddenForm.corpus_metavalue.value = document.popupForm.metavalue.value;
+
+	opener.document.hiddenForm.submit();
+	window.close();
+	return false;
+}
+</SCRIPT>
+</HEAD>
+<BODY>
+<FORM NAME="popupForm" onSubmit="return copyForm()">
+field name (e.g., author):<br>
+<input list="metakeys" name="metakey">
+<datalist id="metakeys">
+***options**
+</datalist>
+<br>
+field value (e.g., Besa):<br>
+<input type="text" name='metavalue'><br>
+<input TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
+</FORM>
+</BODY>
+</HTML>"""
+	options = make_options(file='corpus_metadata_fields.tab')
+	popup_meta_html = popup_meta_html.replace("***options**",options)
+	f = open(prefix + 'popupPageCorpus.html', 'w')
 	f.write(popup_meta_html)
 
 
