@@ -204,7 +204,7 @@ def flush_open(annos, row_num, colmap):
 	flushed = ""
 	for anno in annos:
 		element, name, value = anno
-		flushed += "cell:"+colmap[name] + str(row_num) + ":t:" + value + "\n"
+		flushed += "cell:"+colmap[name] + str(row_num) + ":t:" + value + "\n"  # NO t >TVF
 	return flushed
 
 
@@ -215,7 +215,7 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 			span_string = ":rowspan:" + str(row_num - last_start[alias])
 		else:
 			span_string = ""
-		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+span_string + ":f:1\n"
+		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+span_string + "\n"  # Use t for tvf to leave links on
 	return flushed
 
 
@@ -297,15 +297,15 @@ version:1.5
 
 		elif len(line) > 0:  # Token
 			token = line.strip()
-			output += "cell:A"+str(current_row)+":t:"+token+":f:1\n"
+			output += "cell:A"+str(current_row)+":t:"+token+":f:1:tvf:1\n"  # NO f <> tvf for links
 			current_row +=1
 		else:  # Empty line
 			current_row +=1
 
-	preamble += "cell:A1:t:tok:f:2\n"
+	preamble += "cell:A1:t:tok:f:2\n" # f <> tvf for links
 	output = preamble + output
 	for header in colmap:
-		output += "cell:"+colmap[header]+"1:t:"+header+":f:2\n"
+		output += "cell:"+colmap[header]+"1:t:"+header+":f:2\n" # NO f <> tvf for links
 
 	output += "\nsheet:c:" + str(maxcol) + ":r:" + str(current_row-1) + ":tvf:1\n"
 
@@ -314,7 +314,7 @@ version:1.5
 	output += """
 font:1:* * Antinoou
 font:2:normal bold * *
-valueformat:1:text-wiki
+valueformat:1:text-plain
 --SocialCalcSpreadsheetControlSave
 Content-type: text/plain; charset=UTF-8
 
