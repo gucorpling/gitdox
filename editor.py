@@ -265,7 +265,12 @@ def load_page(user,admin,theform):
 		# Therefore, a file may be associated with the target repo subdir zangsir/coptic-xml-tool/uploaded_commits,
 		# and that is fine, but we will need to make this uploaded_commits subdir first to create our file.
 		if not os.path.isdir(prefix + subdir) and subdir != "":
-			os.mkdir(prefix + subdir, 0755)
+			dirs = subdir.split(os.sep)[:-1]
+			path_so_far = ""
+			for dir in dirs:
+				if not os.path.isdir(prefix + path_so_far + dir + os.sep):
+					os.mkdir(prefix + path_so_far + dir + os.sep, 0755)
+				path_so_far += dir + os.sep
 
 		if mode == "xml":
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
