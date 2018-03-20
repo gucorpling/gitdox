@@ -111,6 +111,7 @@ def build_meta_tag(doc_id):
 	if meta_props != "":
 		meta_props = " " + meta_props
 	output = meta + meta_props + ">\n"
+	output = output.replace("<meta >","<meta>")
 	return output
 
 
@@ -148,6 +149,7 @@ def fill_meta_template(doc_id,template):
 		if key != "body": # Never overwrite body template position
 			template = template.replace("%%" + key + "%%",meta_dict[key])
 
+	template = template.replace("<meta >","<meta>")
 	return template
 
 
