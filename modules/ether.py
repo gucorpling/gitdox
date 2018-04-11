@@ -95,6 +95,13 @@ class ExportConfig:
 		else:
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
 
+def unescape_xml(text):
+	# Fix various common compounded XML escapes
+	text = text.replace("&amp;lt;","<").replace("&amp;gt;",">")
+	text = text.replace("&lt;","<").replace("&gt;",">")
+	text = text.replace("&amp;","&")
+	return text
+
 def build_meta_tag(doc_id):
 	meta = "<meta"
 	meta_items = []
@@ -103,8 +110,9 @@ def build_meta_tag(doc_id):
 	for item in meta_rows:
 		key, value = item[2], item[3]
 		if not key.startswith("ignore:"):
-			key = key.replace("=", "&equals;")
-			value = value.replace('"', "&quot;")
+			key = key.replace("=", "&equals;")  # Key may not contain equals sign
+			value = value.replace('"', "&quot;")  # Value may not contain double quotes
+			value = unescape_xml(value)
 			meta_items.append(key + '="' + value + '"')
 
 	meta_props = " ".join(meta_items)
@@ -127,6 +135,7 @@ def fill_meta_template(doc_id,template):
 		if not key.startswith("ignore:"):
 			key = key.replace("=", "&equals;")
 			value = value.replace('"', "&quot;")
+			value = unescape_xml(value)
 			meta_items.append(escape(key) + '="' + escape(value) + '"')
 			meta_dict[escape(key)] = escape(value)
 
