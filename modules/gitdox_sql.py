@@ -161,9 +161,9 @@ def print_meta(doc_id, corpus=False):
 def save_meta(doc_id,key,value,corpus=False):
 	if corpus:
 		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", ('NULL',key, value,corpus_name))
+		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name))
 	else:
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,'NULL'))
+		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None))
 		invalidate_doc_by_id(doc_id)
 
 def delete_meta(metaid, doc_id, corpus=False):
