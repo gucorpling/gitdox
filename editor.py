@@ -68,6 +68,7 @@ def serialize_file(text_content,file_name):
 
 
 def load_page(user,admin,theform):
+	print("Content-type:text/html\r\n\r\n")
 	global ether_url
 	global code_2fa
 	if theform.getvalue("2fa"):
@@ -397,7 +398,7 @@ def load_page(user,admin,theform):
 	if user == "demo":
 		nlp_service = disabled_nlp_service
 
-	page= "Content-type:text/html\r\n\r\n"
+	page= ""#"Content-type:text/html\r\n\r\n"
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname
