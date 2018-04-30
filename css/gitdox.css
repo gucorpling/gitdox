@@ -16,7 +16,7 @@ h1, h2{font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans",
 	}
 
 .corpusbutton{
-	background-color: #23d83c !important;
+	background-color: #941c1fc4 !important;
 	
 }
 
@@ -93,7 +93,7 @@ select select:focus {
 
 #meta_table, #meta_table_corpus{width:800px;  table-layout: fixed;}
 
-#meta_table_corpus{background-color: #cefbce}
+#meta_table_corpus{background-color: #941c1f8c}
 
 table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after { 
     content: "\00a0\25B4\25BE" 

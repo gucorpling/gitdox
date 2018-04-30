@@ -68,6 +68,7 @@ def serialize_file(text_content,file_name):
 
 
 def load_page(user,admin,theform):
+	print("Content-type:text/html\r\n\r\n")
 	global ether_url
 	global code_2fa
 	if theform.getvalue("2fa"):
@@ -265,7 +266,12 @@ def load_page(user,admin,theform):
 		# Therefore, a file may be associated with the target repo subdir zangsir/coptic-xml-tool/uploaded_commits,
 		# and that is fine, but we will need to make this uploaded_commits subdir first to create our file.
 		if not os.path.isdir(prefix + subdir) and subdir != "":
-			os.mkdir(prefix + subdir, 0755)
+			dirs = subdir.split(os.sep)[:-1]
+			path_so_far = ""
+			for dir in dirs:
+				if not os.path.isdir(prefix + path_so_far + dir + os.sep):
+					os.mkdir(prefix + path_so_far + dir + os.sep, 0755)
+				path_so_far += dir + os.sep
 
 		if mode == "xml":
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
@@ -363,7 +369,7 @@ def load_page(user,admin,theform):
 	# Metadata
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
-		metavalue = theform.getvalue('metavalue')
+		metavalue = theform.getvalue('metavalue').replace("\t","").replace("\n","").replace("\r","")
 		if user != "demo":
 			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
 	if theform.getvalue('metaid'):
@@ -372,7 +378,7 @@ def load_page(user,admin,theform):
 			delete_meta(metaid, doc_id)
 	if theform.getvalue('corpus_metakey'):
 		metakey = theform.getvalue('corpus_metakey')
-		metavalue = theform.getvalue('corpus_metavalue')
+		metavalue = theform.getvalue('corpus_metavalue').replace("\t","").replace("\n","").replace("\r","")
 		if user != "demo":
 			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"),corpus=True)
 	if theform.getvalue('corpus_metaid'):
@@ -392,7 +398,7 @@ def load_page(user,admin,theform):
 	if user == "demo":
 		nlp_service = disabled_nlp_service
 
-	page= "Content-type:text/html\r\n\r\n"
+	page= ""#"Content-type:text/html\r\n\r\n"
 	if mode == "ether":
 		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
 		ether_url += "gd_" + corpus + "_" + docname

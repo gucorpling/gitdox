@@ -95,6 +95,13 @@ class ExportConfig:
 		else:
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
 
+def unescape_xml(text):
+	# Fix various common compounded XML escapes
+	text = text.replace("&amp;lt;","<").replace("&amp;gt;",">")
+	text = text.replace("&lt;","<").replace("&gt;",">")
+	text = text.replace("&amp;","&")
+	return text
+
 def build_meta_tag(doc_id):
 	meta = "<meta"
 	meta_items = []
@@ -103,14 +110,16 @@ def build_meta_tag(doc_id):
 	for item in meta_rows:
 		key, value = item[2], item[3]
 		if not key.startswith("ignore:"):
-			key = key.replace("=", "&equals;")
-			value = value.replace('"', "&quot;")
+			key = key.replace("=", "&equals;")  # Key may not contain equals sign
+			value = value.replace('"', "&quot;")  # Value may not contain double quotes
+			value = unescape_xml(value)
 			meta_items.append(key + '="' + value + '"')
 
 	meta_props = " ".join(meta_items)
 	if meta_props != "":
 		meta_props = " " + meta_props
 	output = meta + meta_props + ">\n"
+	output = output.replace("<meta >","<meta>")
 	return output
 
 
@@ -126,6 +135,7 @@ def fill_meta_template(doc_id,template):
 		if not key.startswith("ignore:"):
 			key = key.replace("=", "&equals;")
 			value = value.replace('"', "&quot;")
+			value = unescape_xml(value)
 			meta_items.append(escape(key) + '="' + escape(value) + '"')
 			meta_dict[escape(key)] = escape(value)
 
@@ -148,6 +158,7 @@ def fill_meta_template(doc_id,template):
 		if key != "body": # Never overwrite body template position
 			template = template.replace("%%" + key + "%%",meta_dict[key])
 
+	template = template.replace("<meta >","<meta>")
 	return template
 
 
@@ -202,7 +213,7 @@ def flush_open(annos, row_num, colmap):
 	flushed = ""
 	for anno in annos:
 		element, name, value = anno
-		flushed += "cell:"+colmap[name] + str(row_num) + ":t:" + value + "\n"
+		flushed += "cell:"+colmap[name] + str(row_num) + ":t:" + value + "\n"  # NO t >TVF
 	return flushed
 
 
@@ -213,7 +224,7 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 			span_string = ":rowspan:" + str(row_num - last_start[alias])
 		else:
 			span_string = ""
-		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+span_string + ":f:1\n"
+		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+span_string + "\n"  # Use t for tvf to leave links on
 	return flushed
 
 
@@ -295,15 +306,15 @@ version:1.5
 
 		elif len(line) > 0:  # Token
 			token = line.strip()
-			output += "cell:A"+str(current_row)+":t:"+token+":f:1\n"
+			output += "cell:A"+str(current_row)+":t:"+token+":f:1:tvf:1\n"  # NO f <> tvf for links
 			current_row +=1
 		else:  # Empty line
 			current_row +=1
 
-	preamble += "cell:A1:t:tok:f:2\n"
+	preamble += "cell:A1:t:tok:f:2\n" # f <> tvf for links
 	output = preamble + output
 	for header in colmap:
-		output += "cell:"+colmap[header]+"1:t:"+header+":f:2\n"
+		output += "cell:"+colmap[header]+"1:t:"+header+":f:2\n" # NO f <> tvf for links
 
 	output += "\nsheet:c:" + str(maxcol) + ":r:" + str(current_row-1) + ":tvf:1\n"
 
@@ -312,7 +323,7 @@ version:1.5
 	output += """
 font:1:* * Antinoou
 font:2:normal bold * *
-valueformat:1:text-wiki
+valueformat:1:text-plain
 --SocialCalcSpreadsheetControlSave
 Content-type: text/plain; charset=UTF-8
 
@@ -374,14 +385,14 @@ def ether_to_sgml(ether, doc_id,config=None):
 	close_tags = defaultdict(list)
 	for cell in cells:
 		if cell[1] == 1:  # Header row
-			colname = cell[2]['t']
+			colname = cell[2]['t'].replace("\\c",":")
 			if colname in config.aliases:
 				colmap[cell[0]] = config.aliases[colname]
 			else:
 				colmap[cell[0]] = colname
 			# Make sure that everything that should be exported has some priority
 			if colname not in config.priorities and config.export_all:
-				if not colname.lower().startswith("ignore\\c"):  # Never export columns prefixed with "ignore:"
+				if not colname.lower().startswith("ignore:"):  # Never export columns prefixed with "ignore:"
 					if "@" in colname:
 						elem = colname.split("@",1)[0]
 					else:
@@ -410,7 +421,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 			else:
 				sec_element = ""
 
-			if element not in config.priorities or (element.startswith("ignore\\c") and config.no_ignore):  # Guaranteed to be in priorities if it should be included
+			if element not in config.priorities or (element.startswith("ignore:") and config.no_ignore):  # Guaranteed to be in priorities if it should be included
 				continue  # Move on to next cell if this is not a desired column
 			if row != last_row:  # New row starting, sort previous lists for opening and closing orders
 				#close_tags[row].sort(key=lambda x: (-last_open_index[x],x))
@@ -453,8 +464,6 @@ def ether_to_sgml(ether, doc_id,config=None):
 				if element in config.no_content:
 					if element == attrib:
 						attrib = ""
-				else:
-					attrib = col_name
 
 				if attrib in config.tok_annos:
 					# TT SGML token annotation, append to token with tab separator and move on
@@ -484,7 +493,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 				open_tag_length[element] = int(close_row) - int(last_open_index[element])
 
 	# Sort last row tags
-	close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
+	#close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	if row + 1 in close_tags:
 		close_tags[row+1].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	for element in open_tags[last_row]:
@@ -520,7 +529,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 			toks[r] = ""  # Caution - empty token!
 		output += toks[r] + '\n'
 
-	output = output.replace('\c', ':')
+	output = output.replace('\\c', ':')
 	#output += "</meta>\n"
 	if "%%body%%" in template:
 		output = template.replace("%%body%%",output.strip())

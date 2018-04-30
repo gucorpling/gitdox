@@ -118,6 +118,8 @@ def cell(text):
 
 def print_meta(doc_id, corpus=False):
 	meta = get_doc_meta(doc_id, corpus=corpus)
+	if meta is None:
+		meta = []
 	# docid,metaid,key,value - four cols
 	metaid_id = "metaid" if not corpus else "corpus_metaid"
 	table_id = "meta_table" if not corpus else "meta_table_corpus"
@@ -159,9 +161,9 @@ def print_meta(doc_id, corpus=False):
 def save_meta(doc_id,key,value,corpus=False):
 	if corpus:
 		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", ('NULL',key, value,corpus_name))
+		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name))
 	else:
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,'NULL'))
+		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None))
 		invalidate_doc_by_id(doc_id)
 
 def delete_meta(metaid, doc_id, corpus=False):
@@ -170,7 +172,11 @@ def delete_meta(metaid, doc_id, corpus=False):
 		invalidate_doc_by_id(doc_id)
 
 def get_doc_info(doc_id):
-	return generic_query("SELECT name,corpus,filename,status,assignee_username,mode,schema FROM docs WHERE id=?", (int(doc_id),))[0]
+	res = generic_query("SELECT name,corpus,filename,status,assignee_username,mode,schema FROM docs WHERE id=?", (int(doc_id),))
+	if len(res) > 0:
+		return res[0]
+	else:
+		return res
 
 def get_all_docs(corpus=None, status=None):
 	if corpus is None:
@@ -186,8 +192,12 @@ def get_all_docs(corpus=None, status=None):
 
 def get_doc_meta(doc_id, corpus=False):
 	if corpus:
-		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
-		return generic_query("SELECT * FROM metadata WHERE corpus_meta=? ORDER BY key COLLATE NOCASE", (corpus_name,))
+		fields = get_doc_info(doc_id)
+		if len(fields) > 0:
+			_, corpus_name, _, _, _, _, _ = fields
+			return generic_query("SELECT * FROM metadata WHERE corpus_meta=? ORDER BY key COLLATE NOCASE",(corpus_name,))
+		else:
+			return None
 	else:
 		return generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE", (int(doc_id),))
 
