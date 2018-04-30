@@ -385,14 +385,14 @@ def ether_to_sgml(ether, doc_id,config=None):
 	close_tags = defaultdict(list)
 	for cell in cells:
 		if cell[1] == 1:  # Header row
-			colname = cell[2]['t']
+			colname = cell[2]['t'].replace("\\c",":")
 			if colname in config.aliases:
 				colmap[cell[0]] = config.aliases[colname]
 			else:
 				colmap[cell[0]] = colname
 			# Make sure that everything that should be exported has some priority
 			if colname not in config.priorities and config.export_all:
-				if not colname.lower().startswith("ignore\\c"):  # Never export columns prefixed with "ignore:"
+				if not colname.lower().startswith("ignore:"):  # Never export columns prefixed with "ignore:"
 					if "@" in colname:
 						elem = colname.split("@",1)[0]
 					else:
@@ -421,7 +421,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 			else:
 				sec_element = ""
 
-			if element not in config.priorities or (element.startswith("ignore\\c") and config.no_ignore):  # Guaranteed to be in priorities if it should be included
+			if element not in config.priorities or (element.startswith("ignore:") and config.no_ignore):  # Guaranteed to be in priorities if it should be included
 				continue  # Move on to next cell if this is not a desired column
 			if row != last_row:  # New row starting, sort previous lists for opening and closing orders
 				#close_tags[row].sort(key=lambda x: (-last_open_index[x],x))
@@ -531,7 +531,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 			toks[r] = ""  # Caution - empty token!
 		output += toks[r] + '\n'
 
-	output = output.replace('\c', ':')
+	output = output.replace('\\c', ':')
 	#output += "</meta>\n"
 	if "%%body%%" in template:
 		output = template.replace("%%body%%",output.strip())

@@ -198,7 +198,7 @@ def parse_ether(ether, doc, corpus):
 				#		cell_row += c
 				#	else:
 				#		cell_col += c
-				cell_content = parts[3]
+				cell_content = parts[3].replace("\\c",":")
 				if "rowspan:" in line:
 					cell_span = parts[-1]
 				else:
