@@ -369,7 +369,7 @@ def load_page(user,admin,theform):
 	# Metadata
 	if theform.getvalue('metakey'):
 		metakey = theform.getvalue('metakey')
-		metavalue = theform.getvalue('metavalue')
+		metavalue = theform.getvalue('metavalue').replace("\t","").replace("\n","").replace("\r","")
 		if user != "demo":
 			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
 	if theform.getvalue('metaid'):
@@ -378,7 +378,7 @@ def load_page(user,admin,theform):
 			delete_meta(metaid, doc_id)
 	if theform.getvalue('corpus_metakey'):
 		metakey = theform.getvalue('corpus_metakey')
-		metavalue = theform.getvalue('corpus_metavalue')
+		metavalue = theform.getvalue('corpus_metavalue').replace("\t","").replace("\n","").replace("\r","")
 		if user != "demo":
 			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"),corpus=True)
 	if theform.getvalue('corpus_metaid'):
