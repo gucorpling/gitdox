@@ -464,8 +464,6 @@ def ether_to_sgml(ether, doc_id,config=None):
 				if element in config.no_content:
 					if element == attrib:
 						attrib = ""
-				else:
-					attrib = col_name
 
 				if attrib in config.tok_annos:
 					# TT SGML token annotation, append to token with tab separator and move on
@@ -495,7 +493,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 				open_tag_length[element] = int(close_row) - int(last_open_index[element])
 
 	# Sort last row tags
-	close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
+	#close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	if row + 1 in close_tags:
 		close_tags[row+1].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	for element in open_tags[last_row]:
