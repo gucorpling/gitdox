@@ -282,14 +282,20 @@ def apply_rule(rule, parsed_ether, meta):
 			arg_boundaries = []
 			name_content = {}
 			arg_content = {}
+			name_filled = []
+			arg_filled = []
 
 			# find boundary rows
 			for cell in parsed_ether[name]:
 				name_boundaries.append(cell.row)
 				name_content[cell.row] = cell.content
+				for i in range(int(cell.row), int(cell.row) + int(cell.span)):
+					name_filled.append(str(i))
 			for cell in parsed_ether[argument]:
 				arg_boundaries.append(cell.row)
 				arg_content[cell.row] = cell.content
+				for i in range(int(cell.row), int(cell.row) + int(cell.span)):
+					arg_filled.append(str(i))
 
 			if operator == "==":
 				for row in name_content:
@@ -302,20 +308,22 @@ def apply_rule(rule, parsed_ether, meta):
 			else:
 				for boundary in name_boundaries:
 					if boundary not in arg_boundaries:
-						report += "Span break on line " + boundary + " in column " + name + " but not " \
-								  + argument + "<br/>"
-						cells.append(name_letter + boundary)
+						if boundary in arg_filled:
+							report += "Span break on line " + boundary + " in column " + name + " but not " \
+									  + argument + "<br/>"
+							cells.append(name_letter + boundary)
 				if operator == "=":
 					for boundary in arg_boundaries:
 						if boundary not in name_boundaries:
-							cells.append(arg_letter + boundary)
+							if boundary in name_filled:
+								cells.append(arg_letter + boundary)
 
-	elif domain == "meta":
-		meta_report, meta_extra = apply_meta_rule(rule, meta)
-		report += meta_report
-		extra += meta_extra
+		elif domain == "meta":
+			meta_report, meta_extra = apply_meta_rule(rule, meta)
+			report += meta_report
+			extra += meta_extra
 
-	return report, extra, cells
+		return report, extra, cells
 
 
 def apply_meta_rule(rule, meta):
