@@ -318,12 +318,12 @@ def apply_rule(rule, parsed_ether, meta):
 							if boundary in name_filled:
 								cells.append(arg_letter + boundary)
 
-		elif domain == "meta":
-			meta_report, meta_extra = apply_meta_rule(rule, meta)
-			report += meta_report
-			extra += meta_extra
+	elif domain == "meta":
+		meta_report, meta_extra = apply_meta_rule(rule, meta)
+		report += meta_report
+		extra += meta_extra
 
-		return report, extra, cells
+	return report, extra, cells
 
 
 def apply_meta_rule(rule, meta):
