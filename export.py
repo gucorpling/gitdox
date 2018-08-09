@@ -19,8 +19,11 @@ def create_zip(content_name_pairs):
 		try:
 			zf.writestr(name, content)#.encode("utf8"))
 		except Exception as e:
-			print("Content-type:text/html\r\n\r\n")
-			raise e
+			try:
+				zf.writestr(name, content.encode("utf8"))
+			except:
+				print("Content-type:text/html\r\n\r\n")
+				raise e
 
 	return io_file
 
