@@ -224,7 +224,7 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 			span_string = ":rowspan:" + str(row_num - last_start[alias])
 		else:
 			span_string = ""
-		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+span_string + "\n"  # Use t for tvf to leave links on
+		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+":f:1:tvf:1"+span_string + "\n"  # Use t for tvf to leave links on
 	return flushed
 
 
@@ -339,6 +339,7 @@ Content-type: text/plain; charset=UTF-8
 
 	return output
 
+
 def ether_to_sgml(ether, doc_id,config=None):
 	"""
 
@@ -357,6 +358,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 	if isinstance(ether,unicode):
 		ether = ether.encode("utf8")
+
 
 	for line in ether.splitlines():
 		parsed_cell = re.match(r'cell:([A-Z]+)(\d+):(.*)$', line)
@@ -505,8 +507,8 @@ def ether_to_sgml(ether, doc_id,config=None):
 	output = ""
 
 	for r in xrange(2,len(toks)+3):
-		if r == 30:
-			pass
+		if r == 1970:
+			a=4
 		for element in close_tags[r]:
 			if element not in config.milestones:
 				output += '</' + element + '>\n'
@@ -564,8 +566,8 @@ def exec_via_temp(input_text, command_params, workdir=""):
 
 
 def fix_colnames(socialcalc):
-	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_group_(orig_group:)',r'\1\2',socialcalc)
-	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_(orig|pos|lemma:)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_group_((orig_group):)',r'\1\2',socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
 	return socialcalc
 
 
