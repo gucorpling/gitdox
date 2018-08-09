@@ -297,7 +297,7 @@ def load_admin(user,admin,theform):
 					if not max_id:  # This is for the initial case after init db
 						max_id = 0
 					doc_id = int(max_id) + 1
-					create_document(doc_id, docname, corpus, "published", "default_user", "cligu/lirc/gitdox", "", mode)
+					create_document(doc_id, docname, corpus, "init", "default_user", "gucorpling/gitdox", "", mode)
 				else:
 					# Document already exists, just overwrite spreadsheet/xml and metadata and set mode
 					doc_id = generic_query("SELECT id FROM docs where corpus=? and name=?", (corpus,docname))[0][0]
@@ -318,9 +318,16 @@ def load_admin(user,admin,theform):
 					save_changes(doc_id, content)
 				for key, value in meta_key_val.iteritems():
 					key = key.replace("@", "_")
+					if key == "status":
+						update_status(doc_id,value)
+						continue
+					elif key == "assigned":
+						update_assignee(doc_id,value)
+						continue
 					save_meta(doc_id, key.decode("utf8"), value.decode("utf8"))
 	if imported > 0:
 		msg += '<span style="color:green">Imported '+str(imported)+' files from archive</span><br>'
+
 
 	page+="""
 	<h2>Batch upload</h2>
