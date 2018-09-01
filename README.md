@@ -26,20 +26,25 @@ for these instructions.
 
 By default, Ethercalc runs on port 8000.
 
+## Install Apache2
+
+1. Install Apache 2: `sudo apt-get install apache2`
+2. Enable CGI module: `sudo a2enmod cgi`
+
 ## Install GitDOX
 
-1. Install Apache 2, if necessary: `sudo apt-get install apache2`
 2. Clone GitDOX somewhere Apache can see it, like `/var/www/html`: `git clone https://github.com/gucorpling/gitdox.git /var/www/html`
 3. Allow permission to execute top-level Python files: `sudo chmod +x /var/www/html/*.py`
 4. Edit `/etc/apache2/apache2.conf` and allow Python CGI scripts for the
    directory you installed GitDOX under:
 
-<code>
-\<Directory "/Applications/MAMP/htdocs/gitdox"\>
+```
+<Directory "/var/www/html">
     Options +ExecCGI
     AddHandler cgi-script .py
-\</Directory\>
-</code>
+    DirectoryIndex index.py
+</Directory>
+```
 
 5. Navigate to `localhost/index.py` in a web browser. 
 
