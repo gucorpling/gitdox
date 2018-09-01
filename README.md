@@ -13,11 +13,13 @@ Ubuntu.
 Ethercalc has an optional dependency on Redis. We assume you will be using Redis
 for these instructions.
 
-1. `sudo add-apt-repository ppa:rwky/redis`
-2. `sudo apt-get update`
-3. `sudo apt-get install redis-server`
-4. Ensure you get a "PONG" back from Redis: `redis-cli ping`
-
+```bash
+sudo add-apt-repository ppa:rwky/redis
+sudo apt-get update
+sudo apt-get install redis-server
+redis-cli ping #=> "PONG", if all has gone well
+```
+ 
 ## Install Ethercalc
 
 ```bash
