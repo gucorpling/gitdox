@@ -1,25 +1,47 @@
 # gitdox
-Repository for GitDOX, a GitHub Data-storage Online XML editor
+GitDOX is an online editor for version controlled XML editing.
 
-This tool is being used by Coptic SCRIPTORIUM as an xml editor/transcription tool for coptic texts. The editor is based on CodeMirror(https://codemirror.net) and uses GitHub as a remote backend, and SQLite for local storage. 
+The editor interface is based on [CodeMirror](https://codemirror.net). GitHub is used as a remote backend, and SQLite is used for local storage. 
 
-To configure on server or localhost, simply download the files, and make sure
+GitDOX is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts. 
 
-(1) you have added handlers for python for the directory in the main Apache config file, like:
+# Installation
+The following instructions assume you are installing on a recent version of
+Ubuntu.
+
+## Install Redis
+Ethercalc has an optional dependency on Redis. We assume you will be using Redis
+for these instructions.
+
+1. `sudo add-apt-repository ppa:rwky/redis`
+2. `sudo apt-get update`
+3. `sudo apt-get install redis-server`
+4. Ensure you get a "PONG" back from Redis: `redis-cli ping`
+
+## Install Ethercalc
+
+1. `sudo apt-get install gzip git curl python libssl-dev pkg-config build-essential`
+2. `sudo npm install -g ethercalc`
+3. Start Ethercalc: `ethercalc`
+
+By default, Ethercalc runs on port 8000.
+
+## Install GitDOX
+
+1. Install Apache 2, if necessary: `sudo apt-get install apache2`
+2. Clone GitDOX somewhere Apache can see it, like `/var/www/html`: `git clone https://github.com/gucorpling/gitdox.git /var/www/html`
+3. Allow permission to execute top-level Python files: `sudo chmod +x /var/www/html/*.py`
+4. Edit `/etc/apache2/apache2.conf` and allow Python CGI scripts for the
+   directory you installed GitDOX under:
 
 <code>
 \<Directory "/Applications/MAMP/htdocs/gitdox"\>
-    
     Options +ExecCGI
-    
     AddHandler cgi-script .py
-
 \</Directory\>
 </code>
 
-(2) you have given executable permission the python scripts.
-
-To start the app, run index.py and log in with admin or your credentials. 
+5. Navigate to `localhost/index.py` in a web browser. 
 
 (3) using the spreadsheet editor requires an installation of EtherCalc.
 
