@@ -1,9 +1,9 @@
-# gitdox
-GitDOX is an online editor for version controlled XML editing.
+# GitDox
+GitDox is an online editor for version controlled XML editing.
 
 The editor interface is based on [CodeMirror](https://codemirror.net). GitHub is used as a remote backend, and SQLite is used for local storage. 
 
-GitDOX is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts. 
+GitDox is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts. 
 
 # Installation
 The following instructions assume you are installing on a recent version of
@@ -42,8 +42,8 @@ sudo a2enmod cgi
 sudo service apache2 restart
 ```
 
-## Install GitDOX
-Decide where you want GitDOX to live under your Apache directories. In these
+## Install GitDox
+Decide where you want GitDox to live under your Apache directories. In these
 instructions we'll assume it's `/var/www/html`
 
 1. Install xmllint for xml validation:
@@ -53,7 +53,7 @@ instructions we'll assume it's `/var/www/html`
 sudo apt-get install libxml2-utils
 ```
 
-2. Execute the following to set up GitDOX's files:
+2. Execute the following to set up GitDox's files:
 
 ```bash
 sudo git clone https://github.com/gucorpling/gitdox.git /var/www/html
@@ -85,7 +85,7 @@ Python files that the client requests, and to serve `index.py` by default:
 ```
 
 5. Modify the value of `ether_url` in `paths.py` so that it reflects where
-   GitDOX can find your Ethercalc service over HTTP. By default, it is on your
+   GitDox can find your Ethercalc service over HTTP. By default, it is on your
    local machine on port 8000, so the line in `paths.py` would read `ether_url =
    "http://localhost/"`.
 
