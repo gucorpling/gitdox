@@ -6,8 +6,7 @@ The editor interface is based on [CodeMirror](https://codemirror.net). GitHub is
 GitDox is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts. 
 
 # Installation
-The following instructions assume you are installing on a recent version of
-Ubuntu.
+The following instructions assume you are installing on a recent (16.04-18.04) version of Ubuntu.
 
 ## Install Redis
 Ethercalc has an optional dependency on Redis. We assume you will be using Redis
@@ -49,7 +48,6 @@ instructions we'll assume it's `/var/www/html`
 1. Install xmllint for xml validation:
 
 ```bash
-# install xmllint for xml validation
 sudo apt-get install libxml2-utils
 ```
 
@@ -94,6 +92,6 @@ Python files that the client requests, and to serve `index.py` by default:
 
 # Credits
 
-(c) 2016-2017 Shuo Zhang (@zangsir) and Amir Zeldes (@amir-zeldes)
+(c) 2016-2017 Shuo Zhang (@zangsir), Amir Zeldes (@amir-zeldes), and Luke Gessler (@lukegessler)
 
 This work was supported by the [KELLIA](http://kellia.uni-goettingen.de/) project, [NEH](https://www.neh.gov/) grant #HG-229371, co-sponsored by the German [DFG](http://www.dfg.de/).
