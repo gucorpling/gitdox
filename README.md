@@ -13,8 +13,8 @@ Ethercalc has an optional dependency on Redis. We assume you will be using Redis
 for these instructions.
 
 ```bash
-sudo apt-get update
-sudo apt-get install redis-server
+sudo apt update
+sudo apt install redis-server
 redis-cli ping #=> "PONG", if all has gone well
 ```
  
@@ -22,11 +22,11 @@ redis-cli ping #=> "PONG", if all has gone well
 
 ```bash
 # install deps
-sudo apt-get install gzip git curl python libssl-dev pkg-config build-essential
+sudo apt install gzip git curl python libssl-dev pkg-config build-essential npm
 # install ethercalc
 sudo npm install -g ethercalc
-# start ethercalc
-ethercalc
+# start ethercalc in background and continue using terminal
+ethercalc &
 ```
 
 By default, Ethercalc runs on port 8000.
@@ -34,7 +34,7 @@ By default, Ethercalc runs on port 8000.
 ## Install Apache2
 
 ```bash
-sudo apt-get install apache2
+sudo apt install apache2
 # enable CGI module and reload
 sudo a2enmod cgi
 sudo service apache2 restart
@@ -47,7 +47,7 @@ instructions we'll assume it's `/var/www/html`
 1. Install xmllint for xml validation:
 
 ```bash
-sudo apt-get install libxml2-utils
+sudo apt install libxml2-utils
 ```
 
 2. Execute the following to set up GitDox's files:
@@ -62,7 +62,7 @@ sudo chown -R www-data:www-data /var/www/html
 sudo chmod +x /var/www/html/*.py
 
 # install dependencies--use pip
-sudo apt-get install python-pip
+sudo apt install python-pip
 sudo pip install -r /var/www/html/requirements.txt
 ```
 
