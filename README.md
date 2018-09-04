@@ -13,7 +13,6 @@ Ethercalc has an optional dependency on Redis. We assume you will be using Redis
 for these instructions.
 
 ```bash
-sudo add-apt-repository ppa:rwky/redis
 sudo apt-get update
 sudo apt-get install redis-server
 redis-cli ping #=> "PONG", if all has gone well
