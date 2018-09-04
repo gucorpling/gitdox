@@ -53,9 +53,9 @@ sudo apt install libxml2-utils
 2. Execute the following to set up GitDox's files:
 
 ```bash
+# clear /var/www/html and clone gitdox to it, changing ownership to www-data
+sudo rm -rf /var/www/html
 sudo git clone https://github.com/gucorpling/gitdox.git /var/www/html
-
-# change ownership of files
 sudo chown -R www-data:www-data /var/www/html
 
 # allow apache to execute top level python files
@@ -84,7 +84,7 @@ Python files that the client requests, and to serve `index.py` by default:
 5. Modify the value of `ether_url` in `paths.py` so that it reflects where
    GitDox can find your Ethercalc service over HTTP. By default, it is on your
    local machine on port 8000, so the line in `paths.py` would read `ether_url =
-   "http://localhost/"`.
+   "http://localhost/:8000"`.
 
 6. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
 
