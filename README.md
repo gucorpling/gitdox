@@ -92,7 +92,7 @@ sudo pip install -r /var/www/html/requirements.txt
 4. Modify the value of `ether_url` in `paths.py` so that it reflects where
    GitDox can find your Ethercalc service over HTTP. By default, it is on your
    local machine on port 8000, so the line in `paths.py` would read `ether_url =
-   "http://localhost/:8000"`.
+   "http://localhost:8000/"`.
 
 5. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
 
