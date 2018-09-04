@@ -76,8 +76,9 @@ sudo rm -rf /var/www/html
 sudo git clone https://github.com/gucorpling/gitdox.git /var/www/html
 sudo chown -R www-data:www-data /var/www/html
 
-# allow apache to execute top level python files
+# allow apache to execute python files
 sudo chmod +x /var/www/html/*.py
+sudo chmod +x /var/www/html/modules/*.py
 
 # install dependencies--use pip
 sudo apt install python-pip
