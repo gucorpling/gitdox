@@ -31,12 +31,30 @@ ethercalc &
 
 By default, Ethercalc runs on port 8000.
 
-## Install Apache2
+## Install and Configure Apache2
+
+Install, and enable CGI module
 
 ```bash
 sudo apt install apache2
 # enable CGI module and reload
 sudo a2enmod cgi
+```
+
+Add these lines to `/etc/apache2/apache2.conf`. This tells Apache to execute
+Python files that the client requests, and to serve `index.py` by default. (Note that we're assuming you're installing GitDox under `/var/www/html`--you should replace this path with the one you're going to install under.)
+
+```xml
+<Directory "/var/www/html">
+	Options +ExecCGI
+	AddHandler cgi-script .py
+	DirectoryIndex index.py
+</Directory>
+```
+
+Restart Apache:
+
+```
 sudo service apache2 restart
 ```
 
@@ -70,23 +88,12 @@ sudo pip install -r /var/www/html/requirements.txt
    attention to `xml_nlp_api` and `spreadsheet_nlp_api` if you plan to make use
    of those features.
 
-4. Add these lines to `/etc/apache2/apache2.conf`. This tells Apache to execute
-Python files that the client requests, and to serve `index.py` by default:
-
-```
-<Directory "/var/www/html">
-	Options +ExecCGI
-	AddHandler cgi-script .py
-	DirectoryIndex index.py
-</Directory>
-```
-
-5. Modify the value of `ether_url` in `paths.py` so that it reflects where
+4. Modify the value of `ether_url` in `paths.py` so that it reflects where
    GitDox can find your Ethercalc service over HTTP. By default, it is on your
    local machine on port 8000, so the line in `paths.py` would read `ether_url =
    "http://localhost/:8000"`.
 
-6. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
+5. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
 
 
 # Credits
