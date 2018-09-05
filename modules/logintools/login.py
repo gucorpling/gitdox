@@ -21,6 +21,8 @@ import os
 #import sha
 import hashlib
 from time import time
+# added by Luke Gessler, 9/2018
+from passlib.apps import custom_app_context as pwd_context
 
 # FIXME: cgitb is insecure and should be removed from production code.
 import cgitb
@@ -280,8 +282,8 @@ def isloggedin(userdir):
     test = decodestring(cookiestring, userdir)
     if not test:
         return False
-    user, password, cookiepath = test
-    thecookie = makecookie(user, password, cookiepath)
+    user, password_hash, cookiepath = test
+    thecookie = makecookie(user, password_hash, cookiepath)
     return user, thecookie
     
 def decodestring(cookiestring, userdir):
@@ -299,34 +301,30 @@ def decodestring(cookiestring, userdir):
 # we've extracted the timestamped string from the cookie string.
 # Let's pull out the username and password hash
     try:
-        username, passhash, ranstring = instring.split('||')
+        username, pwd_hash = instring.split('||')
     except ValueError:
-        return False
-    if not len(ranstring) == 10:
         return False
 # Now we need to check it's a valid username and check the password
     if username in RESERVEDNAMES or not os.path.isfile(userdir+username+'.ini'):
         return False
     user = ConfigObj(userdir+username+'.ini')
-    stampedpass = user['password']
+    stamped_pwd_hash = user['password']
     maxage = user['max-age']
     cookiepath = ConfigObj(userdir+'config.ini')['cookiepath']
 # the password is time stamped - so we need to decode it 
     try:
-        password, daynumber, timestamp = pass_dec(stampedpass)
+        stored_pwd_hash, _, _= pass_dec(stamped_pwd_hash)
     except:
         return False
-    thishash = hashlib.sha1(password+ranstring).hexdigest()
-    if thishash != passhash:
+    if pwd_hash != stored_pwd_hash:
         return False
-    return user, password, cookiepath
+    return user, pwd_hash, cookiepath
 
-def encodestring(username, password):
+def encodestring(username, pwd_hash):
     """Given a username and password return a new encoded string for use by decodecookie."""  
-    ranstring = randomstring(10)
-    thishash = hashlib.sha1(password + ranstring).hexdigest()
-    return pass_enc('||'.join([username, thishash, ranstring]), daynumber=True, timestamp=True)
+    return pass_enc('||'.join([username, pwd_hash]), daynumber=True, timestamp=True)
 
+# modified 9/2018 by Luke Gessler: compare and store hashed password instead of real password
 def checkpass(username, password, userdir, thisscript, action):
     """Check the password from a new login."""
 # XXXX log failed login attempts
@@ -334,15 +332,17 @@ def checkpass(username, password, userdir, thisscript, action):
         return False
     if not os.path.isfile(userdir+username+'.ini'):
         return False
+
     user = ConfigObj(userdir+username+'.ini')
     stampedpass = user['password']
     cookiepath = ConfigObj(userdir+'config.ini')['cookiepath']
-# we need to un-time stamp the password
-    realpass, daynumber, timestamp = pass_dec(stampedpass)
-    if realpass != password:
+    # we need to un-time stamp the password
+    password_hash, daynumber, timestamp = pass_dec(stampedpass)
+
+    if not pwd_context.verify(password, password_hash):
         return False
 
     #open('xxxtest.txt', 'w').write(str(user))
-# if we've got this far then the login was successful and we need to return a cookie
-    thecookie = makecookie(user, password, cookiepath)
+    # if we've got this far then the login was successful and we need to return a cookie
+    thecookie = makecookie(user, password_hash, cookiepath)
     return action, user, thecookie
