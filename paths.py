@@ -1,17 +1,16 @@
 import requests, os, platform
 from modules.configobj import ConfigObj
 
-# URL for ethercalc spreadsheets, possible including authentication
-# e.g. http://mydomain.com/ethercalc/
-# to use password authentication, use a netrc file called .netrc in the project root
-ether_url = "http://mydomain.com/ethercalc/"
-
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
 	prefix = "transc\\"
 else:
 	prefix = ""
 
+# to use password authentication, use a netrc file called .netrc in the project root
+ether_url = ConfigObj(prefix + "users" + os.sep + "config.ini")["ether_url"]
+if not ether_url.endswith(os.sep):
+    ether_url += os.sep
 
 def get_menu():
 	config = ConfigObj(prefix + "users" + os.sep + "config.ini")
