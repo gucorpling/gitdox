@@ -89,10 +89,9 @@ sudo pip install -r /var/www/html/requirements.txt
    attention to `xml_nlp_api` and `spreadsheet_nlp_api` if you plan to make use
    of those features.
 
-4. Modify the value of `ether_url` in `paths.py` so that it reflects where
-   GitDox can find your Ethercalc service over HTTP. By default, it is on your
-   local machine on port 8000, so the line in `paths.py` would read `ether_url =
-   "http://localhost:8000/"`.
+4. Modify the value of `ether_url` in `users/config.ini` so that it reflects where
+   GitDox can find your Ethercalc service over HTTP. By default, GitDox assumes it 
+   is on your local machine on port 8000.
 
 5. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
 
