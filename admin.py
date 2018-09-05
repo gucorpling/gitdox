@@ -14,6 +14,7 @@ from modules.dataenc import pass_dec, pass_enc
 from paths import get_menu
 from editor import harvest_meta
 from modules.ether import make_spreadsheet, get_ether_stylesheet_select, get_corpus_select
+from passlib.apps import custom_app_context as pwd_context
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -51,7 +52,7 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 	userdir=prefix+"users"+os.sep
 	f=open(userdir+username+'.ini',"w")
 	f.write('username='+username+'\n')
-	f.write('password='+pass_enc(password)+'\n')
+	f.write('password='+pass_enc(pwd_context.hash(password,salt=""))+'\n')
 	f.write('realname='+realname+'\n')
 	f.write('admin='+str(admin)+'\n')
 	f.write('email='+email+'\n')
