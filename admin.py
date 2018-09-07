@@ -1,7 +1,7 @@
 #!/usr/bin/python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
-import cgi, cgitb 
+import cgi, cgitb
 import os, platform
 from os.path import isfile, join
 from os import listdir
@@ -14,6 +14,9 @@ from modules.dataenc import pass_dec, pass_enc
 from paths import get_menu
 from editor import harvest_meta
 from modules.ether import make_spreadsheet, get_ether_stylesheet_select, get_corpus_select
+from passlib.apps import custom_app_context as pwd_context
+import github3
+import time
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -51,15 +54,21 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 	userdir=prefix+"users"+os.sep
 	f=open(userdir+username+'.ini',"w")
 	f.write('username='+username+'\n')
-	f.write('password='+pass_enc(password)+'\n')
+	f.write('password='+pass_enc(pwd_context.hash(password,salt=""))+'\n')
 	f.write('realname='+realname+'\n')
 	f.write('admin='+str(admin)+'\n')
 	f.write('email='+email+'\n')
 	f.write('max-age=0'+'\n')
 	f.write('editable=Yes'+'\n')
 	f.write('numlogins = 85\nnumused = 2869\n')
+
+	# get oauth token for github. Add current date to note since they need to be unique or an error will occur
+	note = project + ", " + time.ctime()
+	auth = github3.authorize(git_username, git_password, ['repo'], note, "")
+
 	f.write('git_username='+git_username+'\n')
-	f.write('git_password='+pass_enc(git_password)+'\n')
+	f.write('git_token='+auth.token+'\n')
+	f.write('git_id='+str(auth.id)+'\n') # in case we ever need to update authorizations
 	f.write('git_2fa='+str(git_2fa).lower()+'\n')
 	f.close()
 

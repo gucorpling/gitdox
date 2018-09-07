@@ -91,9 +91,9 @@ def load_page(user,admin,theform):
 	old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema = ["", "", "", "", "", "", ""]
 
 	if int(admin) > 0:
-		git_username, git_password, git_2fa = get_git_credentials(user, admin, code_2fa)
+		git_username, git_token, git_2fa = get_git_credentials(user, admin, code_2fa)
 	else:
-		git_username, git_password, git_2fa = (None,None,None)
+		git_username, git_token, git_2fa = (None, None, None)
 
 	if theform.getvalue('id'):
 		doc_id = theform.getvalue('id')
@@ -284,7 +284,7 @@ def load_page(user,admin,theform):
 			file_name = file_name.replace(" ","_") + "_ether.sgml"
 		saved_file = subdir + file_name
 		serialize_file(serializable_content, saved_file)
-		git_status = push_update_to_git(git_username, git_password, saved_file, git_account, git_repo, commit_message)
+		git_status = push_update_to_git(git_username, git_token, saved_file, git_account, git_repo, commit_message)
 
 		# File system cleanup
 		if subdir == "":
