@@ -70,7 +70,7 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 		f.write('git_token='+auth.token+'\n')
 		f.write('git_id='+str(auth.id)+'\n') # in case we ever need to update authorizations
 		f.write('git_2fa='+str(git_2fa).lower()+'\n')
-        except:
+	except:
 		# would be ideal to show an error, but just fail silently
 		pass 
 	f.close()
