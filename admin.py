@@ -98,14 +98,14 @@ def update_password(user,new_pass):
 
 
 def update_git_info(user,new_git_username,new_git_password,new_git_2fa=False):
-	o = ConfigObj(prefix + 'users' + 'os.sep' + user + '.ini')
+	o = ConfigObj(prefix + 'users' + os.sep + user + '.ini')
 	o['git_username'] = new_git_username
 	o['git_2fa'] = str(new_git_2fa).lower()
 
 	try: 
 		note = project + ", " + time.ctime()
-	   	auth = github3.authorize(new_git_username, new_git_password, ['repo'], note, "")
-	   	o['git_token'] = auth.token
+		auth = github3.authorize(new_git_username, new_git_password, ['repo'], note, "")
+		o['git_token'] = auth.token
 		o['git_id'] = auth.id
 		if 'git_password' in o:
 			del o['git_password']
