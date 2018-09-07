@@ -64,7 +64,7 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 
 	# get oauth token for github. Add current date to note since they need to be unique or an error will occur
 	note = project + ", " + time.ctime()
-	auth = github3.authorize(git_username, git_password, ['user', 'repo'], note, "")
+	auth = github3.authorize(git_username, git_password, ['repo'], note, "")
 
 	f.write('git_username='+git_username+'\n')
 	f.write('git_token='+auth.token+'\n')

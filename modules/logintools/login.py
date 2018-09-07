@@ -18,16 +18,34 @@
 import sys
 import cgi
 import os
-#import sha
-import hashlib
-from time import time
+from time import time, ctime
 # added by Luke Gessler, 9/2018
 from passlib.apps import custom_app_context as pwd_context
+import github3
 
-# FIXME: cgitb is insecure and should be removed from production code.
-import cgitb
-cgitb.enable()
+def gitdox_migrate_userconfig(o, config):
+    """GitDox's scheme for user objects changed after version 0.9.1. This function
+    checks the config to see if it uses the old scheme, and changes it if it does."""
 
+    old_pass, _, _ = pass_dec(o['password'])
+    if not old_pass.startswith('$6$rounds=656000$$'):
+        o['password'] = pass_enc(pwd_context.hash(old_pass, salt=""))
+        o.write()
+
+    if 'git_password' in o and o['git_password'] != "" \
+       and 'git_username' in o and o['git_username'] != "":
+        old = pass_dec(o['git_password'])[0]
+        username = o['git_username']
+        note = config['project'] + ", " + ctime()
+        try:
+            auth = github3.authorize(username, old, ['repo'], note, "")
+            o['git_token'] = auth.token
+            o['git_id'] = auth.id
+
+            del o['git_password']
+            o.write()
+        except:
+            pass # fail silently
 
 from modules.configobj import ConfigObj
 from modules.dataenc import pass_enc, pass_dec, unexpired, table_enc, table_dec
@@ -334,6 +352,8 @@ def checkpass(username, password, userdir, thisscript, action):
         return False
 
     user = ConfigObj(userdir+username+'.ini')
+    config = ConfigObj(userdir + 'config.ini')
+    gitdox_migrate_userconfig(user, config)
     stampedpass = user['password']
     cookiepath = ConfigObj(userdir+'config.ini')['cookiepath']
     # we need to un-time stamp the password
