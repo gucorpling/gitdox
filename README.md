@@ -22,7 +22,7 @@ First, [install Docker](https://docs.docker.com/install/). You may be able to
 install it using your platform's package manager.
 
 ```bash
-docker run -dit --restart unless-stopped --name gitdox-dev -p 5000:80 gucorpling/gitdox-dev
+docker run -dit --restart unless-stopped --name gitdox-dev -p 5000:80 gucorpling/gitdox:dev
 ```
 
 GitDox should now be running the docker container you've set up, and you may
