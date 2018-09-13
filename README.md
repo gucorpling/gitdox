@@ -6,6 +6,86 @@ The editor interface is based on [CodeMirror](https://codemirror.net). GitHub is
 GitDox is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts. 
 
 # Installation
+You have three choices:
+
+1. Pull the latest GitDox Docker image
+2. Build and run a GitDox Docker image
+3. Manually install GitDox on your machine 
+
+Unless you have a good reason to do (2) or (3), we recommend you do (1).
+
+# Pull the latest Docker image
+**Note:** currently, only the `gucorpling/gitdox-dev` image is available. We
+hope to provide a stable release soon.
+
+First, [install Docker](https://docs.docker.com/install/). You may be able to
+install it using your platform's package manager.
+
+```bash
+docker run -dit --restart unless-stopped --name gitdox-dev -p 5000:80 gucorpling/gitdox-dev
+```
+
+GitDox should now be running the docker container you've set up, and you may
+visit `http://localhost:5000` on your machine to verify that it works. GitDox should
+now always be running on your machine, even if you reboot it. If for some reason
+you need to stop it manually, you may do so:
+
+```bash
+docker stop gitdox
+# since you stopped it manually, it will no longer start automatically, even on
+# reboot. to start again:
+docker start gitdox
+```
+
+If for whatever reason you need to manually edit GitDox files, you may start a
+bash session inside of the Docker container:
+
+```bash
+docker exec -it gitdox-instance bash
+# now you are inside--install vim so you can edit files
+apt install vim 
+cd /var/www/html
+vim user/admin.ini # or whatever you need to edit
+```
+
+# Build and run a Docker image
+First, [install Docker](https://docs.docker.com/install/). You may be able to
+install it using your platform's package manager.
+
+Run the following code:
+
+```bash
+git clone https://github.com/gucorpling/gitdox ~/gitdox
+# compile the docker image
+docker build -t gitdox .
+# launch the image on your machine, mapping the image's port 80 to your machine's 80
+docker run -dit --restart unless-stopped --name gitdox -p 5000:80 gitdox
+```
+
+GitDox should now be running the docker container you've set up, and you may
+visit `http://localhost:5000` on your machine to verify that it works. GitDox should
+now always be running on your machine, even if you reboot it. If for some reason
+you need to stop it manually, you may do so:
+
+```bash
+docker stop gitdox
+# since you stopped it manually, it will no longer start automatically, even on
+# reboot. to start again:
+docker start gitdox
+```
+
+If for whatever reason you need to manually edit GitDox files, you may start a
+bash session inside of the Docker container:
+
+```bash
+docker exec -it gitdox-instance bash
+# now you are inside--install vim so you can edit files
+apt install vim 
+cd /var/www/html
+vim user/admin.ini # or whatever you need to edit
+```
+
+# Manual Installation
 The following instructions assume you are installing on a recent (16.04-18.04) version of Ubuntu.
 
 ## Install Redis
@@ -90,8 +170,12 @@ sudo pip install -r /var/www/html/requirements.txt
    of those features.
 
 4. Modify the value of `ether_url` in `users/config.ini` so that it reflects where
-   GitDox can find your Ethercalc service over HTTP. By default, GitDox assumes it 
-   is on your local machine on port 8000.
+   GitDox can find your Ethercalc service over HTTP. It defaults to assuming
+   that you will serve Ethercalc via reverse proxy into a subdirectory of your
+   website, /ethercalc/. If you want to serve it over its original port, you
+   should change it to something like `yourdomain.com:8000`, and if you want to
+   serve it over a subdomain, change it to something like
+   `your.subdomain.yourdomain.com`.
 
 5. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
 

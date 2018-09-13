@@ -16,6 +16,8 @@
 
 import sys
 import os
+# added by Luke Gessler, 9/2018
+from passlib.apps import custom_app_context as pwd_context
 
 from modules.cgiutils import *
 
@@ -25,15 +27,15 @@ RESERVEDNAMES = ['config', 'default', 'temp', 'emails', 'pending']
 
 # Helper functions for the login scripts and tools
   
-def makecookie(userconfig, password, cookiepath):
+def makecookie(userconfig, password_hash, cookiepath):
     """
     Return the current valid cookie heaader for the values supplied in the
-    userconfig, the straight password and the cookiepath.
+    userconfig, the password hash and the cookiepath.
     """
     from login import encodestring
     from Cookie import SimpleCookie
     thecookie = SimpleCookie()
-    cookiestring = encodestring(userconfig['username'],password)
+    cookiestring = encodestring(userconfig['username'], password_hash)
     maxage = userconfig['max-age']
     thecookie['userid'] = cookiestring
     if maxage and int(maxage):            # possible cause of error here if the maxage value in a users file isn't an integer !!
@@ -69,7 +71,8 @@ def createuser(userdir, realname, username, email, password, adminlev):
     user['realname'] = realname
     user['email'] = email
     user['admin'] = adminlev
-    user['password'] = pass_enc(password, timestamp=True, daynumber=True)
+    pwd_hash = pwd_context.hash(password,salt="")
+    user['password'] = pass_enc(pwd_hash, timestamp=True, daynumber=True)
     user['created'] = str(time())
     user.write()
 

@@ -3,7 +3,7 @@
 
 import cgi
 from modules.gitdox_sql import *
-from modules.ether import ether_to_sgml, get_socialcalc, build_meta_tag
+from modules.ether import ether_to_sgml, get_socialcalc, build_meta_tag, ether_to_csv
 from modules.logintools import login
 import zipfile
 from StringIO import StringIO
@@ -42,13 +42,17 @@ def export_all_docs(config=None, corpus_filter=None, status=None, extension="sgm
 			filename = corpus + "_" + docname
 		else:  # Only exporting one user specified corpus, name documents without prefix
 			filename = docname
-		if mode == "xml":
+		if mode == "xml" and config!="[CSV]":
 			content = build_meta_tag(doc_id) + content.strip() + "\n</meta>\n"
 			files.append((content,filename + ".xml"))
 		elif mode == "ether":
-			ether_name = "_".join(["gd",corpus,docname])
-			sgml = ether_to_sgml(get_socialcalc(ether_url, ether_name),doc_id,config=config)
-			files.append((sgml, filename + "." + extension))
+			ether_name = "_".join(["gd", corpus, docname])
+			if config=="[CSV]":
+				csv = ether_to_csv(ether_url,ether_name)
+				files.append((csv, filename + ".csv"))
+			else:
+				sgml = ether_to_sgml(get_socialcalc(ether_url, ether_name),doc_id,config=config)
+				files.append((sgml, filename + "." + extension))
 
 	for corp in all_corpus_meta:
 		serialized_meta = ""

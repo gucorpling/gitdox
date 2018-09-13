@@ -1,5 +1,6 @@
 import github3, os, platform
 from modules.dataenc import pass_dec, pass_enc
+from modules.configobj import ConfigObj
 code_2fa = ""
 
 
@@ -18,9 +19,9 @@ def get_two_factor():
 		return code_2fa
 
 
-def push_update_to_git(username,password,path,account,repo,message):
+def push_update_to_git(username, token, path, account, repo, message):
 	files_to_upload = [path]
-	gh = github3.login(username=username, password=password, two_factor_callback=get_two_factor)
+	gh = github3.login(username=username, token=token, two_factor_callback=get_two_factor)
 	repository = gh.repository(account, repo)
 	for file_info in files_to_upload:
 		with open(prefix+file_info, 'rb') as fd:
@@ -36,22 +37,18 @@ def push_update_to_git(username,password,path,account,repo,message):
 			return str(push_status['commit'])
 
 
-def get_git_credentials(user,admin,code):
+def get_git_credentials(user, admin, code):
 	global code_2fa
 	code_2fa = code
 	if admin==0:
 		return
+
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep + ".." + os.sep
 	userdir = scriptpath + "users" + os.sep
-	userfile = userdir + user + '.ini'
-	f=open(userfile,'r').read().split('\n')
-	user_dict={}
-	for line in f:
-		if line!='':
-			l=line.split(' = ')
-			user_dict[l[0]]=l[1]
-	git_username=user_dict['git_username'] if "git_username" in user_dict else "_"
-	git_password=pass_dec(user_dict['git_password']) if "git_password" in user_dict else "_"
-	git_use2fa=user_dict['git_2fa'] if "git_2fa" in user_dict else "false"
-	return git_username,git_password[0],git_use2fa
+	user_dict = ConfigObj(userdir + user + '.ini')
+
+	git_username = user_dict['git_username'] if "git_username" in user_dict else "_"
+	git_token = user_dict['git_token'] if "git_token" in user_dict else "_"
+	git_use2fa = user_dict['git_2fa'] if "git_2fa" in user_dict else "false"
+	return git_username, git_token, git_use2fa
 

@@ -20,6 +20,8 @@ from modules.configobj import ConfigObj
 from modules.pathutils import *
 from modules.cgiutils import *
 from loginutils import *
+# added by Luke Gessler, 9/2018
+from passlib.apps import custom_app_context as pwd_context
 
 ####################################################
 # Various default values etc
@@ -141,7 +143,8 @@ def confirm(theform, userdir, thisscript):
             action = uservals[entry]
         elif entry == 'password':
             password = uservals[entry]
-            newconfig[entry] = pass_enc(password, timestamp=True, daynumber=True)
+            pwd_hash = pwd_context.hash(password,salt="")
+            newconfig[entry] = pass_enc(pwd_hash, timestamp=True, daynumber=True)
         else:
             newconfig[entry] = uservals[entry]
     newconfig.write()
@@ -149,7 +152,8 @@ def confirm(theform, userdir, thisscript):
     # next we need to create the cookie header to return it 
     from Cookie import SimpleCookie
     thecookie = SimpleCookie()
-    thecookie['userid'] = encodestring(newconfig['username'], password)
+    pwd_hash = pwd_context.hash(password,salt="")
+    thecookie['userid'] = encodestring(newconfig['username'], pwd_hash)
     config = ConfigObj(userdir + 'config.ini')
     maxage = newconfig['max-age'] 
     cookiepath = config['cookiepath']
@@ -182,8 +186,8 @@ def doeditaccount(theform, userconfig, userdir, thisscript, action, newcookie):
     vallist = allentries + [entry for entry in edacckeys if entry not in allentries]
     formdict = getform(vallist, theform, nolist=True)
     #
-    oldpass = formdict['pass0']
-    storedpass = pass_dec(userconfig['password'])[0] 
+    oldpass_hash = pwd_context.hash(formdict['pass0'],salt="")
+    storedpass_hash = pass_dec(userconfig['password'])[0] 
     pass1 = formdict['pass1']
     pass2 = formdict['pass2']
     #
@@ -192,7 +196,7 @@ def doeditaccount(theform, userconfig, userdir, thisscript, action, newcookie):
     if not email:
         msg = 'The email address you supplied appears to be invalid.'
         display_edit(formdict, userdir, thisscript, msg, action, newcookie, userconfig)
-    if email != oldemail and (not oldpass or oldpass != storedpass):
+    if email != oldemail and (not oldpass_hash or oldpass_hash != storedpass_hash):
         msg = 'You must correctly enter your password to change your email address.'
         display_edit(formdict, userdir, thisscript, msg, action, newcookie, userconfig)
     userconfig['email'] = email
@@ -207,11 +211,12 @@ def doeditaccount(theform, userconfig, userdir, thisscript, action, newcookie):
         if len(pass1) < 5:
             msg = "The password must be longer than 5 characters."
             display_edit(formdict, userdir, thisscript, msg, action, newcookie, userconfig)
-        if not oldpass or oldpass != storedpass:
+        if not oldpass_hash or oldpass_hash != storedpass_hash:
             msg = 'You must correctly enter your current password to change it.'
             display_edit(formdict, userdir, thisscript, msg, action, newcookie, userconfig)
-        userconfig['password'] = pass_enc(pass1, daynumber=True, timestamp=True)
-        newcookie = makecookie(userconfig, pass1, ConfigObj(userdir+'config.ini')['cookiepath'])
+        pass1_hash = pwd_context.hash(pass1,salt="")
+        userconfig['password'] = pass_enc(pass1_hash, daynumber=True, timestamp=True)
+        newcookie = makecookie(userconfig, pass1_hash, ConfigObj(userdir+'config.ini')['cookiepath'])
     for entry in formdict:
         if entry not in edacckeys:
             userconfig[entry] = formdict[entry]
@@ -327,7 +332,7 @@ def savedetails(userdir, formdict, action=None):
     store = tempstore[key]
     for entry in formdict:
         if entry == 'pass1' or entry == 'pass2':
-            store['password'] = formdict[entry]
+            store['password'] = pwd_context.hash(formdict[entry],salt="")
         elif entry == 'login':
             pass
         else:

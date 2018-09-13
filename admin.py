@@ -1,7 +1,7 @@
 #!/usr/bin/python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
-import cgi, cgitb 
+import cgi, cgitb
 import os, platform
 from os.path import isfile, join
 from os import listdir
@@ -14,6 +14,9 @@ from modules.dataenc import pass_dec, pass_enc
 from paths import get_menu
 from editor import harvest_meta
 from modules.ether import make_spreadsheet, get_ether_stylesheet_select, get_corpus_select
+from passlib.apps import custom_app_context as pwd_context
+import github3
+import time
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -51,16 +54,25 @@ def write_user_file(username,password,admin,email,realname,git_username,git_pass
 	userdir=prefix+"users"+os.sep
 	f=open(userdir+username+'.ini',"w")
 	f.write('username='+username+'\n')
-	f.write('password='+pass_enc(password)+'\n')
+	f.write('password='+pass_enc(pwd_context.hash(password,salt=""))+'\n')
 	f.write('realname='+realname+'\n')
 	f.write('admin='+str(admin)+'\n')
 	f.write('email='+email+'\n')
 	f.write('max-age=0'+'\n')
 	f.write('editable=Yes'+'\n')
 	f.write('numlogins = 85\nnumused = 2869\n')
-	f.write('git_username='+git_username+'\n')
-	f.write('git_password='+pass_enc(git_password)+'\n')
-	f.write('git_2fa='+str(git_2fa).lower()+'\n')
+
+	# get oauth token for github. Add current date to note since they need to be unique or an error will occur
+	note = project + ", " + time.ctime()
+	try:
+		auth = github3.authorize(git_username, git_password, ['repo'], note, "")
+		f.write('git_username='+git_username+'\n')
+		f.write('git_token='+auth.token+'\n')
+		f.write('git_id='+str(auth.id)+'\n') # in case we ever need to update authorizations
+		f.write('git_2fa='+str(git_2fa).lower()+'\n')
+	except:
+		# would be ideal to show an error, but just fail silently
+		pass 
 	f.close()
 
 
@@ -86,31 +98,22 @@ def update_password(user,new_pass):
 
 
 def update_git_info(user,new_git_username,new_git_password,new_git_2fa=False):
-	f=open(prefix+'users'+os.sep+user+'.ini','r')
-	ff=f.read().split('\n')
-	f.close()
+	o = ConfigObj(prefix + 'users' + os.sep + user + '.ini')
+	o['git_username'] = new_git_username
+	o['git_2fa'] = str(new_git_2fa).lower()
 
-	new_file=[]
-	for line in ff:
-		if line!='':
-			line_split=line.split('=')
-			if line_split[0].strip().startswith('git_password'):
-				newline='git_password = ' + pass_enc(new_git_password)
-				new_file.append(newline)
-			elif line_split[0].strip().startswith('git_username'):
-				newline='git_username = ' + new_git_username
-				new_file.append(newline)
-			elif line_split[0].strip().startswith('git_2fa'):
-				newline = 'git_2fa = ' + str(new_git_2fa).lower()
-				new_file.append(newline)
-			else:
-				new_file.append(line)
-	open(prefix + 'users'+os.sep+user+'.ini', 'w').close()
-	g = open(prefix+ 'users'+os.sep+user+'.ini','a')
-	for l in new_file:
-		g.write(l+'\n')
-	g.close()
-
+	try: 
+		note = project + ", " + time.ctime()
+		auth = github3.authorize(new_git_username, new_git_password, ['repo'], note, "")
+		o['git_token'] = auth.token
+		o['git_id'] = auth.id
+		if 'git_password' in o:
+			del o['git_password']
+		o.write()
+	except:
+		# fail silently--would want to display an error ideally, but 
+		# users will know to try again if the credentials are wrong
+		pass
 
 def load_admin(user,admin,theform):
 	warn=""
