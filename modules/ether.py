@@ -188,8 +188,7 @@ def get_ether_stylesheet_select():
 
 	stylesheet_list = get_file_list(stylesheet_dir,"ini",hide_extension=True)
 	select = """<select name="ether_stylesheet" id="ether_stylesheet">\n"""
-	if len(stylesheet_list) == 0:
-		select += "\t<option>--default--</option>\n"
+	select += "\t<option>[CSV]</option>\n"
 
 	for f in stylesheet_list:
 		select += '\t<option value="' + f + '">' + f + '</option>\n'
@@ -338,6 +337,13 @@ Content-type: text/plain; charset=UTF-8
 """
 
 	return output
+
+
+def ether_to_csv(ether_path, name):
+	command = "curl --netrc -X GET " + ether_path + "_/" + name + "/csv/"
+	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+	(stdout, stderr) = proc.communicate()
+	return stdout.decode("utf8")
 
 
 def ether_to_sgml(ether, doc_id,config=None):
