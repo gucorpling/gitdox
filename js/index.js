@@ -61,7 +61,7 @@ function validate_all() {
       	 $("#validate_landing").html('<i class="fa fa-check"></i> re-validate');
       	},
        	error: function( jqXHR, textStatus, errorThrown) {
-       	 alert(errorThrown);
+       	 console.log(errorThrown);
        	 $("#validate_landing").removeClass("disabledbutton");
     	 $("#validate_landing").html('<i class="fa fa-check"></i> re-validate');
        	}
