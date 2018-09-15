@@ -37,7 +37,7 @@ docker stop gitdox
 docker start gitdox
 ```
 
-If for whatever reason you need to manually edit GitDox files, you may start a
+If you need to manually edit GitDox files, you may start a
 bash session inside of the Docker container:
 
 ```bash
@@ -47,6 +47,17 @@ apt install vim
 cd /var/www/html
 vim user/admin.ini # or whatever you need to edit
 ```
+
+If you anticipate that you will need to heavily modify GitDox's files, you may wish 
+to have your GitDox folders live in your host machine's filesystem:
+
+```bash
+sudo git clone https://github.com/gucorpling/gitdox /opt/gitdox
+sudo chown -R www-data:www-data /opt/gitdox
+docker run -dit --restart unless-stopped --name gitdox -v /opt/gitdox:/var/www/html -p 5000:80 gucorpling/gitdox:dev gitdox
+```
+
+These commands install GitDox under `/opt` in your host machine and allows you to modify them just as you would modify any other file on your machine. But in the Docker command, with the `-v` flag we tell it to mount this folder as `/var/www/html` in the container's filesystem. The files are shared bidirectionally: changes made in the container will flow to the host, and vice versa.
 
 # Build and run a Docker image
 First, [install Docker](https://docs.docker.com/install/). You may be able to
