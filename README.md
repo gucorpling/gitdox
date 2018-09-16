@@ -15,7 +15,7 @@ You have three choices:
 Unless you have a good reason to do (2) or (3), we recommend you do (1).
 
 # Pull the latest Docker image
-**Note:** currently, only the `gucorpling/gitdox-dev` image is available. We
+**Note:** currently, only the `gucorpling/gitdox:dev` image is available. We
 hope to provide a stable release soon.
 
 First, [install Docker](https://docs.docker.com/install/). You may be able to
