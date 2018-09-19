@@ -1,11 +1,53 @@
-<script type="text/javascript" src="codemirror-5.15.2/addon/search/search.js"></script>
-<script type="text/javascript" src="codemirror-5.15.2/addon/search/searchcursor.js"></script>
-<script type="text/javascript" src="codemirror-5.15.2/addon/search/jump-to-line.js"></script>
-<script type="text/javascript" src="codemirror-5.15.2/addon/dialog/dialog.js"></script>
+<script src="codemirror-5.15.2/addon/search/search.js"></script>
+<script src="codemirror-5.15.2/addon/search/searchcursor.js"></script>
+<script src="codemirror-5.15.2/addon/search/jump-to-line.js"></script>
+<script src="codemirror-5.15.2/addon/dialog/dialog.js"></script>
 <link rel="stylesheet" type="text/css" href="codemirror-5.15.2/addon/dialog/dialog.css">
 
-<textarea id="code" name="code">**content**</textarea>
+<div class="container">
+  <textarea id="code" name="code">**content**</textarea>
+</div>
+<div class="handle"></div>
 <div class="button h128" onclick="do_save();" ><i class="fa fa-floppy-o"> </i> Save</div> **NLP**  **github**
+
+<!-- enable manual scroll -->
+<!-- from https://jsfiddle.net/mindplay/rs2L2vtb/2/ -->
+<script>
+(function(){
+
+
+
+})();
+</script>
+
+<style>
+.handle {
+  background: #f7f7f7;
+  height: 20px;
+  user-select: none;
+  cursor: row-resize;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+}
+
+.handle:before {
+  content: '\2261'; /* https://en.wikipedia.org/wiki/Triple_bar */
+  color: #999;
+  position: absolute;
+  left: 50%;
+}
+
+.handle:hover {
+  background: #f0f0f0;
+}
+
+.handle:hover:before {
+  color: #000;
+}
+</style>
+<!-- end manual scroll -->
+
+
 
     <script>
 
@@ -324,6 +366,38 @@
         hintOptions: {schemaInfo: tags}
       });
 
+let $handle = document.querySelector(".handle");
+let $container = document.querySelector(".container");
+
+function height_of($el) {
+  return parseInt(window.getComputedStyle($el).height.replace(/px$/, ""));
+}
+
+const MIN_HEIGHT = 200;
+
+var start_x;
+var start_y;
+var start_h;
+
+function on_drag(e) {
+  editor.setSize(null, Math.max(MIN_HEIGHT, (start_h + e.y - start_y)) + "px");
+}
+
+function on_release(e) {
+  document.body.removeEventListener("mousemove", on_drag);
+  window.removeEventListener("mouseup", on_release);
+}
+
+$handle.addEventListener("mousedown", function (e) {
+  start_x = e.x;
+  start_y = e.y;
+  start_h = height_of($container);
+
+  document.body.addEventListener("mousemove", on_drag);
+  window.addEventListener("mouseup", on_release);
+});
+
+
 	  function updateTextArea() {
 	      editor.save();
 	  }
@@ -333,3 +407,5 @@
 
 
     </script>
+
+
