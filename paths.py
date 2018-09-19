@@ -14,7 +14,11 @@ if not ether_url.endswith(os.sep):
 
 def get_menu():
 	config = ConfigObj(prefix + "users" + os.sep + "config.ini")
+
+        if "banner" not in config:
+		return ""
 	banner = config["banner"]
+
 	if banner.startswith("http"):  # Web resource
 		resp = requests.get(banner)
 		return resp.text
