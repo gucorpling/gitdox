@@ -22,6 +22,7 @@ else:
 	prefix = ""
 
 project = "Scriptorium"
+cgitb.enable()
 
 
 def make_options(**kwargs):
@@ -222,7 +223,6 @@ def load_landing(user, admin, theform):
 	menu = menu.encode("utf8")
 
 	landing = open(prefix + "templates" + os.sep + "landing.html").read()
-	header = open(prefix + "templates" + os.sep + "header.html").read()
 
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	userdir = scriptpath + "users" + os.sep
@@ -233,7 +233,6 @@ def load_landing(user, admin, theform):
 	landing = landing.replace("**max_id_plus1**", str(max_id + 1))
 	landing = landing.replace("**user**", user)
 	landing = landing.replace("**project**", project)
-	landing = landing.replace("**header**", header)
 	landing = landing.replace("**skin**", skin)
 	landing = landing.replace("**validation_rules**", validation_rules)
 	landing = landing.replace("**corpora**", corpus_list)
