@@ -176,7 +176,6 @@ def load_admin(user,admin,theform):
 	<body>
 	**navbar**
 	<div id="wrapper">
-		**header**
 		<div id="content">
 		<h1 >GitDox - Administration</h1>
 			<p style="border-bottom:groove;"><i>administration and user management</i> | <a href="index.py">back to document list</a></p>
@@ -416,9 +415,7 @@ def load_admin(user,admin,theform):
 
 
 	page+="</div></div></div></body></html>"
-	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
-	page = page.replace("**header**",header)
 	page = page.replace("**project**",project)
 	page = page.replace("**skin**",skin)
 
@@ -470,9 +467,6 @@ def load_user_config(user,admin,theform):
 	<body>
 	**navbar**
 	<div id="wrapper">
-		<div id="header">
-			**header**
-		</div>
 		<div id="content">
 	<h1 >Coptic XML transcription editor</h1> 
 		<p style="border-bottom:groove;"><i>edit user info</i> | <a href="index.py">back to document list</a> </p>
@@ -503,9 +497,7 @@ def load_user_config(user,admin,theform):
 	
 	page += "\t\t\t</div>\t\t\n</div>\t\n</div>\n</body>\n</html>"
 
-	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
-	page = page.replace("**header**",header)
 	page = page.replace("**project**",project)
 	page = page.replace("**skin**",skin)
 
