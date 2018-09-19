@@ -22,7 +22,6 @@ else:
 	prefix = ""
 
 project = "Scriptorium"
-cgitb.enable()
 
 
 def make_options(**kwargs):
