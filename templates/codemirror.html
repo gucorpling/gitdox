@@ -325,5 +325,10 @@
 	  
 	  delete CodeMirror.keyMap.emacsy["Alt-F"]; delete CodeMirror.keyMap.emacsy["Alt-D"];
 
+	    val = document.getElementById('code').value.replace(/&(?!amp;)/g,'&amp;');
+        $('#code').val(val);
+        editor.getDoc().setValue(val);
+
+
 
     </script>

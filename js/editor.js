@@ -31,9 +31,9 @@ function validate_doc() {
 
 function do_save(){
     if (document.getElementById('code')!=null){
-        val = document.getElementById('code').value.replace('&','&amp;');
-        document.getElementById('code').value = val;
+        val = document.getElementById('code').value.replace(/&(?!amp;)/g,'&amp;');
         editor.getDoc().setValue(val);
+        document.getElementById('code').value = val;
     }
     document.getElementById('editor_form').submit();
 }
