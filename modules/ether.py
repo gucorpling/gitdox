@@ -19,7 +19,9 @@ from configobj import ConfigObj
 from ast import literal_eval
 import json
 import cgi
+import requests
 from xml.sax.saxutils import escape
+
 
 __version__ = "2.0.0"
 
@@ -340,10 +342,12 @@ Content-type: text/plain; charset=UTF-8
 
 
 def ether_to_csv(ether_path, name):
-	command = "curl --netrc -X GET " + ether_path + "_/" + name + "/csv/"
-	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-	(stdout, stderr) = proc.communicate()
-	return stdout.decode("utf8")
+	try:
+		r = requests.get(ether_path + "_/" + name + "/csv/")
+	except:
+		return ""
+
+	return r.text
 
 
 def ether_to_sgml(ether, doc_id,config=None):
@@ -605,35 +609,27 @@ def delete_spreadsheet(ether_url, name):
 	:param name: name of the spreadsheet (last part of URL)
 	:return: void
 	"""
-
-	ether_command = "curl --netrc -X DELETE " + ether_url + "_/" + name
-	del_proc = subprocess.Popen(ether_command,shell=True)
-
-	(stdout, stderr) = del_proc.communicate()
-
-	return stdout, stderr
-
+	try:
+		r = requests.delete(ether_url + "_/" + name)
+	except:
+		pass
 
 def sheet_exists(ether_path, name):
 	return len(get_socialcalc(ether_path,name)) > 0
 
 
 def get_socialcalc(ether_path, name):
-	command = "curl --netrc -X GET " + ether_path + "_/" + name
-	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-	(stdout, stderr) = proc.communicate()
-	return stdout.decode("utf8")
+	try:
+		r = requests.get(ether_path + '_/' + name)
+	except:
+		return ""
+	return r.text
 
 
 def get_timestamps(ether_path):
-	command = "curl --netrc -X GET " + ether_path + "_roomtimes"
-	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-	(stdout, stderr) = proc.communicate()
-	times = json.loads(stdout)
-	output = {}
-	for room in times:
-		output[room.replace("timestamp-","")] = times[room]
-	return output
+	r = requests.get(ether_path + "_roomtimes")
+	times = r.json()
+	return {room.replace("timestamp-", ""): times[room] for room in times}
 
 
 if __name__  == "__main__":
