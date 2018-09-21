@@ -8,7 +8,10 @@ else:
 	prefix = ""
 
 # to use password authentication, use a netrc file called .netrc in the project root
-ether_url = ConfigObj(prefix + "users" + os.sep + "config.ini")["ether_url"]
+try:
+    ether_url = ConfigObj(prefix + "users" + os.sep + "config.ini")["ether_url"]
+except KeyError:
+    ether_url = ""
 if not ether_url.endswith(os.sep):
     ether_url += os.sep
 
