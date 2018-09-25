@@ -169,12 +169,15 @@ def load_page(user,admin,theform):
 
 			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
 			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet" and mode == "xml" and user != "demo":
-				api_call = spreadsheet_nlp_api
-				nlp_user, nlp_password = get_nlp_credentials()
 				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
-				data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
-				resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
-				sgml=resp.text.encode("utf8")
+				api_call = spreadsheet_nlp_api
+				if api_call != "":
+					nlp_user, nlp_password = get_nlp_credentials()
+					data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
+					resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
+					sgml = resp.text.encode("utf8")
+				else:
+					sgml = data_to_process
 				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
 				mode = "ether"
 
@@ -296,11 +299,12 @@ def load_page(user,admin,theform):
 			shutil.rmtree(prefix+subdir)
 
 	if theform.getvalue('nlp_xml') == "do_nlp_xml" and mode == "xml":
-		api_call=xml_nlp_api
-		nlp_user, nlp_password = get_nlp_credentials()
-		data = {"data":text_content, "lb":"line", "format":"pipes"}
-		resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
-		text_content=resp.text
+		api_call = xml_nlp_api
+		if api_call != "":
+			nlp_user, nlp_password = get_nlp_credentials()
+			data = {"data":text_content, "lb":"line", "format":"pipes"}
+			resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
+			text_content=resp.text
 
 	# Editing options
 	# Docname
