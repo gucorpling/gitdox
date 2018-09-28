@@ -177,7 +177,7 @@ def load_page(user,admin,theform):
 					resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 					sgml = resp.text.encode("utf8")
 				else:
-					sgml = data_to_process
+					sgml = data_to_process.encode("utf8")
 				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
 				mode = "ether"
 
