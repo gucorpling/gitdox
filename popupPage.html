@@ -1,28 +1,68 @@
-<HTML>
-<HEAD>
-<SCRIPT LANGUAGE="JavaScript">
+<html>
+  <head>
+    <script>LANGUAGE="JavaScript">
 function copyForm() {
-	opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
-	opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
+  opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
+  opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
 
-	opener.document.hiddenForm.submit();
-	window.close();
-	return false;
+  opener.document.hiddenForm.submit();
+  window.close();
+  return false;
 }
-</SCRIPT>
-</HEAD>
-<BODY>
-<FORM NAME="popupForm" onSubmit="return copyForm()">
-field name (e.g., author):<br>
-<input list="metakeys" name="metakey">
-<datalist id="metakeys">
-***options***
-</datalist>
-<br>
-field value (e.g., Besa):<br>
-<input type="text" name='metavalue'><br>
-<INPUT TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
-</FORM>
-</BODY>
-</HTML>
+    </script>
+  </head>
+  <body>
+    <form name="popupForm" onSubmit="return copyForm()">
+      field name (e.g., author):<br>
+      <input list="metakeys" name="metakey">
+      <datalist id="metakeys">
+        <option value=annotation>
+        <option value=author>
+        <option value=collection>
+        <option value=Coptic_edition>
+        <option value=corpus>
+        <option value=country>
+        <option value=document_cts_urn>
+        <option value=endnote>
+        <option value=facsimile_graphic_url>
+        <option value=Greek_source>
+        <option value=idno>
+        <option value=ignore:image>
+        <option value=language>
+        <option value=license>
+        <option value=msContents_title@n>
+        <option value=msContents_title@type>
+        <option value=msltem_title>
+        <option value=msName>
+        <option value=next>
+        <option value=note>
+        <option value=objectType>
+        <option value=origDate>
+        <option value=origDate_notAfter>
+        <option value=origDate_notBefore>
+        <option value=origDate_precision>
+        <option value=origPlace>
+        <option value=pages_from>
+        <option value=pages_to>
+        <option value=placeName>
+        <option value=previous>
+        <option value=project>
+        <option value=redundant>
+        <option value=repository>
+        <option value=source>
+        <option value=source_info>
+        <option value=title>
+        <option value=translation>
+        <option value=Trismegistos>
+        <option value=version@date>
+        <option value=version@n>
+        <option value=witness>
 
+      </datalist>
+      <br>
+      field value (e.g., Besa):<br>
+      <input type="text" name='metavalue'><br>
+      <input TYPE="BUTTON" VALUE="Submit" onClick="copyForm()">
+    </form>
+  </body>
+</html>
