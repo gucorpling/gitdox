@@ -170,12 +170,17 @@ def load_page(user,admin,theform):
 			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
 			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet" and mode == "xml" and user != "demo":
 				api_call = spreadsheet_nlp_api
-				nlp_user, nlp_password = get_nlp_credentials()
 				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
-				data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
-				resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
-				sgml=resp.text.encode("utf8")
-				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
+
+				if api_call is None or api_call == "":
+					out, err = make_spreadsheet(data_to_process, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
+				else:
+					nlp_user, nlp_password = get_nlp_credentials()
+					data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
+					resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
+					sgml=resp.text.encode("utf8")
+					out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
+
 				mode = "ether"
 
 
