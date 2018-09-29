@@ -56,6 +56,7 @@ def load_validation_rules():
 	<body>
 	**navbar**
 	<div id="wrapper">
+		  **header**
 		<div id="content">
 	<h1>GitDox - Validation</h1>
 		<p style="border-bottom:groove;"><i>validation rule management</i> | <a href="index.py">back to document list</a> </p>
@@ -111,7 +112,9 @@ def load_validation_rules():
 
 
 	page+="</div></div></body></html>"
+	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**",get_menu())
+	page = page.replace("**header**",header)
 	page = page.replace("**project**",project)
 	page = page.replace("**skin**",skin)
 

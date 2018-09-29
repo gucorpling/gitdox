@@ -465,7 +465,9 @@ def load_page(user,admin,theform):
 			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
 			page = page.replace('''<div onclick="do_save();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
 
+	header = open(templatedir + "header.html").read()
 	page = page.replace("**navbar**", get_menu())
+	page = page.replace("**header**", header)
 	page = page.replace("**project**", project)
 	page = page.replace("**skin**", skin)
 	page = page.replace("**editor_help_link**",editor_help_link)
