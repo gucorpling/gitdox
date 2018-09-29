@@ -225,7 +225,12 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 		else:
 			span_string = ""
 
-		flushed += "cell:" + colmap[alias][stack_len - 1] + str(last_start[alias][-1]) + ":t:" + last_value[alias][-1]+":f:1:tvf:1"+span_string + "\n"  # Use t for tvf to leave links on
+		# Use t for tvf to leave links on
+		flushed += "cell:" \
+			+ colmap[alias][stack_len - 1] \
+			+ str(last_start[alias][-1]) \
+			+ ":t:" + last_value[alias][-1] \
+			+ ":f:1:tvf:1" + span_string + "\n"
 
 		# pop the stack since we've closed a tag
 		last_value[alias].pop()
