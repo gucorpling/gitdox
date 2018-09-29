@@ -19,12 +19,9 @@ from configobj import ConfigObj
 from ast import literal_eval
 import json
 import cgi
-import requests
 from xml.sax.saxutils import escape
 
-
 __version__ = "2.0.0"
-
 
 class ExportConfig:
 
@@ -220,12 +217,27 @@ def flush_open(annos, row_num, colmap):
 
 def flush_close(closing_element, last_value, last_start, row_num, colmap, aliases):
 	flushed = ""
-	for alias in aliases[closing_element]:
-		if last_start[alias] < row_num - 1:
-			span_string = ":rowspan:" + str(row_num - last_start[alias])
+	for alias in aliases[closing_element][-1]:
+		stack_len = len(last_start[alias])
+
+		with open('tmp','a') as f:
+			f.write("\nFound element " + closing_element + " at " + str(row_num) + "\n")
+			f.write(repr(last_value) + "\n")
+			f.write(repr(last_start) + "\n")
+			f.write(alias + "\n")
+			f.write(repr(aliases[closing_element]) + "\n")
+			f.write(repr(last_start[alias]) + "\n")
+			f.flush()
+
+		if stack_len > 0 and last_start[alias][-1] < row_num - 1:
+			span_string = ":rowspan:" + str(row_num - last_start[alias][-1])
 		else:
 			span_string = ""
-		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+":f:1:tvf:1"+span_string + "\n"  # Use t for tvf to leave links on
+
+		flushed += "cell:" + colmap[alias][stack_len - 1] + str(last_start[alias][-1]) + ":t:" + last_value[alias][-1]+":f:1:tvf:1"+span_string + "\n"  # Use t for tvf to leave links on
+		last_value[alias].pop()
+		last_start[alias].pop()
+		aliases[closing_element].pop()
 	return flushed
 
 
@@ -238,14 +250,23 @@ def number_to_letter(number):
 
 
 def sgml_to_ether(sgml, ignore_elements=False):
-	sgml = sgml.replace("\r","")
-	current_row = 2
 	open_annos = defaultdict(list)
+
+	# a mapping from a tag name to a list of values. the list is a stack
+	# where the most recently encountered opening tag's value/start row
+	# is kept on the right side of the list. whenever we see a closing tag
+	# we pop from the stack, and whenever we see an opening tag we push
+	# (append) to the stack
+	last_value = defaultdict(list)
+	last_start = defaultdict(list)
+
+	# maps from tags to a similar stack data structure where the top of the stack
+	# (i.e. the right side of the list) contains all the annotations that were
+	# present on the most recently opened nested element
 	aliases = defaultdict(list)
-	last_value = {}
-	last_start = {}
+
+	# values in this dict are also lists which follow the pattern described above
 	colmap = OrderedDict()
-	maxcol = 1
 
 	preamble = """socialcalc:version:1.0
 MIME-Version: 1.0
@@ -265,45 +286,54 @@ version:1.5
 
 """
 
+	sgml = sgml.replace("\r","")
+
 	output = ""
+	maxcol = 1
+	current_row = 2
 
 	for line in sgml.strip().split("\n"):
 		line = line.strip()
+		# SocialCalc uses colons internally, \\c used to repr colon in data
 		line = line.replace(":","\\c")
+
 		if line.startswith("<?") or line.endswith("/>"):  # Skip unary tags and XML instructions
-			pass
+			continue
 		elif line.startswith("<meta") or line.startswith("</meta"):  # meta tags
-			pass
+			continue
 		elif line.startswith("</"):  # Closing tag
 			my_match = re.match("</([^>]+)>",line)
 			element = my_match.groups(0)[0]
-			output+=flush_close(element, last_value, last_start, current_row, colmap, aliases)
+			output += flush_close(element, last_value, last_start, current_row, colmap, aliases)
 		elif line.startswith("<"): # Opening tag
 			my_match = re.match("<([^ >]+)[ >]",line)
 			element = my_match.groups(0)[0]
-			aliases[element] = []  # Reset element aliases to see which attributes this instance has
+			aliases[element].append([])  # Add new set of aliases to see which attributes this instance has
 			if "=" not in line:
 				line = "<" + element + " " + element + '="' + element + '">'
 
-			my_match = re.findall('([^" =]+)="([^"]+)"',line)
+			attrs = re.findall('([^" =]+)="([^"]+)"',line)
 			anno_name = ""
 			anno_value = ""
-			for match in my_match:
-				if element != match[0] and ignore_elements is False:
-					anno_name = element + "_" + match[0]
+			for attr in attrs:
+				if element != attr[0] and ignore_elements is False:
+					anno_name = element + "_" + attr[0]
 				else:
-					anno_name = match[0]
-				anno_value = match[1]
+					anno_name = attr[0]
+				anno_value = attr[1]
 				open_annos[current_row].append((anno_name,anno_value))
-				last_value[anno_name] = anno_value
-				last_start[anno_name] = current_row
-				if element not in aliases:
-					aliases[element] = [anno_name]
-				elif anno_name not in aliases[element]:
-					aliases[element].append(anno_name)
+				last_value[anno_name].append(anno_value)
+				last_start[anno_name].append(current_row)
+				if anno_name not in aliases[element][-1]:
+					aliases[element][-1].append(anno_name)
+
 				if anno_name not in colmap:
-					maxcol +=1
-					colmap[anno_name] = number_to_letter(maxcol)
+					maxcol += 1
+					colmap[anno_name] = [number_to_letter(maxcol)]
+				elif anno_name in colmap and \
+					 len(last_start[anno_name]) > len(colmap[anno_name]):
+					maxcol += 1
+					colmap[anno_name].append(number_to_letter(maxcol))
 
 		elif len(line) > 0:  # Token
 			token = line.strip()
@@ -315,7 +345,8 @@ version:1.5
 	preamble += "cell:A1:t:tok:f:2\n" # f <> tvf for links
 	output = preamble + output
 	for header in colmap:
-		output += "cell:"+colmap[header]+"1:t:"+header+":f:2\n" # NO f <> tvf for links
+		for entry in colmap[header]:
+			output += "cell:"+entry+"1:t:"+header+":f:2\n" # NO f <> tvf for links
 
 	output += "\nsheet:c:" + str(maxcol) + ":r:" + str(current_row-1) + ":tvf:1\n"
 
@@ -342,12 +373,10 @@ Content-type: text/plain; charset=UTF-8
 
 
 def ether_to_csv(ether_path, name):
-	try:
-		r = requests.get(ether_path + "_/" + name + "/csv/")
-	except:
-		return ""
-
-	return r.text
+	command = "curl --netrc -X GET " + ether_path + "_/" + name + "/csv/"
+	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+	(stdout, stderr) = proc.communicate()
+	return stdout.decode("utf8")
 
 
 def ether_to_sgml(ether, doc_id,config=None):
@@ -609,27 +638,35 @@ def delete_spreadsheet(ether_url, name):
 	:param name: name of the spreadsheet (last part of URL)
 	:return: void
 	"""
-	try:
-		r = requests.delete(ether_url + "_/" + name)
-	except:
-		pass
+
+	ether_command = "curl --netrc -X DELETE " + ether_url + "_/" + name
+	del_proc = subprocess.Popen(ether_command,shell=True)
+
+	(stdout, stderr) = del_proc.communicate()
+
+	return stdout, stderr
+
 
 def sheet_exists(ether_path, name):
 	return len(get_socialcalc(ether_path,name)) > 0
 
 
 def get_socialcalc(ether_path, name):
-	try:
-		r = requests.get(ether_path + '_/' + name)
-	except:
-		return ""
-	return r.text
+	command = "curl --netrc -X GET " + ether_path + "_/" + name
+	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+	(stdout, stderr) = proc.communicate()
+	return stdout.decode("utf8")
 
 
 def get_timestamps(ether_path):
-	r = requests.get(ether_path + "_roomtimes")
-	times = r.json()
-	return {room.replace("timestamp-", ""): times[room] for room in times}
+	command = "curl --netrc -X GET " + ether_path + "_roomtimes"
+	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+	(stdout, stderr) = proc.communicate()
+	times = json.loads(stdout)
+	output = {}
+	for room in times:
+		output[room.replace("timestamp-","")] = times[room]
+	return output
 
 
 if __name__  == "__main__":
