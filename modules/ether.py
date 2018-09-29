@@ -220,21 +220,14 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 	for alias in aliases[closing_element][-1]:
 		stack_len = len(last_start[alias])
 
-		with open('tmp','a') as f:
-			f.write("\nFound element " + closing_element + " at " + str(row_num) + "\n")
-			f.write(repr(last_value) + "\n")
-			f.write(repr(last_start) + "\n")
-			f.write(alias + "\n")
-			f.write(repr(aliases[closing_element]) + "\n")
-			f.write(repr(last_start[alias]) + "\n")
-			f.flush()
-
 		if stack_len > 0 and last_start[alias][-1] < row_num - 1:
 			span_string = ":rowspan:" + str(row_num - last_start[alias][-1])
 		else:
 			span_string = ""
 
 		flushed += "cell:" + colmap[alias][stack_len - 1] + str(last_start[alias][-1]) + ":t:" + last_value[alias][-1]+":f:1:tvf:1"+span_string + "\n"  # Use t for tvf to leave links on
+
+		# pop the stack since we've closed a tag
 		last_value[alias].pop()
 		last_start[alias].pop()
 		aliases[closing_element].pop()
