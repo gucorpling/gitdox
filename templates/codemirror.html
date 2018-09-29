@@ -96,6 +96,7 @@
       "figure",
       "list",
       "p",
+	  "table",
       "quote",
       "s",
       "head",
@@ -247,6 +248,34 @@
       "list",
       "s",
       "sp"
+    ]
+  },
+    "table": {
+    "attrs": {
+      "rend": null,
+	  "rows": null,
+	  "cols": null
+    },
+    "children": [
+      "row",
+	  "head"
+    ]
+  },
+      "row": {
+    "attrs": {
+      "n": null
+    },
+    "children": [
+      "cell"
+    ]
+  },
+      "cell": {
+    "attrs": {
+      "n": null,
+      "role": ["label"]
+    },
+    "children": [
+      "s"
     ]
   },
   "list": {
@@ -404,6 +433,11 @@ $handle.addEventListener("mousedown", function (e) {
 	  editor.on('change', updateTextArea);
 	  
 	  delete CodeMirror.keyMap.emacsy["Alt-F"]; delete CodeMirror.keyMap.emacsy["Alt-D"];
+
+	    val = document.getElementById('code').value.replace(/&(?!amp;)/g,'&amp;');
+        $('#code').val(val);
+        editor.getDoc().setValue(val);
+
 
 
     </script>
