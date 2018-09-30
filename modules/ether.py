@@ -19,6 +19,7 @@ from configobj import ConfigObj
 from ast import literal_eval
 import json
 import cgi
+import requests
 from xml.sax.saxutils import escape
 
 __version__ = "2.0.0"
@@ -373,10 +374,13 @@ Content-type: text/plain; charset=UTF-8
 
 
 def ether_to_csv(ether_path, name):
-	command = "curl --netrc -X GET " + ether_path + "_/" + name + "/csv/"
-	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-	(stdout, stderr) = proc.communicate()
-	return stdout.decode("utf8")
+	try:
+		r = requests.get(ether_path + "_/" + name + "/csv/")
+	except:
+		return ""
+
+	return r.text
+
 
 def dedupe_properly_nested_tags(sgml):
 	is_open = {}
@@ -680,13 +684,10 @@ def delete_spreadsheet(ether_url, name):
 	:param name: name of the spreadsheet (last part of URL)
 	:return: void
 	"""
-
-	ether_command = "curl --netrc -X DELETE " + ether_url + "_/" + name
-	del_proc = subprocess.Popen(ether_command,shell=True)
-
-	(stdout, stderr) = del_proc.communicate()
-
-	return stdout, stderr
+	try:
+		r = requests.delete(ether_url + "_/" + name)
+	except:
+		pass
 
 
 def sheet_exists(ether_path, name):
@@ -698,6 +699,7 @@ def get_socialcalc(ether_path, name):
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
 	return stdout.decode("utf8")
+
 
 
 def get_timestamps(ether_path):
