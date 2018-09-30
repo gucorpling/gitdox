@@ -378,6 +378,29 @@ def ether_to_csv(ether_path, name):
 	(stdout, stderr) = proc.communicate()
 	return stdout.decode("utf8")
 
+def dedupe_properly_nested_tags(sgml):
+	is_open = {}
+
+	output = sgml.split("\n")
+
+	for i, line in enumerate(sgml.split("\n")):
+		if (not line.startswith("<")
+			or line.startswith("<?")
+			or line.endswith("/>")
+			or line.startswith("<meta")
+			or line.startswith("</meta")):
+			continue
+
+		if line.startswith("</"):
+			element = re.match("</([^>]+)>", line).groups(0)[0]
+			# store line at which we began
+			is_open[element] = i
+		else:
+			element = re.match("<([^ >]+)[ >]", line).groups(0)[0]
+
+
+
+	return sgml
 
 def ether_to_sgml(ether, doc_id,config=None):
 	"""
@@ -392,13 +415,15 @@ def ether_to_sgml(ether, doc_id,config=None):
 	else:
 		config = ExportConfig(config=config)
 
+	# mapping from col header (meaningful string) to the col letter
 	colmap = {}
+	# list of 3-tuples of parsed cells: (col, row, contents)
 	cells = []
 
 	if isinstance(ether,unicode):
 		ether = ether.encode("utf8")
 
-
+	# parse cell contents into cells
 	for line in ether.splitlines():
 		parsed_cell = re.match(r'cell:([A-Z]+)(\d+):(.*)$', line)
 		if parsed_cell is not None:
@@ -423,22 +448,37 @@ def ether_to_sgml(ether, doc_id,config=None):
 	sec_element_checklist = []
 	row = 1
 
+	# added to support duplicate columns
+	namecount = defaultdict(int)
+
 	close_tags = defaultdict(list)
 	for cell in cells:
 		if cell[1] == 1:  # Header row
 			colname = cell[2]['t'].replace("\\c",":")
-			if colname in config.aliases:
-				colmap[cell[0]] = config.aliases[colname]
+
+			# if we've already seen a tag of this name, prepare to make it unique
+			namecount[colname] += 1
+			if namecount[colname] > 1:
+				dupe_suffix = "__" + str(namecount[colname]) + "__"
 			else:
-				colmap[cell[0]] = colname
+				dupe_suffix = ""
+
+			# if an attr is present, be sure to place the dupe suffix before the attr
+			if colname in config.aliases:
+				alias = config.aliases[colname]
+				if "@" in alias:
+					unique_colname = alias.replace("@", dupe_suffix + "@")
+			else:
+				unique_colname = colname + dupe_suffix
+			colmap[cell[0]] = unique_colname
+
 			# Make sure that everything that should be exported has some priority
-			if colname not in config.priorities and config.export_all:
-				if not colname.lower().startswith("ignore:"):  # Never export columns prefixed with "ignore:"
-					if "@" in colname:
-						elem = colname.split("@",1)[0]
-					else:
-						elem = colname
+			if unique_colname not in config.priorities and config.export_all:
+				if not unique_colname.lower().startswith("ignore:"):
+					elem = unique_colname.split("@",1)[0]
 					config.priorities.append(elem)
+			with open('tmp','a') as f:
+				f.write(repr(colmap) + "\n" + repr(config.priorities) + "\n\n")
 		else:
 			col = cell[0]
 			row = cell[1]
@@ -576,6 +616,8 @@ def ether_to_sgml(ether, doc_id,config=None):
 		output = template.replace("%%body%%",output.strip())
 
 	output = re.sub("%%[^%]+%%", "none", output)
+
+	output = dedupe_properly_nested_tags(output)
 
 	return output
 
