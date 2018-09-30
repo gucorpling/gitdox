@@ -3,7 +3,11 @@
 	border-radius: 4px;
 	font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;
 	background-color: hsla(40,53%,100%,0.30);
-  width: 100%;
+	width: 100%;
+}
+
+#doctable input[type=text] {
+	width: 95%;
 }
 
 h1, h2{font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;-webkit-font-smoothing: subpixel-antialiased;}
