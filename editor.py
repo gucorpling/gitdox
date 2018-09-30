@@ -231,7 +231,7 @@ def load_page(user,admin,theform):
 					old_socialcalc = get_socialcalc(ether_url, old_sheet_name)
 					out, err = make_spreadsheet(old_socialcalc, ether_url + "_/gd_" + corpus + "_" + docname, "socialcalc")
 					if out == "OK":
-						out, err = delete_spreadsheet(ether_url,old_sheet_name)
+						delete_spreadsheet(ether_url,old_sheet_name)
 					else:
 						mymsg += "out was: " + out + " err was" + err
 

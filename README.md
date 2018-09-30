@@ -21,12 +21,14 @@ hope to provide a stable release soon.
 First, [install Docker](https://docs.docker.com/install/). You may be able to
 install it using your platform's package manager.
 
+(**Note: if your machine has Apache running, you should stop it first by running `sudo service apache2 stop`.**)
+
 ```bash
-docker run -dit --restart unless-stopped --name gitdox-dev -p 5000:80 gucorpling/gitdox:dev
+docker run -dit --restart unless-stopped --name gitdox-dev -p 80:80 gucorpling/gitdox:dev
 ```
 
 GitDox should now be running the docker container you've set up, and you may
-visit `http://localhost:5000` on your machine to verify that it works. GitDox should
+visit `http://localhost` on your machine to verify that it works. GitDox should
 now always be running on your machine, even if you reboot it. If for some reason
 you need to stop it manually, you may do so:
 
@@ -54,7 +56,7 @@ to have your GitDox folders live in your host machine's filesystem:
 ```bash
 sudo git clone https://github.com/gucorpling/gitdox /opt/gitdox
 sudo chown -R www-data:www-data /opt/gitdox
-docker run -dit --restart unless-stopped --name gitdox -v /opt/gitdox:/var/www/html -p 5000:80 gucorpling/gitdox:dev gitdox
+docker run -dit --restart unless-stopped --name gitdox -v /opt/gitdox:/var/www/html -p 80:80 gucorpling/gitdox:dev gitdox
 ```
 
 These commands install GitDox under `/opt` in your host machine and allows you to modify them just as you would modify any other file on your machine. But in the Docker command, with the `-v` flag we tell it to mount this folder as `/var/www/html` in the container's filesystem. The files are shared bidirectionally: changes made in the container will flow to the host, and vice versa.
