@@ -217,6 +217,7 @@ def flush_open(annos, row_num, colmap):
 
 def flush_close(closing_element, last_value, last_start, row_num, colmap, aliases):
 	flushed = ""
+
 	for alias in aliases[closing_element][-1]:
 		stack_len = len(last_start[alias])
 
@@ -235,7 +236,8 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 		# pop the stack since we've closed a tag
 		last_value[alias].pop()
 		last_start[alias].pop()
-		aliases[closing_element].pop()
+
+	aliases[closing_element].pop()
 	return flushed
 
 
