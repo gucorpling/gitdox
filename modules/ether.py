@@ -18,6 +18,7 @@ from os.path import isfile, join
 from configobj import ConfigObj
 from ast import literal_eval
 import json
+import copy
 import cgi
 import requests
 from xml.sax.saxutils import escape
@@ -382,29 +383,96 @@ def ether_to_csv(ether_path, name):
 	return r.text
 
 
-def dedupe_properly_nested_tags(sgml):
-	is_open = {}
+def strip_unique_identifier(tag):
+	"""Given an SGML closing or opening tag, replace anything that looks
+	like __\d+__ on the end of the tag name, assuming that we were the
+	ones who added it."""
 
-	output = sgml.split("\n")
+	try:
+		tag_name = re.match("^</?([^ >]+)", tag).groups(0)[0]
+	except AttributeError:
+		return tag
 
-	for i, line in enumerate(sgml.split("\n")):
-		if (not line.startswith("<")
-			or line.startswith("<?")
-			or line.endswith("/>")
-			or line.startswith("<meta")
-			or line.startswith("</meta")):
+	orig_tag_name = re.sub("__\d+__$", "", tag_name)
+	tag = tag.replace("<" + tag_name, "<" + orig_tag_name)
+	tag = tag.replace("</" + tag_name, "</" + orig_tag_name)
+	tag = tag.replace(tag_name + "=" + '"' + orig_tag_name + '"',
+					  orig_tag_name + "=" + '"' + orig_tag_name + '"')
+	return tag
+
+def deunique_should_skip_line(line):
+	return (not line.startswith("<")      # tokens
+			or line.startswith("<?")      # xml instrs
+			or line.endswith("/>")        # unary tags
+			or line.startswith("<meta")   # meta
+			or line.startswith("</meta"))
+
+def reverse_adjacent_closing_tags(lines):
+	"""Finds sublists like ['</e>', '</e__2__>'] and replaces them with
+	  ['</e__2__>', '</e>']"""
+	def swap_run(l, start, end):
+		l[start:end] = l[start:end][::-1]
+
+	run_start = None
+	for i, line in enumerate(lines):
+		if line.startswith("</"):
+			if run_start is not None:
+				deuniqued_tag = strip_unique_identifier(line)
+				if deuniqued_tag != lines[run_start]:
+					swap_run(lines, run_start, i)
+			else:
+				run_start = i
+		elif run_start is not None:
+			swap_run(lines, run_start, i)
+			run_start = None
+		else:
+			run_start = None
+
+	if run_start is not None:
+		swap_run(lines, run_start, i+1)
+
+	return lines
+
+def merge_adjacent_tags(lines):
+	return lines
+
+def deunique_properly_nested_tags(sgml):
+	"""Use a silly n^2 algorithm to detect properly nested tags and strip
+	them of their unique identifiers. Probably an n algorithm to do this."""
+	lines = sgml.split("\n")
+	lines = reverse_adjacent_closing_tags(lines)
+
+	output = copy.copy(lines)
+
+	for i, line in enumerate(lines):
+		if deunique_should_skip_line(line) or line.startswith("</"):
 			continue
 
-		if line.startswith("</"):
-			element = re.match("</([^>]+)>", line).groups(0)[0]
-			# store line at which we began
-			is_open[element] = i
-		else:
-			element = re.match("<([^ >]+)[ >]", line).groups(0)[0]
+		# if we've gotten this far, we have an opening tag--store the tag name
+		open_element = re.match("<([^ >]+)[ >]", line).groups(0)[0]
+		open_counts = defaultdict(int)
 
+		for j, line2 in enumerate(lines[i:]):
+			if deunique_should_skip_line(line2):
+				continue
 
+			if line2.startswith("</"):
+				element = re.match("</([^>]+)>", line2).groups(0)[0]
+				open_counts[element] -= 1
+				if element == open_element:
+					break
+			else:
+				element = re.match("<([^ >]+)[ >]", line2).groups(0)[0]
+				open_counts[element] += 1
 
-	return sgml
+		# element is properly nested if no element was opened in the block that
+		# was not also closed in the block or vice versa
+		if sum(open_counts.values()) == 0:
+			output[i] = strip_unique_identifier(output[i])
+			output[i+j] = strip_unique_identifier(output[i+j])
+
+	return "\n".join(output)
+
 
 def ether_to_sgml(ether, doc_id,config=None):
 	"""
@@ -460,29 +528,41 @@ def ether_to_sgml(ether, doc_id,config=None):
 		if cell[1] == 1:  # Header row
 			colname = cell[2]['t'].replace("\\c",":")
 
+			if colname in config.aliases:
+				colname = config.aliases[colname]
+
 			# if we've already seen a tag of this name, prepare to make it unique
-			namecount[colname] += 1
-			if namecount[colname] > 1:
-				dupe_suffix = "__" + str(namecount[colname]) + "__"
+			bare_colname = colname.split("@",1)[0]
+			namecount[bare_colname] += 1
+			if namecount[bare_colname] > 1:
+				dupe_suffix = "__" + str(namecount[bare_colname]) + "__"
 			else:
 				dupe_suffix = ""
 
-			# if an attr is present, be sure to place the dupe suffix before the attr
-			if colname in config.aliases:
-				alias = config.aliases[colname]
-				if "@" in alias:
-					unique_colname = alias.replace("@", dupe_suffix + "@")
+			if "@" in colname:
+				unique_colname = colname.replace("@", dupe_suffix + "@")
 			else:
 				unique_colname = colname + dupe_suffix
+
 			colmap[cell[0]] = unique_colname
 
 			# Make sure that everything that should be exported has some priority
-			if unique_colname not in config.priorities and config.export_all:
+			if unique_colname.split("@",1)[0] not in config.priorities and config.export_all:
 				if not unique_colname.lower().startswith("ignore:"):
 					elem = unique_colname.split("@",1)[0]
 					config.priorities.append(elem)
-			with open('tmp','a') as f:
-				f.write(repr(colmap) + "\n" + repr(config.priorities) + "\n\n")
+#				if unique_colname.lower().startswith("ignore:"):
+#					pass
+#				elif dupe_suffix == "":
+#					elem = unique_colname.split("@",1)[0]
+#					config.priorities.append(elem)
+#				else:
+#					# need to put dupe__3__ ahead of dupe__2__, etc. for proper nesting
+#					elem = unique_colname.split("@",1)[0]
+#					i = config.priorities.index(bare_colname)
+#					while i < len(config.priorities) and config.priorities[i].startswith(bare_colname):
+#						i += 1
+#					config.priorities.insert(i, elem)
 		else:
 			col = cell[0]
 			row = cell[1]
@@ -621,7 +701,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 	output = re.sub("%%[^%]+%%", "none", output)
 
-	output = dedupe_properly_nested_tags(output)
+	output = deunique_properly_nested_tags(output)
 
 	return output
 
