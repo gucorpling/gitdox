@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 from gitdox_sql import *
 from ether import get_socialcalc, make_spreadsheet, exec_via_temp, get_timestamps
@@ -143,10 +143,10 @@ def validate_doc(doc_id, editor=False):
 			if re.search(rule_doc, doc_name) is None:
 				rule_applies = False
 
-		if rule_applies is True:
+		if rule_applies:
 			rule_report, rule_extra, rule_cells = apply_rule(rule, parsed_ether, meta)
 			cells += rule_cells
-			if editor is True and len(rule_extra) > 0:
+			if editor and len(rule_extra) > 0:
 				new_report = """<div class="tooltip">""" + rule_report[:-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
 			else:
 				new_report = rule_report
@@ -156,10 +156,10 @@ def validate_doc(doc_id, editor=False):
 			elif rule_domain == "meta":
 				meta_report += new_report
 
-	if editor == True:
+	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name)
 
-	if editor is True:
+	if editor:
 		full_report = ether_report + meta_report
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
