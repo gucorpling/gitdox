@@ -18,7 +18,7 @@ from os.path import isfile, join
 from configobj import ConfigObj
 from ast import literal_eval
 import json
-import copy
+from copy import copy
 import cgi
 import requests
 from xml.sax.saxutils import escape
@@ -433,16 +433,13 @@ def reverse_adjacent_closing_tags(lines):
 
 	return lines
 
-def merge_adjacent_tags(lines):
-	return lines
-
 def deunique_properly_nested_tags(sgml):
 	"""Use a silly n^2 algorithm to detect properly nested tags and strip
 	them of their unique identifiers. Probably an n algorithm to do this."""
 	lines = sgml.split("\n")
 	lines = reverse_adjacent_closing_tags(lines)
 
-	output = copy.copy(lines)
+	output = copy(lines)
 
 	for i, line in enumerate(lines):
 		if deunique_should_skip_line(line) or line.startswith("</"):
@@ -470,6 +467,8 @@ def deunique_properly_nested_tags(sgml):
 		if sum(open_counts.values()) == 0:
 			output[i] = strip_unique_identifier(output[i])
 			output[i+j] = strip_unique_identifier(output[i+j])
+
+	output = reverse_adjacent_closing_tags(output)
 
 	return "\n".join(output)
 
@@ -525,17 +524,16 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 	close_tags = defaultdict(list)
 	for cell in cells:
-		if cell[1] == 1:  # Header row
+		# Header row
+		if cell[1] == 1:
 			colname = cell[2]['t'].replace("\\c",":")
-
 			if colname in config.aliases:
 				colname = config.aliases[colname]
 
 			# if we've already seen a tag of this name, prepare to make it unique
-			bare_colname = colname.split("@",1)[0]
-			namecount[bare_colname] += 1
-			if namecount[bare_colname] > 1:
-				dupe_suffix = "__" + str(namecount[bare_colname]) + "__"
+			namecount[colname] += 1
+			if namecount[colname] > 1:
+				dupe_suffix = "__" + str(namecount[colname]) + "__"
 			else:
 				dupe_suffix = ""
 
@@ -551,18 +549,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 				if not unique_colname.lower().startswith("ignore:"):
 					elem = unique_colname.split("@",1)[0]
 					config.priorities.append(elem)
-#				if unique_colname.lower().startswith("ignore:"):
-#					pass
-#				elif dupe_suffix == "":
-#					elem = unique_colname.split("@",1)[0]
-#					config.priorities.append(elem)
-#				else:
-#					# need to put dupe__3__ ahead of dupe__2__, etc. for proper nesting
-#					elem = unique_colname.split("@",1)[0]
-#					i = config.priorities.index(bare_colname)
-#					while i < len(config.priorities) and config.priorities[i].startswith(bare_colname):
-#						i += 1
-#					config.priorities.insert(i, elem)
+		# All other rows
 		else:
 			col = cell[0]
 			row = cell[1]
@@ -570,47 +557,54 @@ def ether_to_sgml(ether, doc_id,config=None):
 				col_name = colmap[col]
 			else:
 				raise IOError("Column " + col + " not found in doc_id " + str(doc_id))
+
+			# If the column specifies an attribute name, use it, otherwise use the element's name again
 			if "@" in col_name:
 				element, attrib = col_name.split("@",1)
 			else:
 				element = col_name
 				attrib = element
 
+			# Check to see if the cell has been merged with other cells
 			if 'rowspan' in cell[2]:
 				rowspan = int(cell[2]['rowspan'])
 			else:
 				rowspan = 1
 
-			if "|" in element:  # Check for flexible element, e.g. m|w@x means 'prefer to attach x to m, else to w'
+			# Check for flexible element, e.g. m|w@x means 'prefer to attach x to m, else to w'
+			if "|" in element:
 				element, sec_element = element.split("|",1)
 			else:
 				sec_element = ""
 
+			# Move on to next cell if this is not a desired column
 			if element not in config.priorities or (element.startswith("ignore:") and config.no_ignore):  # Guaranteed to be in priorities if it should be included
-				continue  # Move on to next cell if this is not a desired column
-			if row != last_row:  # New row starting, sort previous lists for opening and closing orders
-				#close_tags[row].sort(key=lambda x: (-last_open_index[x],x))
+				continue
+
+			# New row starting from this cell, sort previous lists for opening and closing orders
+			if row != last_row:
 				close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
+
 				for element in open_tags[last_row]:
 					open_tag_order[last_row].append(element)
-				#open_tag_order[last_row].sort(key=lambda x: (open_tag_length[x],x), reverse=True)
+
 				open_tag_order[last_row].sort(key=lambda x: (-open_tag_length[x],config.priorities.index(x)))
 
 				for sec_tuple in sec_element_checklist:
 					prim_found = False
-					e_prim, e_sec, attr, val, span = sec_tuple
-					if e_prim in open_tags[last_row] and e_prim in open_tag_length:
-						if span == open_tag_length[e_prim]:
-							open_tags[last_row][e_prim].append((attr, val))
-							if e_prim not in close_tags[last_row + span]:
-								close_tags[last_row+span-1].append(e_prim)
+					prim_elt, sec_elt, attr, val, span = sec_tuple
+					if prim_elt in open_tags[last_row] and prim_elt in open_tag_length:
+						if span == open_tag_length[prim_elt]:
+							open_tags[last_row][prim_elt].append((attr, val))
+							if prim_elt not in close_tags[last_row + span]:
+								close_tags[last_row+span-1].append(prim_elt)
 							prim_found = True
 					if not prim_found:
-						if e_sec in open_tags[last_row] and e_sec in open_tag_length:
-							if span == open_tag_length[e_sec]:
-								open_tags[last_row][e_sec].append((attr, val))
-								if e_sec not in close_tags[last_row + span]:
-									close_tags[last_row + span - 1].append(e_sec)
+						if sec_elt in open_tags[last_row] and sec_elt in open_tag_length:
+							if span == open_tag_length[sec_elt]:
+								open_tags[last_row][sec_elt].append((attr, val))
+								if sec_elt not in close_tags[last_row + span]:
+									close_tags[last_row + span - 1].append(sec_elt)
 				sec_element_checklist = []  # Purge sec_elements
 
 				last_row = row
@@ -653,9 +647,11 @@ def ether_to_sgml(ether, doc_id,config=None):
 					close_row = row + rowspan
 				else:
 					close_row = row + 1
-				if element not in close_tags[close_row]:
-					close_tags[close_row].append(element)
+				# this introduces too many close tags for elts that have more than one attr.
+				# We take care of this later with close_tag_debt
+				close_tags[close_row].append(element)
 				open_tag_length[element] = int(close_row) - int(last_open_index[element])
+
 
 	# Sort last row tags
 	#close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
@@ -668,22 +664,25 @@ def ether_to_sgml(ether, doc_id,config=None):
 	#output = build_meta_tag(doc_id)
 	template = fill_meta_template(doc_id,config.template)
 	output = ""
+	close_tag_debt = defaultdict(int)
 
-	for r in xrange(2,len(toks)+3):
-		if r == 1970:
-			a=4
+	for r in xrange(2,len(toks)+5):
 		for element in close_tags[r]:
-			if element not in config.milestones:
-				output += '</' + element + '>\n'
-
-		if r == len(toks)+2:
-			break
+			if element != "" and element not in config.milestones:
+				if close_tag_debt[element] > 0:
+					close_tag_debt[element] -= 1
+				else:
+					output += '</' + element + '>\n'
 
 		for element in open_tag_order[r]:
 			tag = '<' + element
+			attr_count = 0
 			for attrib, value in open_tags[r][element]:
 				if attrib != "":
 					tag += ' ' + attrib + '="' + value + '"'
+					attr_count += 1
+					if attr_count > 1:
+						close_tag_debt[element] += 1
 			if element in config.milestones:
 				tag += '/>\n'
 			else:
@@ -701,6 +700,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 	output = re.sub("%%[^%]+%%", "none", output)
 
+	# fix tags that look like elt__2__ if it still gives correct sgml
 	output = deunique_properly_nested_tags(output)
 
 	return output
