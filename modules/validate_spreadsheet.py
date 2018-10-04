@@ -17,6 +17,9 @@ class Cell:
 		self.content = content
 		self.span = span
 
+	def __repr__(self):
+		return "<Cell (" + str((self.col, self.row, self.header, self.content, self.span)) + ")>"
+
 
 def highlight_cells(cells, ether_url, ether_doc_name):
 	old_ether = get_socialcalc(ether_url, ether_doc_name)
@@ -146,7 +149,7 @@ def validate_doc(doc_id, editor=False):
 		if rule_applies:
 			rule_report, rule_extra, rule_cells = apply_rule(rule, parsed_ether, meta)
 			cells += rule_cells
-			if editor and len(rule_extra) > 0:
+			if editor is True and len(rule_extra) > 0:
 				new_report = """<div class="tooltip">""" + rule_report[:-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
 			else:
 				new_report = rule_report
@@ -234,9 +237,7 @@ def apply_rule(rule, parsed_ether, meta):
 		return report, extra, cells
 
 	if domain == "ether":
-
 		if operator in ["~", "|", "exists"]:
-
 			# find col letter corresponding to col name
 			if name in parsed_ether:
 				col = parsed_ether[name]
@@ -386,7 +387,7 @@ def validate_doc_xml(doc_id, schema, editor=False):
 				rule_applies = False
 		if rule_applies is True:
 			rule_report, rule_extra = apply_meta_rule(rule, meta)
-			if editor is True and len(rule_extra) > 0:
+			if editor and len(rule_extra) > 0:
 				meta_report += """<div class="tooltip">""" + rule_report[
 															 :-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
 			else:
