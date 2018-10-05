@@ -629,7 +629,10 @@ def get_socialcalc(ether_path, name):
 def get_timestamps(ether_path):
 	r = requests.get(ether_path + "_roomtimes")
 	times = r.json()
-	return {room.replace("timestamp-", ""): times[room] for room in times}
+	output = {}
+	for room in times:
+		output[room.replace("timestamp-", "")] = times[room]
+	return output
 
 
 if __name__  == "__main__":
