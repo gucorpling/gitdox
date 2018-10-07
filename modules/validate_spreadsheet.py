@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 from gitdox_sql import *
 from ether import get_socialcalc, make_spreadsheet, exec_via_temp, get_timestamps
@@ -16,6 +16,9 @@ class Cell:
 		self.header = ""
 		self.content = content
 		self.span = span
+
+	def __repr__(self):
+		return "<Cell (" + str((self.col, self.row, self.header, self.content, self.span)) + ")>"
 
 
 def highlight_cells(cells, ether_url, ether_doc_name):
@@ -143,7 +146,7 @@ def validate_doc(doc_id, editor=False):
 			if re.search(rule_doc, doc_name) is None:
 				rule_applies = False
 
-		if rule_applies is True:
+		if rule_applies:
 			rule_report, rule_extra, rule_cells = apply_rule(rule, parsed_ether, meta)
 			cells += rule_cells
 			if editor is True and len(rule_extra) > 0:
@@ -156,10 +159,10 @@ def validate_doc(doc_id, editor=False):
 			elif rule_domain == "meta":
 				meta_report += new_report
 
-	if editor == True:
+	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name)
 
-	if editor is True:
+	if editor:
 		full_report = ether_report + meta_report
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
@@ -234,9 +237,7 @@ def apply_rule(rule, parsed_ether, meta):
 		return report, extra, cells
 
 	if domain == "ether":
-
 		if operator in ["~", "|", "exists"]:
-
 			# find col letter corresponding to col name
 			if name in parsed_ether:
 				col = parsed_ether[name]
@@ -386,7 +387,7 @@ def validate_doc_xml(doc_id, schema, editor=False):
 				rule_applies = False
 		if rule_applies is True:
 			rule_report, rule_extra = apply_meta_rule(rule, meta)
-			if editor is True and len(rule_extra) > 0:
+			if editor and len(rule_extra) > 0:
 				meta_report += """<div class="tooltip">""" + rule_report[
 															 :-5] + """ <i class="fa fa-ellipsis-h"> </i>""" + "<span>" + rule_extra + "</span>" + "</div>"
 			else:
