@@ -420,6 +420,7 @@ def reverse_adjacent_closing_tags(lines):
 				deuniqued_tag = strip_unique_identifier(line)
 				if deuniqued_tag != lines[run_start]:
 					swap_run(lines, run_start, i)
+					run_start = None
 			else:
 				run_start = i
 		elif run_start is not None:
