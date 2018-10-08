@@ -12,10 +12,10 @@ gitdox_root = os.path.dirname(os.path.realpath(__file__))
 # to use password authentication, use a netrc file called .netrc in the project root
 try:
 	ether_url = ConfigObj(gitdox_root + os.sep + "users" + os.sep + "config.ini")["ether_url"]
+	if not ether_url.endswith(os.sep):
+		ether_url += os.sep
 except KeyError:
 	ether_url = ""
-if not ether_url.endswith(os.sep):
-	ether_url += os.sep
 
 def get_menu():
 	config = ConfigObj(prefix + "users" + os.sep + "config.ini")
