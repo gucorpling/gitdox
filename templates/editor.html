@@ -92,13 +92,13 @@
                                     <td rowspan="6" class="report_container">
                                         <div id="validation_report">
                                         </div>
-	                                  </td>
+                                    </td>
                                 </tr>
                                 <tr>
-	                                  <td>Git Repo: </td>
-	                                  <td><input type="text" id="edit_filename" name="edit_filename" value="**repo**" defaultValue="**repo**" onblur="validate_repo();">
-		                                    <div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
-	                                  </td>
+                                    <td>Git Repo: </td>
+                                    <td><input type="text" id="edit_filename" name="edit_filename" value="**repo**" defaultValue="**repo**" onblur="validate_repo();">
+                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+                                    </td>
                                 </tr>
                                 <tr><td>XML Schema:</td><td>**edit_schema**</td></tr>
                                 <tr><td>Assigned to:</td><td>**edit_assignee**</td></tr>
@@ -113,27 +113,70 @@
                         <h3>Metadata</h3>
                         **metadata**
 
-                        <div class="button" onClick="openPopup('popupPage.html')"><i class="fa fa-info-circle"> </i> Add document meta</div>
-
-                        <input TYPE="hidden" NAME="metakey">
+                        <input type="hidden" name="metakey">
                         <input type="hidden" name="metavalue">
                         <br/><br/>
                         **corpus_metadata**
 
-                        <div class="button corpusbutton" onClick="openPopup('popupPageCorpus.html')"><i class="fa fa-info-circle"> </i> Add corpus meta</div>
+                        <div class="button" onClick="openPopup('popupPage.html')">
+                            <i class="fa fa-info-circle"></i>
+                            Add Document Metadata
+                        </div>
 
-                        <input TYPE="hidden" NAME="corpus_metakey">
+                        <input type="hidden" name="corpus_metakey">
                         <input type="hidden" name="corpus_metavalue">
+                        <br/><br/>
 
+                        <div class="button corpusbutton" onClick="openPopup('popupPageCorpus.html')"><i class="fa fa-info-circle"> </i> Add Corpus Metadata</div>
 
                     </form>
 
+                    <div style="width:400px;padding-top:24px;">
+                        <form id="form_clone" action="editor.py">
+                            <input type="hidden" name="id" id="id" value="**id**"/>
+                            <select id="source_doc" name="source_doc" style="width:100%;" **source_doc_attrs**>
+                                <option value="">-- Select document --</option>
+                                **existing_documents**
+                            </select>
+                            <br/>
+                            <button type="button" id="clone_doc"
+                                    onclick="document.getElementById('form_clone').submit();"
+                                    class="button disabled" disabled="disabled" style="width:100%;">
+                                <i class="fa fa-copy"></i>
+                                Copy Document Metadata
+                            </button>
+                        </form>
+                        <script>
+                         // disable clone button if no doc is selected
+                         window.addEventListener("load", function() {
+                             var sourceDoc = document.getElementById("source_doc");
+                             var cloneDoc = document.getElementById("clone_doc");
+                             if (sourceDoc.value === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                         document.getElementById("source_doc").addEventListener("input", function(event) {
+                             var cloneDoc = document.getElementById("clone_doc");
+                             var v = event.target.value;
+                             if (v === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                        </script>
+                    </div>
 
                 </article>
-
-
             </div>
-
         </div>
     </div>
 </body>
