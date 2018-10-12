@@ -9,10 +9,6 @@ import cgi
 import json
 from pprint import pformat
 
-def logln(s,fname='tmp'):
-	with open(fname,'a') as f:
-		f.write(s + "\n")
-
 class Cell:
 	def __init__(self, col, row, content, span):
 		self.col = col
@@ -150,8 +146,6 @@ def validate_doc(doc_id, editor=False):
 			if re.search(rule_doc, doc_name) is None:
 				rule_applies = False
 
-		logln(repr(rule))
-		logln("Rule applies: " + str(rule_applies))
 		if rule_applies:
 			rule_report, rule_extra, rule_cells = apply_rule(rule, parsed_ether, meta)
 			cells += rule_cells
@@ -241,8 +235,6 @@ def apply_rule(rule, parsed_ether, meta):
 	if name is None:
 		return report, extra, cells
 
-	logln(pformat(dict(parsed_ether)))
-
 	# list of letters with col name
 	col_letters = colmap[name]
 
@@ -320,7 +312,6 @@ def apply_rule(rule, parsed_ether, meta):
 						if row not in all_rows:
 							all_rows.append(row)
 
-			import cgitb; cgitb.enable()
 			for row in all_rows:
 				# check to see if all cells in rhs are contained within cells on lhs
 				if operator == ">":
