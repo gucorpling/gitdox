@@ -342,10 +342,8 @@ def apply_rule(rule, parsed_ether, meta):
 									   + " lacks a corresponding value in one of these columns: "
 									   + ", ".join(name_letters) + "<br/>")
 
-					if operator == "==":
-						if row == "1":
-							continue
-
+					# check for content equivalence
+					if operator == "==" and row != "1":
 						for i in range(min(len(name_tuples[row]), len(arg_tuples[row]))):
 							name_letter, name_content = name_tuples[row][i]
 							arg_letter, arg_content = arg_tuples[row][i]
