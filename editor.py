@@ -162,11 +162,11 @@ def load_page(user,admin,theform):
 
 			# cloning metadata from an existing doc into a new doc
 			if theform.getvalue('source_doc'):
-				existing_meta = get_doc_meta(theform.getvalue('source_doc'))
+				source_meta = get_doc_meta(theform.getvalue('source_doc'))
 				if doc_id > max_id:
 					create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
 					max_id = doc_id
-				for meta in existing_meta:
+				for meta in source_meta:
 					m_key, m_val = meta[2:4]
 					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
 
@@ -191,11 +191,15 @@ def load_page(user,admin,theform):
 				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
 				mode = "ether"
 
+			cgitb.enable()
 			# handle copying metadata
 			if theform.getvalue('source_doc'):
-				existing_meta = get_doc_meta(theform.getvalue('source_doc'))
-				for meta in existing_meta:
-					m_key, m_val = meta[2:4]
+				source_meta = get_doc_meta(theform.getvalue('source_doc'))
+				existing_meta = get_doc_meta(doc_id)
+				# don't overwrite existing keys
+				meta_to_write = [x for x in source_meta for y in existing_meta if x[2] != y[2]]
+				for meta in meta_to_add:
+					m_key, m_val = meta[2], meta[3]
 					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
 
 
