@@ -7,7 +7,11 @@ from collections import defaultdict
 import re
 import cgi
 import json
+from pprint import pformat
 
+def logln(s,fname='tmp'):
+	with open(fname,'a') as f:
+		f.write(s + "\n")
 
 class Cell:
 	def __init__(self, col, row, content, span):
@@ -18,7 +22,7 @@ class Cell:
 		self.span = span
 
 	def __repr__(self):
-		return "<Cell (" + str((self.col, self.row, self.header, self.content, self.span)) + ")>"
+		return "<Cell (" + repr((self.col, self.row, self.header, self.content, self.span)) + ")>"
 
 
 def highlight_cells(cells, ether_url, ether_doc_name):
@@ -146,6 +150,8 @@ def validate_doc(doc_id, editor=False):
 			if re.search(rule_doc, doc_name) is None:
 				rule_applies = False
 
+		logln(repr(rule))
+		logln("Rule applies: " + str(rule_applies))
 		if rule_applies:
 			rule_report, rule_extra, rule_cells = apply_rule(rule, parsed_ether, meta)
 			cells += rule_cells
@@ -183,8 +189,8 @@ def parse_ether(ether, doc, corpus):
 
 	# find col letter corresponding to col name
 	parsed = defaultdict(list)
+	colmap = defaultdict(list)
 	rev_colmap = {}
-	colmap = {}
 	all_cells = []
 	for line in ether_lines:
 		if line.startswith("cell:"):  # Cell row
@@ -202,22 +208,19 @@ def parse_ether(ether, doc, corpus):
 				#	else:
 				#		cell_col += c
 				cell_content = parts[3].replace("\\c",":")
-				if "rowspan:" in line:
-					cell_span = parts[-1]
-				else:
-					cell_span = "1"
-				if cell_row == "1":  # Header row
-					colmap[cell_content] = cell_col
+				cell_span = parts[-1] if "rowspan:" in line else "1"
+
+				# record col name
+				if cell_row == "1":
+					colmap[cell_content].append(cell_col)
 					rev_colmap[cell_col] = cell_content
-				all_cells.append(Cell(cell_col,cell_row,cell_content,cell_span))
+
+				cell = Cell(cell_col, cell_row, cell_content, cell_span)
+				parsed[cell_col].append(cell)
+				all_cells.append(cell)
 
 	for cell in all_cells:
-		try:
-			cell.header = rev_colmap[cell.col]
-		except KeyError:
-			raise KeyError("KeyError: " + cell.col + "; Document: " + corpus + " :: " + doc + "")
-
-		parsed[cell.header].append(cell)
+		cell.header = rev_colmap[cell.col]
 
 	parsed["__colmap__"] = colmap  # Save colmap for apply_rule
 	return parsed
@@ -233,91 +236,130 @@ def apply_rule(rule, parsed_ether, meta):
 	extra = ''
 	cells = []
 
+	colmap = parsed_ether['__colmap__'] # name -> list of col letters
+
 	if name is None:
 		return report, extra, cells
 
+	logln(pformat(dict(parsed_ether)))
+
+	# list of letters with col name
+	col_letters = colmap[name]
+
 	if domain == "ether":
-		if operator in ["~", "|", "exists"]:
-			# find col letter corresponding to col name
-			if name in parsed_ether:
-				col = parsed_ether[name]
-			else:
-				if operator in ["|","exists"]:
-					report += "Column named " + name + " not found<br/>"
+		# check to see if column exists
+		if operator == "exists":
+			if len(col_letters) == 0:
+				report += "Column named " + name + " not found<br/>"
 				return report, extra, cells
 
-			for cell in col:
-				if cell.row != "1":
-					if operator == "|":  # rowspan
-						if argument == "1":
-							if cell.span != "1":
-								report += "Cell " + cell.col + cell.row + ": row span is not 1<br/>"
-								cells.append(cell.col + cell.row)
-						else:
-							if cell.span != "" and cell.span is not None:
-								report += "Cell " + cell.col + cell.row + ": row span is not " + argument + "<br/>"
-								cells.append(cell.col + cell.row)
+		# check to see that all cells are of a certain row span
+		elif operator == "|":
+			# do any exist?
+			if len(col_letters) == 0:
+				report += "Column named " + name + " not found<br/>"
+				return report, extra, cells
 
-					elif operator == "~":  # regex
-						match = re.search(argument, cell.content)
-						if match is None:
-							report += "Cell " + cell.col + cell.row + ": content does not match pattern <br/>"
-							extra += "Cell " + cell.col + cell.row + ":<br/>" + "Content: " + cell.content + "<br/>" + "Pattern: " + argument + "<br/>"
+			for letter in col_letters:
+				for cell in parsed_ether[letter]:
+					if cell.row == "1":
+						continue
+
+					if argument == "1":
+						if cell.span != "1":
+							report += "Cell " + cell.col + cell.row + ": row span is not 1<br/>"
+							cells.append(cell.col + cell.row)
+					else:
+						if cell.span != "" and cell.span is not None:
+							report += "Cell " + cell.col + cell.row + ": row span is not " + argument + "<br/>"
 							cells.append(cell.col + cell.row)
 
-		elif operator in ["=", ">","=="]:  # care about two cols: name and argument
+		elif operator == "~":
+			for letter in col_letters:
+				for cell in parsed_ether[letter]:
+					if cell.row == "1":
+						continue
+					match = re.search(argument, cell.content)
+					if match is None:
+						report += "Cell " + cell.col + cell.row + ": content does not match pattern <br/>"
+						extra += "Cell " + cell.col + cell.row + ":<br/>" + "Content: " + cell.content + "<br/>" + "Pattern: " + argument + "<br/>"
+						cells.append(cell.col + cell.row)
 
-			# find col letters corresponding to col names
-			name_letter = parsed_ether["__colmap__"][name] if name in parsed_ether["__colmap__"] else None
-			arg_letter = parsed_ether["__colmap__"][argument] if argument in parsed_ether["__colmap__"] else None
-			if name_letter is None:
+		elif operator in ["=", ">", "=="]:
+			name_letters = colmap[name]
+			arg_letters = colmap[argument]
+
+			if len(name_letters) == 0:
 				if operator != "==":
 					report += "Column named " + name + " not found<br/>"
 				return report, extra, cells
-			if arg_letter is None:
+			if len(arg_letters) == 0:
 				if operator != "==":
 					report += "Column named " + argument + " not found<br/>"
 				return report, extra, cells
 
-			name_boundaries = []
-			arg_boundaries = []
-			name_content = {}
-			arg_content = {}
-			name_filled = []
-			arg_filled = []
+			name_tuples = defaultdict(list)
+			arg_tuples = defaultdict(list)
+			start_rows = defaultdict(list)
+			all_rows = []
 
-			# find boundary rows
-			for cell in parsed_ether[name]:
-				name_boundaries.append(cell.row)
-				name_content[cell.row] = cell.content
-				for i in range(int(cell.row), int(cell.row) + int(cell.span)):
-					name_filled.append(str(i))
-			for cell in parsed_ether[argument]:
-				arg_boundaries.append(cell.row)
-				arg_content[cell.row] = cell.content
-				for i in range(int(cell.row), int(cell.row) + int(cell.span)):
-					arg_filled.append(str(i))
+			for letter in name_letters:
+				for cell in parsed_ether[letter]:
+					start_rows[letter].append(cell.row)
+					for i in range(int(cell.span) or 1):
+						row = str(int(cell.row) + i)
+						name_tuples[row].append((letter, cell.content))
+						all_rows.append(row)
 
-			if operator == "==":
-				for row in name_content:
-					if row in arg_content:
-						if arg_content[row] != name_content[row]:
-							cells.append(arg_letter + row)
-				for boundary in arg_boundaries:
-					if boundary not in name_boundaries:
-						cells.append(arg_letter + boundary)
-			else:
-				for boundary in name_boundaries:
-					if boundary not in arg_boundaries:
-						if boundary in arg_filled:
-							report += "Span break on line " + boundary + " in column " + name + " but not " \
-									  + argument + "<br/>"
-							cells.append(name_letter + boundary)
-				if operator == "=":
-					for boundary in arg_boundaries:
-						if boundary not in name_boundaries:
-							if boundary in name_filled:
-								cells.append(arg_letter + boundary)
+			for letter in arg_letters:
+				for cell in parsed_ether[letter]:
+					start_rows[letter].append(cell.row)
+					for i in range(int(cell.span) or 1):
+						row = str(int(cell.row) + i)
+						arg_tuples[row].append((letter, cell.content))
+						if row not in all_rows:
+							all_rows.append(row)
+
+			import cgitb; cgitb.enable()
+			for row in all_rows:
+				# check to see if all cells in rhs are contained within cells on lhs
+				if operator == ">":
+					if row in arg_tuples and row not in name_tuples:
+						for letter, _ in arg_tuples[row]:
+							cells.append(letter + row)
+							report += ("Cell " + letter + row
+									   + " must appear in the span of a cell in one of these columns: "
+									   + ", ".join(name_letters) + "<br/>")
+
+				# operator in ["=", "=="], i.e. span equivalence and span and content equivalence
+				else:
+					name_len = len(name_tuples[row])
+					arg_len = len(arg_tuples[row])
+
+					if name_len > arg_len:
+						for letter, _ in name_tuples[row][arg_len:]:
+							cells.append(letter + row)
+							report += ("Cell " + letter + row
+									   + " lacks a corresponding value in one of these columns: "
+									   + ", ".join(arg_letters) + "<br/>")
+					elif arg_len < name_len:
+						for letter, _ in arg_tuples[row][name_len:]:
+							cells.append(letter + row)
+							report += ("Cell " + letter + row
+									   + " lacks a corresponding value in one of these columns: "
+									   + ", ".join(name_letters) + "<br/>")
+
+					if operator == "==":
+						for i in range(min(len(name_tuples[row]), len(arg_tuples[row]))):
+							name_letter, name_content = name_tuples[row][i]
+							arg_letter, arg_content = arg_tuples[row][i]
+
+							if arg_content != name_content and (row in start_rows[arg_letter] or row in start_rows[name_letter]):
+								cells.append(name_letter + row)
+								cells.append(arg_letter + row)
+								report += ("Cells " + name_letter + row
+										   + " and " + arg_letter + row
+										   + " must have equivalent content.<br/>")
 
 	elif domain == "meta":
 		meta_report, meta_extra = apply_meta_rule(rule, meta)
