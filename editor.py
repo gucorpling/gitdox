@@ -106,7 +106,7 @@ def load_page(user,admin,theform):
 			corpus = "default_corpus"
 			schema = ""
 			text_content = ""
-			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
+			# If one of the four forms is edited or we're cloning a doc, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
 			if theform.getvalue('edit_docname') and user != "demo":
 				if docname != 'new_document':
 					if doc_id > max_id:
@@ -159,6 +159,15 @@ def load_page(user,admin,theform):
 						max_id = doc_id
 					else:
 						update_schema(doc_id, schema)
+
+			# cloning metadata from an existing doc into a new doc
+			if theform.getvalue('source_doc'):
+				existing_meta = get_doc_meta(theform.getvalue('source_doc'))
+				create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
+				for meta in existing_meta:
+					m_key, m_val = meta[2:4]
+					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
+				max_id = doc_id
 
 		else:
 			# Get previous values from DB

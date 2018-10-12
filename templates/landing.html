@@ -42,7 +42,7 @@
                         validate</div>
                 </div>
                 <p style="margin-bottom: 50px;">For help getting started see the <a target="_wiki" href="http://wiki.copticscriptorium.org/doku.php?id=gitdox_workflow">wiki</a></p>
-                <p>
+                <div>
                     <form id="corpus_table_form">
                         <table id="corpus_list_table">
                             <tr><td class="corp_label">Choose a corpus:</td><td>
@@ -52,20 +52,58 @@
                             </td></tr>
                         </table>
                     </form>
-                </p>
-                <input type="hidden" name="newdoc" value="true">
-                <p>
+                </div>
+                <div style="padding: 18px 0 30px 0;">
                     <form id="form_new" action='editor.py' style="display: inline-block;">
                         <input type="hidden" name="id" value="**max_id_plus1**">
-                        <div **create_doc** style="">
+                        <div **create_doc**>
                             <i class="fa fa-plus-circle"></i>
                             New Document
                         </div>
                     </form>
-                </p>
-                    **table**
+                    <form id="form_clone" action="editor.py" style="display: inline-block; float:right">
+                        <input type="hidden" name="id" id="id" value="**max_id_plus1**">
+                        <select id="source_doc" name="source_doc" style="width: 240px;" **source_doc_attrs**>
+                            <option value="">-- Select document to clone --</option>
+                            **existing_documents**
+                        </select>
+                        <br/>
+                        <button type="button" id="clone_doc" onclick="document.getElementById('form_clone').submit();" class="button disabled" disabled="disabled">
+                            <i class="fa fa-copy"></i>
+                            New Document with Cloned Metadata
+                        </button>
+                        <script>
+                         // disable clone button if no doc is selected
+                         window.addEventListener("load", function() {
+                             var sourceDoc = document.getElementById("source_doc");
+                             var cloneDoc = document.getElementById("clone_doc");
+                             if (sourceDoc.value === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                         document.getElementById("source_doc").addEventListener("input", function(event) {
+                             var cloneDoc = document.getElementById("clone_doc");
+                             var v = event.target.value;
+                             if (v === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                        </script>
+                    </form>
+                </div>
+                **table**
             </div>
         </div>
-        <script>window.onload = validate_all();</script>
+        <script>window.addEventListener("load", validate_all);</script>
     </body>
 </html>
