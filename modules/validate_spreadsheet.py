@@ -298,11 +298,13 @@ def apply_rule(rule, parsed_ether, meta):
 			for letter in name_letters:
 				for cell in parsed_ether[letter]:
 					start_rows[letter].append(cell.row)
+					# "de-merge" cell so we have an entry for every row in its span with its letter and content
 					for i in range(int(cell.span) or 1):
 						row = str(int(cell.row) + i)
 						name_tuples[row].append((letter, cell.content))
 						all_rows.append(row)
 
+			# same as above with arg_letters
 			for letter in arg_letters:
 				for cell in parsed_ether[letter]:
 					start_rows[letter].append(cell.row)
