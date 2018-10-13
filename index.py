@@ -241,9 +241,14 @@ def load_landing(user, admin, theform):
 	landing = landing.replace("**table**", table)
 	landing = landing.replace("**navbar**", menu)
 	if int(admin) > 0:
-		landing = landing.replace("**create_doc**",'''onclick="document.getElementById('form_new').submit();" class="button"''')
+		landing = landing.replace("**create_doc**",
+                                  '''onclick="document.getElementById('form_new').submit();" class="button"''')
+		landing = landing.replace("**source_doc_attrs**", '''''')
+		opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + '</option>' for x in doc_list])
+		landing = landing.replace("**existing_documents**", opts)
 	else:
-		landing = landing.replace("**create_doc**",'''class="button disabled"''')
+		landing = landing.replace("**create_doc**", '''class="button disabled"''')
+		landing = landing.replace("**source_doc_attrs**", '''disabled="disabled"''')
 	page += landing
 	print("Content-type:text/html\n\n")
 

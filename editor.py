@@ -106,7 +106,7 @@ def load_page(user,admin,theform):
 			corpus = "default_corpus"
 			schema = ""
 			text_content = ""
-			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
+			# If one of the four forms is edited or we're cloning a doc, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
 			if theform.getvalue('edit_docname') and user != "demo":
 				if docname != 'new_document':
 					if doc_id > max_id:
@@ -160,6 +160,16 @@ def load_page(user,admin,theform):
 					else:
 						update_schema(doc_id, schema)
 
+			# cloning metadata from an existing doc into a new doc
+			if theform.getvalue('source_doc'):
+				source_meta = get_doc_meta(theform.getvalue('source_doc'))
+				if doc_id > max_id:
+					create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
+					max_id = doc_id
+				for meta in source_meta:
+					m_key, m_val = meta[2:4]
+					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
+
 		else:
 			# Get previous values from DB
 			old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema = get_doc_info(doc_id)
@@ -180,6 +190,16 @@ def load_page(user,admin,theform):
 					sgml = data_to_process.encode("utf8")
 				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
 				mode = "ether"
+
+			# handle copying metadata
+			if theform.getvalue('source_doc'):
+				source_meta = get_doc_meta(theform.getvalue('source_doc'))
+				existing_meta = get_doc_meta(doc_id)
+				# don't overwrite existing keys
+				meta_to_write = [x for x in source_meta for y in existing_meta if x[2] != y[2]]
+				for meta in meta_to_write:
+					m_key, m_val = meta[2], meta[3]
+					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
 
 
 	if theform.getvalue('edit_docname'):
@@ -459,6 +479,16 @@ def load_page(user,admin,theform):
 		page=page.replace("**id**",doc_id)
 		page=page.replace("**mode**",mode)
 		page=page.replace("**schema**",schema)
+
+		# handle clone meta button
+		if int(admin) > 0:
+			doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
+			page = page.replace("**source_doc_attrs**", '''''')
+			opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + '</option>' for x in doc_list])
+			page = page.replace("**existing_documents**", opts)
+		else:
+			page = page.replace("**source_doc_attrs**", '''disabled="disabled"''')
+
 		if int(admin)>0:
 			page=page.replace("**github**",push_git)
 		else:
