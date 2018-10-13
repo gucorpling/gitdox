@@ -244,7 +244,7 @@ def load_landing(user, admin, theform):
 		landing = landing.replace("**create_doc**",
                                   '''onclick="document.getElementById('form_new').submit();" class="button"''')
 		landing = landing.replace("**source_doc_attrs**", '''''')
-		opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + '</option>' for x in doc_list])
+		opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + ' (' + x[1] + ')</option>' for x in doc_list])
 		landing = landing.replace("**existing_documents**", opts)
 	else:
 		landing = landing.replace("**create_doc**", '''class="button disabled"''')
