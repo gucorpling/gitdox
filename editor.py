@@ -484,7 +484,7 @@ def load_page(user,admin,theform):
 		if int(admin) > 0:
 			doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
 			page = page.replace("**source_doc_attrs**", '''''')
-			opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + '</option>' for x in doc_list])
+			opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + ' (' + x[1] + ')</option>' for x in doc_list])
 			page = page.replace("**existing_documents**", opts)
 		else:
 			page = page.replace("**source_doc_attrs**", '''disabled="disabled"''')
