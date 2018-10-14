@@ -194,9 +194,9 @@ def load_page(user,admin,theform):
 			# handle copying metadata
 			if theform.getvalue('source_doc'):
 				source_meta = get_doc_meta(theform.getvalue('source_doc'))
-				existing_meta = get_doc_meta(doc_id)
+				existing_meta_keys = [x[2] for x in get_doc_meta(doc_id)]
 				# don't overwrite existing keys
-				meta_to_write = [x for x in source_meta for y in existing_meta if x[2] != y[2]]
+				meta_to_write = [x for x in source_meta if x[2] not in existing_meta_keys]
 				for meta in meta_to_write:
 					m_key, m_val = meta[2], meta[3]
 					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
@@ -484,7 +484,7 @@ def load_page(user,admin,theform):
 		if int(admin) > 0:
 			doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
 			page = page.replace("**source_doc_attrs**", '''''')
-			opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + '</option>' for x in doc_list])
+			opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + ' (' + x[1] + ')</option>' for x in doc_list])
 			page = page.replace("**existing_documents**", opts)
 		else:
 			page = page.replace("**source_doc_attrs**", '''disabled="disabled"''')
