@@ -96,6 +96,58 @@ class ExportConfig:
 		else:
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
 
+def parse_ether(ether):
+	"""Take in raw socialcalc data and turn it into a dict of Cells. Used in validation."""
+	class Cell:
+		def __init__(self, col, row, content, span):
+			self.col = col
+			self.row = row
+			self.header = ""
+			self.content = content
+			self.span = span
+		def __repr__(self):
+			return "<Cell (" + repr((self.col, self.row, self.header, self.content, self.span)) + ")>"
+
+	ether_lines = ether.splitlines()
+
+	# find col letter corresponding to col name
+	parsed = defaultdict(list)
+	colmap = defaultdict(list)
+	rev_colmap = {}
+	all_cells = []
+	for line in ether_lines:
+		if line.startswith("cell:"):  # Cell row
+			# A maximal row looks like this incl. span: cell:F2:t:LIRC2014_chw0oir:f:1:rowspan:289
+			# A minimal row without formatting: cell:C2:t:JJ:f:1
+			parts = line.split(":")
+			if len(parts) > 3:  # Otherwise invalid row
+				cell_id = parts[1]
+				cell_row = cell_id[1:]
+				cell_col = cell_id[0]
+				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
+				#for c in cell_id:
+				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
+				#		cell_row += c
+				#	else:
+				#		cell_col += c
+				cell_content = parts[3].replace("\\c",":")
+				cell_span = parts[-1] if "rowspan:" in line else "1"
+
+				# record col name
+				if cell_row == "1":
+					colmap[cell_content].append(cell_col)
+					rev_colmap[cell_col] = cell_content
+
+				cell = Cell(cell_col, cell_row, cell_content, cell_span)
+				parsed[cell_col].append(cell)
+				all_cells.append(cell)
+
+	for cell in all_cells:
+		cell.header = rev_colmap[cell.col]
+
+	parsed["__colmap__"] = colmap  # Save colmap for apply_rule
+	return parsed
+
 def unescape_xml(text):
 	# Fix various common compounded XML escapes
 	text = text.replace("&amp;lt;","<").replace("&amp;gt;",">")
@@ -790,6 +842,7 @@ def get_timestamps(ether_path):
 	for room in times:
 		output[room.replace("timestamp-", "")] = times[room]
 	return output
+
 
 
 if __name__  == "__main__":

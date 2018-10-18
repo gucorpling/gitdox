@@ -2,7 +2,7 @@ function validate_all() {
     $("#validate_landing").addClass("disabledbutton");
     $("#validate_landing").html('<i class="fa fa-spinner fa-spin"></i> validating...');
     $.ajax({
-        url: 'modules/validate_spreadsheet.py',
+        url: 'validate.py',
         type: 'post',
         data: {doc_id: 'all'},
         dataType: "json",

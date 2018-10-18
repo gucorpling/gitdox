@@ -13,7 +13,7 @@ function validate_doc() {
 	var mode = $("#mode").val();
 	var schema = $("#schema").val();
     $.ajax({
-		url: 'modules/validate_spreadsheet.py',
+		url: 'validate.py',
     	type: 'post',
     	data: {doc_id: docId, mode: mode, schema: schema},
     	dataType: "html",
