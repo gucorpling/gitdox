@@ -173,6 +173,7 @@ width: 100%}
 
 #validation_report{
     height: 300px;
+    overflow-y: auto;
 }
 
 tfoot {
