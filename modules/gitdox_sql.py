@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 Data access functions to read from and write to the SQLite backend.
@@ -178,6 +178,10 @@ def get_doc_info(doc_id):
 	else:
 		return res
 
+def get_doc_content(doc_id):
+	res = generic_query("SELECT content FROM docs WHERE id=?", (int(doc_id),))
+	return res[0][0]
+
 def get_all_docs(corpus=None, status=None):
 	if corpus is None:
 		if status is None:
@@ -206,6 +210,12 @@ def get_corpora():
 
 def get_validate_rules():
 		return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate", None)
+
+def get_meta_rules():
+	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'meta'", None)
+
+def get_ether_rules():
+	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'ether'", None)
 
 def get_sorted_rules(sort):
 	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate ORDER BY " + sort, None)  # parameterization doesn't work for order by
