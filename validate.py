@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from collections import defaultdict
-import re
+import re, sys
 import cgi
 import json
 
@@ -134,7 +134,7 @@ def validate_doc_ether(doc_id, editor=False):
 		if len(report) == 0:
 			report = "spreadsheet is valid"
 		if len(meta_validation["report"]) == 0:
-			meta_report = "metadata is valid"
+			meta_validation["report"] = "metadata is valid"
 		json_report['ether'] = report
 		json_report['meta'] = meta_validation["report"]
 		return json_report
@@ -203,10 +203,23 @@ def validate_all_docs():
 	return json.dumps(reports)
 
 if __name__ == "__main__":
-	parameter = cgi.FieldStorage()
-	doc_id = parameter.getvalue("doc_id")
-	mode = parameter.getvalue("mode")
-	schema = parameter.getvalue("schema")
+
+	mode = ""
+	schema = ""
+	if len(sys.argv) > 1:
+		from argparse import ArgumentParser
+		p = ArgumentParser()
+		p.add_argument("-d","--doc",help="doc ID in gitdox.db or 'all'", default="all")
+
+		opts = p.parse_args()
+		doc_id = opts.doc
+		if doc_id != "all":
+			_, _, _, _, _, mode, schema = get_doc_info(doc_id)
+	else:
+		parameter = cgi.FieldStorage()
+		doc_id = parameter.getvalue("doc_id")
+		mode = parameter.getvalue("mode")
+		schema = parameter.getvalue("schema")
 
 	if doc_id == "all":
 		print "Content-type:application/json\n\n"
