@@ -75,7 +75,7 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 
 def validate_doc_meta(doc_id, editor):
 	# metadata validation
-	report = ''
+	report = {"report":"","tooltip":""}
 	rules = [MetaValidator(x) for x in get_meta_rules()]
 
 	meta = get_doc_meta(doc_id)
@@ -85,13 +85,13 @@ def validate_doc_meta(doc_id, editor):
 	for rule in rules:
 		res = rule.validate(meta, doc_name, doc_corpus)
 		if editor and len(res['tooltip']) > 0:
-			report += ("""<div class="tooltip">"""
+			report["tooltip"] += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
 					+ """ <i class="fa fa-ellipsis-h"></i>"""
 					+ "<span>" + res['tooltip'] + "</span>"
 					+ "</div>")
 		else:
-			report += res['report']
+			report["report"] += res['report']
 	return report
 
 def validate_doc_ether(doc_id, editor=False):
@@ -108,7 +108,7 @@ def validate_doc_ether(doc_id, editor=False):
 	cells = []
 
 	# check metadata
-	meta_report = validate_doc_meta(doc_id, editor)
+	meta_validation = validate_doc_meta(doc_id, editor)
 
 	# check ethercalc rules
 	for rule in rules:
@@ -125,7 +125,7 @@ def validate_doc_ether(doc_id, editor=False):
 
 	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name)
-		full_report = report + meta_report
+		full_report = report + meta_validation["report"]
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
 		return full_report
@@ -133,10 +133,10 @@ def validate_doc_ether(doc_id, editor=False):
 		json_report = {}
 		if len(report) == 0:
 			report = "spreadsheet is valid"
-		if len(meta_report) == 0:
+		if len(meta_validation["report"]) == 0:
 			meta_report = "metadata is valid"
 		json_report['ether'] = report
-		json_report['meta'] = meta_report
+		json_report['meta'] = meta_validation["report"]
 		return json_report
 
 def validate_doc_xml(doc_id, schema, editor=False):
