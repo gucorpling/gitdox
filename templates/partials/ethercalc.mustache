@@ -1,0 +1,24 @@
+<iframe width="99.8%" height="800px" src="{{ether_url}}"
+        style="background-color: white; border: solid black 1px; padding: 0px; margin: 0px"></iframe>
+<div class="button disabled h128">
+    <i class="fa fa-floppy-o"> </i> Save
+</div>
+{{{disabled_nlp_html}}}
+{{{github_push_html}}}
+
+<h3>Export</h3>
+
+<p>Generate XML from this spreadsheet using a stylesheet</p>
+<div style="display: inline-block">
+    {{{ether_stylesheet_select_html}}}
+    <input type="hidden" name="doc_id" id="doc_id" value="{{id}}">
+    <button onclick="export_ether();">Export</button>
+</div>
+
+<h3>Upload</h3>
+
+<p>Replace existing spreadsheet data by uploading an SGML or Excel file</p>
+<div style="display: inline-block">
+    <input id="file" type="file" name="file" style="width: 200px"/>
+    <button onclick="upload()">Upload</button>
+</div>

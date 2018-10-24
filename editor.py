@@ -17,6 +17,7 @@ import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
 	build_meta_tag, get_ether_stylesheet_select, get_file_list
+from modules.renderer import render
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -68,9 +69,9 @@ def serialize_file(text_content,file_name):
 
 
 def load_page(user,admin,theform):
-	print("Content-type:text/html\r\n\r\n")
 	global ether_url
 	global code_2fa
+
 	if theform.getvalue("2fa"):
 		code_2fa = theform.getvalue("2fa")
 	else:
@@ -87,7 +88,6 @@ def load_page(user,admin,theform):
 	schema = ""
 	doc_id = ""  # Should only remain so if someone navigated directly to editor.py
 	docname = ""
-	mymsg = ""
 	old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema = ["", "", "", "", "", "", ""]
 
 	if int(admin) > 0:
@@ -252,8 +252,6 @@ def load_page(user,admin,theform):
 					out, err = make_spreadsheet(old_socialcalc, ether_url + "_/gd_" + corpus + "_" + docname, "socialcalc")
 					if out == "OK":
 						delete_spreadsheet(ether_url,old_sheet_name)
-					else:
-						mymsg += "out was: " + out + " err was" + err
 
 			text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
 
@@ -423,20 +421,24 @@ def load_page(user,admin,theform):
 	if user == "demo":
 		nlp_service = disabled_nlp_service
 
-	page= ""#"Content-type:text/html\r\n\r\n"
+	# dict of variables we'll need to render the html
+	render_data = {}
+
+	# prepare embedded editor html
 	if mode == "ether":
-		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
+		render_data['ether_mode'] = True
+
 		ether_url += "gd_" + corpus + "_" + docname
+		render_data['ether_url'] = ether_url
 
 		stylesheet_select = get_ether_stylesheet_select()
-		embedded_editor = embedded_editor.replace("**stylesheet_select**",stylesheet_select)
+		render_data['ether_stylesheet_select_html'] = stylesheet_select
 
 		if "file" in theform and user != "demo":
 			fileitem = theform["file"]
 			if len(fileitem.filename) > 0:
 				#  strip leading path from file name to avoid directory traversal attacks
 				fn = os.path.basename(fileitem.filename)
-				msg = 'The file "' + fn + '" was uploaded successfully'
 				if fn.endswith(".xls") or fn.endswith(".xlsx"):
 					make_spreadsheet(fileitem.file.read(),"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname,"excel")
 				else:
@@ -446,68 +448,51 @@ def load_page(user,admin,theform):
 					for (key, value) in iteritems(meta_key_val):
 						key = key.replace("@","_")
 						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
-		else:
-			msg = "no file was uploaded"
-
-		embedded_editor = embedded_editor.replace("**source**",ether_url)
 	else:
-		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "codemirror.html").read()
+		render_data['ether_mode'] = False
 
-	page += urllib.urlopen(prefix + "templates" + os.sep + "editor.html").read()
-	page += mymsg
-	page = page.replace("**embedded_editor**",embedded_editor)
+	render_data['doc_is_selected'] = len(doc_id) != 0
+	render_data['id'] = doc_id
+	render_data['mode'] = mode
+	render_data['schema'] = schema
+	render_data['docname'] = docname
+	render_data['corpusname'] = corpus
 
-	if len(doc_id) == 0:
-		exp = re.compile(r"<article>.*</article>",re.DOTALL)
-		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
-	else:
-		metadata = print_meta(doc_id)
-		corpus_metadata = print_meta(doc_id,corpus=True)
-		#corpus_metadata = ""
-		page=page.replace("**content**",text_content)
-		page=page.replace("**docname**",docname)
-		page=page.replace("**corpusname**",corpus)
-		page=page.replace("**edit_status**",edit_status)
-		page=page.replace("**repo**",repo_name)
-		page=page.replace("**edit_schema**",edit_schema)
-		page=page.replace("**edit_assignee**",edit_assignee)
-		page=page.replace("**edit_mode**",edit_mode)
-		page=page.replace("**metadata**",metadata)
-		page=page.replace("**corpus_metadata**",corpus_metadata)
-		page=page.replace("**disabled_NLP**",disabled_nlp_service)
-		page=page.replace("**NLP**",nlp_service)
-		page=page.replace("**id**",doc_id)
-		page=page.replace("**mode**",mode)
-		page=page.replace("**schema**",schema)
+	render_data['text_content'] = text_content
+	render_data['repo'] = repo_name
 
-		# handle clone meta button
-		if int(admin) > 0:
-			doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
-			page = page.replace("**source_doc_attrs**", '''''')
-			opts = "\n".join(['<option value="' + str(x[0]) + '">' + x[2] + ' (' + x[1] + ')</option>' for x in doc_list])
-			page = page.replace("**existing_documents**", opts)
-		else:
-			page = page.replace("**source_doc_attrs**", '''disabled="disabled"''')
+	render_data['edit_status_html'] = edit_status
+	render_data['edit_schema_html'] = edit_schema
+	render_data['edit_assignee_html'] = edit_assignee
+	render_data['edit_mode_html'] = edit_mode
+	render_data['metadata_html'] = print_meta(doc_id)
+	render_data['corpus_metadata_html'] = print_meta(doc_id,corpus=True)
 
-		if int(admin)>0:
-			page=page.replace("**github**",push_git)
-		else:
-			page = page.replace("**github**", '')
+	render_data['disabled_nlp_html'] = disabled_nlp_service
+	render_data['nlp_html'] = nlp_service
 
-		if int(admin) < 3:
-			page = page.replace('onblur="validate_docname();"','onblur="validate_docname();" disabled="disabled" class="disabled"')
-			page = page.replace('onblur="validate_corpusname();"','onblur="validate_corpusname();" disabled="disabled" class="disabled"')
-			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
-			page = page.replace('''<div onclick="do_save();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
+	render_data["admin_gt_zero"] = int(admin) > 0
+	render_data["admin_eq_three"] = admin == "3"
 
-	header = open(templatedir + "header.html").read()
-	page = page.replace("**navbar**", get_menu())
-	page = page.replace("**header**", header)
-	page = page.replace("**project**", project)
-	page = page.replace("**skin**", skin)
-	page = page.replace("**editor_help_link**",editor_help_link)
+	# handle clone meta button, and allow github pushing
+	if int(admin) > 0:
+		doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
+		render_data["docs"] = []
+		for doc in doc_list:
+			doc_vars = {}
+			doc_vars["id"] = str(doc[0])
+			doc_vars["corpus"] = doc[1]
+			doc_vars["name"] = doc[2]
+			render_data['docs'].append(doc_vars)
 
-	return page
+		render_data["github_push_html"] = push_git
+
+	render_data["can_save"] = not (int(admin) < 3)
+	render_data["navbar_html"] = get_menu()
+	render_data["editor_help_link_html"] = editor_help_link
+	render_data["skin_stylesheet"] = skin
+
+	return render("editor", render_data)
 
 
 def open_main_server():
@@ -520,7 +505,9 @@ def open_main_server():
 	action, userconfig = login(theform, userdir, thisscript, action)
 	user = userconfig["username"]
 	admin = userconfig["admin"]
-	print(load_page(user,admin,theform).encode("utf8"))
+
+	print("Content-type:text/html\n\n")
+	print(load_page(user, admin, theform).encode("utf8"))
 
 
 if __name__ == "__main__":
