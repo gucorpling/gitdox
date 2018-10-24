@@ -1,1 +1,9 @@
+# compiled python files
 **.pyc
+
+# these are auto-generated in index.py
+popupPage.html
+popupPageCorpus.html
+
+# usually don't want to commit this
+gitdox.db 
