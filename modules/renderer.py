@@ -25,7 +25,7 @@ def render(template_name, variables, template_dir='templates' + os.sep, file_ext
     partials_dir = prefix + template_dir + os.sep + 'partials' + os.sep
     partials = dict([(filename[:-len(file_ext)], open(partials_dir + filename, 'r').read())
                                     for filename in os.listdir(prefix + template_dir + 'partials')
-                                    if filename.endswith(".mustache")])
+                                    if filename.endswith(file_ext)])
     renderer = Renderer(partials=partials)
 
     return renderer.render_path(prefix + template_dir + template_name + file_ext, variables)
