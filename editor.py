@@ -30,7 +30,6 @@ scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 userdir = scriptpath + "users" + os.sep
 templatedir = scriptpath + "templates" + os.sep
 config = ConfigObj(userdir + 'config.ini')
-skin = config["skin"]
 project = config["project"]
 editor_help_link = config["editor_help_link"]
 # Captions and API URLs for NLP buttons
@@ -488,9 +487,7 @@ def load_page(user,admin,theform):
 		render_data["github_push_html"] = push_git
 
 	render_data["can_save"] = not (int(admin) < 3)
-	render_data["navbar_html"] = get_menu()
 	render_data["editor_help_link_html"] = editor_help_link
-	render_data["skin_stylesheet"] = skin
 
 	return render("editor", render_data)
 

@@ -114,13 +114,11 @@ def load_landing(user, admin, theform):
 	render_data["admin_gt_zero"] = int(admin) > 0
 	render_data["admin_eq_three"] = admin == "3"
 	render_data["max_id_plus1"] = str(max_id + 1)
-	render_data["navbar_html"] = get_menu().encode("utf8")
 	render_data["user"] = user
 
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	userdir = scriptpath + "users" + os.sep
 	config = ConfigObj(userdir + 'config.ini')
-	render_data["skin_stylesheet"] = config["skin"]
 	render_data["project"] = config["project"]
 
 	return render("index", render_data)
