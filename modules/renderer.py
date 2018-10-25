@@ -1,11 +1,17 @@
 import platform
 import os
+from modules.configobj import ConfigObj
+from paths import get_menu
 from pystache.renderer import Renderer
 
+import cgitb; cgitb.enable()
 if platform.system() == "Windows":
 	prefix = "transc\\"
 else:
 	prefix = ""
+rootpath = os.path.dirname(os.path.dirname(os.path.realpath(__file__))) + os.sep
+userdir = rootpath + "users" + os.sep
+config = ConfigObj(userdir + 'config.ini')
 
 def render(template_name, variables, template_dir='templates', file_ext=".mustache"):
     """
@@ -28,4 +34,6 @@ def render(template_name, variables, template_dir='templates', file_ext=".mustac
                                     if filename.endswith(file_ext)])
     renderer = Renderer(partials=partials)
 
+    variables['skin_stylesheet'] = config['skin']
+    variables['navbar_html'] = get_menu()
     return renderer.render_path(prefix + template_dir + os.sep + template_name + file_ext, variables)
