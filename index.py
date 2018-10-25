@@ -93,15 +93,9 @@ def load_landing(user, admin, theform):
 	render_data['docs'] = []
 	for doc in doc_list:
 		doc_vars = {}
-		for item in doc:
-			if item == "xml":
-				doc_vars["xml"] = True
-				mode = "xml"
-			elif item == "ether":
-				doc_vars["ether"] = True
-				mode = "ether"
-			elif "-" in str(item):
-				doc_vars["other_mode"] = True
+		doc_vars["xml"] = "xml" in doc
+		doc_vars["ether"] = "ether" in doc
+		doc_vars["other_mode"] = not (doc_vars["xml"] or doc_vars["ether"])
 
 		id = str(doc[0])
 		doc_vars["id"] = id
