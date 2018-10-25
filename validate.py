@@ -3,12 +3,13 @@
 
 from collections import defaultdict
 import re
-import cgi
+import cgi, cgitb
 import json
 
 from paths import ether_url
 from modules.gitdox_sql import *
 from modules.ether import get_socialcalc, make_spreadsheet, exec_via_temp, get_timestamps, parse_ether
+from modules.validation.legacy_xml_validator import LegacyXmlValidator
 from modules.validation.xml_validator import XmlValidator
 from modules.validation.meta_validator import MetaValidator
 from modules.validation.ether_validator import EtherValidator
@@ -140,10 +141,20 @@ def validate_doc_ether(doc_id, editor=False):
 		return json_report
 
 def validate_doc_xml(doc_id, schema, editor=False):
-	xml_report = ""
+	rules = [XmlValidator(x) for x in get_xml_rules()]
 
+	doc_info = get_doc_info(doc_id)
+	doc_name = doc_info[0]
+	doc_corpus = doc_info[1]
 	doc_content = get_doc_content(doc_id)
-	xml_report = XmlValidator(schema).validate(doc_content)
+
+	# Schemas used to be assigned per document--do not support this anymore
+	#xml_report = LegacyXmlValidator(schema).validate(doc_content)
+
+	xml_report = ""
+	for rule in rules:
+		xml_report += rule.validate(doc_content, doc_name, doc_corpus)
+
 	meta_report = validate_doc_meta(doc_id, editor)
 
 	# report
