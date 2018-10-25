@@ -33,9 +33,38 @@
             </div>
             <div id="content">
                 <h1>GitDox - Validation</h1>
-                <p style="border-bottom:groove;"><i>validation rule management</i> | <a href="index.py">back to document list</a> </p>
+                <p style="border-bottom:groove;">
+                    <i>validation rule management</i> | <a href="index.py">back to document list</a>
+                </p>
 
-                <div id="ValidationTableContainer"></div>
+                <style>
+                .jtable-title {
+                    font-size: 16px !important;
+                    border: none !important;
+                    border-radius: 0 !important;
+                    background: #eeeeee !important;
+                }
+                table.jtable {
+                    border: none !important;
+                }
+
+                .ui-widget-overlay {
+                    opacity: 0.5 !important;
+                }
+                </style>
+
+                <div style="padding-bottom: 32px;">
+                    <div id="xml-table-container"></div>
+                </div>
+                <div style="padding-bottom: 32px;">
+                    <div id="meta-table-container"></div>
+                </div>
+                <div style="padding-bottom: 32px;">
+                    <div id="ether-table-container"></div>
+                </div>
+                <div style="padding-bottom: 32px;">
+                    <div id="export-table-container"></div>
+                </div>
             </div>
         </div>
     </body>
