@@ -150,15 +150,6 @@ def load_page(user,admin,theform):
 					else:
 						update_assignee(doc_id, assignee)
 
-			if theform.getvalue('edit_schema') and user != "demo":
-				schema = theform.getvalue('edit_schema')
-				if schema != "--none--":
-					if doc_id > max_id:
-						create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
-						max_id = doc_id
-					else:
-						update_schema(doc_id, schema)
-
 			# cloning metadata from an existing doc into a new doc
 			if theform.getvalue('source_doc'):
 				source_meta = get_doc_meta(theform.getvalue('source_doc'))
@@ -237,10 +228,6 @@ def load_page(user,admin,theform):
 				mode = theform.getvalue('edit_mode')
 				if mode != old_mode and user != "demo":
 					update_mode(doc_id,mode)
-			if theform.getvalue('edit_schema'):
-				schema = theform.getvalue('edit_schema')
-				if schema != old_schema and user != "demo":
-					update_schema(doc_id, schema)
 			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet":  # mode has been changed to spreadsheet via NLP
 				update_mode(doc_id, "ether")
 				mode = "ether"
@@ -350,24 +337,6 @@ def load_page(user,admin,theform):
 
 	edit_status += options+"</select>"
 
-	# Get XML schema list
-	schema_list = ['--none--']
-	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
-	schemadir = scriptpath + "schemas" + os.sep
-
-	schema_list += get_file_list(schemadir,"xsd",hide_extension=True)
-
-	edit_schema = """<select name="edit_schema" onchange="do_save();">"""
-	for schema_file in schema_list:
-		schema_select = ""
-		schema_name = schema_file
-		if schema_name == schema:
-			schema_select = "selected"
-		edit_schema += """<option value='""" + schema_name + "' %s>" + schema_name + """</option>"""
-		edit_schema = edit_schema % schema_select
-	edit_schema += "</select>"
-	# edit_schema = edit_schema.replace(schema+'"', schema+'" selected="selected"')
-
 	# Get user_list from the logintools
 	user_list=[]
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
@@ -461,7 +430,6 @@ def load_page(user,admin,theform):
 	render_data['repo'] = repo_name
 
 	render_data['edit_status_html'] = edit_status
-	render_data['edit_schema_html'] = edit_schema
 	render_data['edit_assignee_html'] = edit_assignee
 	render_data['edit_mode_html'] = edit_mode
 	render_data['metadata_html'] = print_meta(doc_id)
