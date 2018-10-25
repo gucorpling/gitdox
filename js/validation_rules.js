@@ -4,12 +4,13 @@ $(document).ready(function () {
         sorting: true,
         actions: {
             listAction: function (postData, jtParams) {
+                jtParams.domain = 'xml';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
                         url: 'modules/jtable_rule_list.py',
                         type: 'POST',
                         dataType: 'json',
-                        data: {domain: "xml"},
+                        data: jtParams,
                         success: function (data) {
                             $dfd.resolve(data);
                         },
@@ -55,12 +56,13 @@ $(document).ready(function () {
         sorting: true,
         actions: {
             listAction: function (postData, jtParams) {
+                jtParams.domain = 'meta';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
                         url: 'modules/jtable_rule_list.py',
                         type: 'POST',
                         dataType: 'json',
-                        data: {domain: "meta"},
+                        data: jtParams,
                         success: function (data) {
                             $dfd.resolve(data);
                         },
@@ -112,12 +114,13 @@ $(document).ready(function () {
         sorting: true,
         actions: {
             listAction: function (postData, jtParams) {
+                jtParams.domain = 'ether';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
                         url: 'modules/jtable_rule_list.py',
                         type: 'POST',
                         dataType: 'json',
-                        data: {domain: "ether"},
+                        data: jtParams,
                         success: function (data) {
                             $dfd.resolve(data);
                         },
@@ -169,12 +172,13 @@ $(document).ready(function () {
         sorting: true,
         actions: {
             listAction: function (postData, jtParams) {
+                jtParams.domain = 'export';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
                         url: 'modules/jtable_rule_list.py',
                         type: 'POST',
                         dataType: 'json',
-                        data: {domain: "export"},
+                        data: jtParams,
                         success: function (data) {
                             $dfd.resolve(data);
                         },
