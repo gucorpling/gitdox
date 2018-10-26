@@ -248,13 +248,14 @@ class EtherValidator(Validator):
 
         if self.corpus is not None:
             if re.search(self.corpus, doc_corpus) is None:
-                return res
+                return res, False
         if self.doc is not None:
             if re.search(self.doc, doc_name) is None:
-                return res
+                return res, False
 
         report, tooltip, cells = self._apply_rule(parsed_ether)
+
         res['report'] += report
         res['tooltip'] += tooltip
         res['cells'] += cells
-        return res
+        return res, True

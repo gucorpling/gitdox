@@ -194,9 +194,15 @@
                                     <i class="fa fa-code" title="xml">&nbsp;</i>
                                     {{/xml}}
                                     {{#ether}}
-                                    <i class="fa fa-code" title="spreadsheet">&nbsp;</i>
+                                    <i class="fa fa-table" title="spreadsheet">&nbsp;</i>
                                     {{/ether}}
                                     <i class="fa fa-tags" title="metadata" style="display:inline-block">&nbsp;</i>
+                                    {{#ether}}
+                                    <i class="fa fa-file" title="export">&nbsp;</i>
+                                    {{/ether}}
+                                    {{^ether}}
+                                    <i class="fa fa-file" title="hidden" style="visibility:hidden;">&nbsp;</i>
+                                    {{/ether}}
                                 </div>
                             </td>
 

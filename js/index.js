@@ -9,17 +9,23 @@ function validate_all() {
         success: function(response) {
             console.log(response);
             $.each(response, function(key, value) {
-                // 1 vs 2 is for ordering ether/xml before metadata
+                // 1 vs 2 is for ordering ether/xml before metadata, 3 is used for export
                 // sort is hidden text at beginning of cell for sorting purposes
                 var output1 = '';
                 var output2 = '';
+                var output3 = '';
                 var sort1 = '';
                 var sort2 = '';
+                var sort3 = '';
                 $.each(value, function(k,v) {
                     if (k == "ether") {
-                        if (v == "spreadsheet is valid") {
+                        if (v.indexOf("EtherCalc is valid") > -1) {
                             color = 'green';
                             sort1 = 'v';
+                        }
+                        else if (v.indexOf("no applicable") > -1) {
+                            color = 'gray';
+                            sort1 = 'n';
                         }
                         else {
                             color = 'red';
@@ -28,9 +34,13 @@ function validate_all() {
                         output1 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-table" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
                     }
                     else if (k == "meta") {
-                        if (v == "metadata is valid") {
+                        if (v.indexOf("metadata is valid") > -1) {
                             color = 'green';
                             sort2 = 'v';
+                        }
+                        else if (v.indexOf("no applicable") > -1) {
+                            color = 'gray';
+                            sort2 = 'n';
                         }
                         else {
                             color = 'red';
@@ -39,11 +49,11 @@ function validate_all() {
                         output2 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-tags" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
                     }
                     else if (k == "xml") {
-                        if (v.indexOf("validates") !== -1) {
+                        if (v.indexOf("xml is valid") > -1) {
                             color = 'green';
                             sort1 = 'v';
                         }
-                        else if (v == "No schema<br/>") {
+                        else if (v.indexOf("no applicable") > -1) {
                             color = 'gray';
                             sort1 = 'n';
                         }
@@ -53,9 +63,27 @@ function validate_all() {
                         }
                         output1 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-code" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
                     }
+                    else if (k == "export") {
+                        if (v.indexOf("exports are valid") > -1) {
+                            color = 'green';
+                            sort3 = 'v';
+                        }
+                        else if (v.indexOf("no applicable") > -1) {
+                            color = 'gray';
+                            sort3 = 'n';
+                        }
+                        else {
+                            color = 'red';
+                            sort3 = 'i';
+                        }
+                        output3 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-file" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
+                    }
                 });
-                $("#validate_"+key).before("<i hidden>" + sort1 + sort2 + "</i>");
-                $("#validate_"+key).html(output1 + output2);
+                if (!output3) {
+                    output3 = '<div class="tooltip" style="display:inline-block"><i class="fa fa-file" style="visibility:hidden;">&nbsp;</i><span> </span></div>';
+                }
+                $("#validate_"+key).before("<i hidden>" + sort1 + sort2 + sort3 + "</i>");
+                $("#validate_"+key).html(output1 + output2 + output3);
             });
             $("#validate_landing").removeClass("disabledbutton");
             $("#validate_landing").html('<i class="fa fa-check"></i> re-validate');

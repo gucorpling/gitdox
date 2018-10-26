@@ -13,6 +13,7 @@ from modules.validation.legacy_xml_validator import LegacyXmlValidator
 from modules.validation.xml_validator import XmlValidator
 from modules.validation.meta_validator import MetaValidator
 from modules.validation.ether_validator import EtherValidator
+from modules.validation.export_validator import ExportValidator
 
 def highlight_cells(cells, ether_url, ether_doc_name):
 	old_ether = get_socialcalc(ether_url, ether_doc_name)
@@ -83,8 +84,10 @@ def validate_doc_meta(doc_id, editor):
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
+	meta_rule_fired = False
 	for rule in rules:
-		res = rule.validate(meta, doc_name, doc_corpus)
+		res, fired = rule.validate(meta, doc_name, doc_corpus)
+		meta_rule_fired = meta_rule_fired or fired
 		if editor and len(res['tooltip']) > 0:
 			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
@@ -93,17 +96,26 @@ def validate_doc_meta(doc_id, editor):
 					+ "</div>")
 		else:
 			report += res['report']
+
+	if not meta_rule_fired:
+		report = "<strong>no applicable metadata rules<br></strong>"
+	elif len(report) == 0:
+		report = "<strong>metadata is valid<br></strong>"
+	else:
+		report = "<strong>Metadata Problems:</strong><br>" + report
 	return report
 
 def validate_doc_ether(doc_id, editor=False):
-	rules = [EtherValidator(x) for x in get_ether_rules()]
+	ether_rules = [EtherValidator(x) for x in get_ether_rules()]
+	export_rules = [ExportValidator(x) for x in get_export_rules()]
 
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
-	parsed_ether = parse_ether(get_socialcalc(ether_url, ether_doc_name))
+	socialcalc = get_socialcalc(ether_url, ether_doc_name)
+	parsed_ether = parse_ether(socialcalc)
 
 	report = ''
 	cells = []
@@ -111,9 +123,10 @@ def validate_doc_ether(doc_id, editor=False):
 	# check metadata
 	meta_report = validate_doc_meta(doc_id, editor)
 
-	# check ethercalc rules
-	for rule in rules:
-		res = rule.validate(parsed_ether, doc_name, doc_corpus)
+	ether_rule_fired = False
+	for rule in ether_rules:
+		res, fired = rule.validate(parsed_ether, doc_name, doc_corpus)
+		ether_rule_fired = ether_rule_fired or fired
 		if editor and len(res['tooltip']) > 0:
 			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
@@ -123,21 +136,37 @@ def validate_doc_ether(doc_id, editor=False):
 		else:
 			report += res['report']
 		cells += res['cells']
+	if not ether_rule_fired:
+		report = "<strong>no applicable EtherCalc validation rules<br></strong>"
+	elif report:
+		report = "<strong>Ether Problems:</strong><br>" + report
+	else:
+		report = "<strong>EtherCalc is valid</strong><br>"
+
+	export_report = ""
+	export_rule_fired = False
+	for rule in export_rules:
+		res, fired = rule.validate(socialcalc, doc_id, doc_name, doc_corpus)
+		export_rule_fired = export_rule_fired or fired
+		export_report += res
+	if not export_rule_fired:
+		export_report = "<strong>no applicable export validation rules<br></strong>"
+	elif export_report:
+		export_report = "<strong>Export Problems:</strong><br>" + export_report
+	else:
+		export_report = "<strong>exports are valid</strong><br>"
 
 	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name)
-		full_report = report + meta_report
+		full_report = report + meta_report + export_report
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
 		return full_report
 	else:
 		json_report = {}
-		if len(report) == 0:
-			report = "spreadsheet is valid"
-		if len(meta_report) == 0:
-			meta_report = "metadata is valid"
 		json_report['ether'] = report
 		json_report['meta'] = meta_report
+		json_report['export'] = export_report
 		return json_report
 
 def validate_doc_xml(doc_id, schema, editor=False):
@@ -152,8 +181,17 @@ def validate_doc_xml(doc_id, schema, editor=False):
 	#xml_report = LegacyXmlValidator(schema).validate(doc_content)
 
 	xml_report = ""
+	xml_rule_fired = False
 	for rule in rules:
-		xml_report += rule.validate(doc_content, doc_name, doc_corpus)
+		res, fired = rule.validate(doc_content, doc_name, doc_corpus)
+		xml_report += res
+		xml_rule_fired = xml_rule_fired or fired
+	if not xml_rule_fired:
+		xml_report = "<strong>no applicable XML schemas<br></strong>"
+	elif xml_report:
+		xml_report = "<strong>Export Problems:</strong><br>" + xml_report
+	else:
+		xml_report = "<strong>xml is valid</strong><br>"
 
 	meta_report = validate_doc_meta(doc_id, editor)
 
@@ -164,15 +202,11 @@ def validate_doc_xml(doc_id, schema, editor=False):
 			full_report = xml_report + meta_report
 		except Exception as e:
 			full_report = "[Encoding error: " + str(e) + "]"
-		if len(full_report) == 0:
-			full_report = "Document is valid!"
+
 		return full_report
 	else:
 		json_report = {}
-		if len(xml_report) == 0:
-			xml_report = "xml is valid"
-		if len(meta_report) == 0:
-			meta_report = "metadata is valid"
+
 		json_report['xml'] = xml_report
 		json_report['meta'] = meta_report
 		return json_report
