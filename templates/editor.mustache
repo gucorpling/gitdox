@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<title>**docname** - GitDox: Edit</title>
+<title>{{docname}} - GitDox: Edit</title>
 <meta charset="utf-8"/>
 
 
 <head>
-    <link rel="stylesheet" href="**skin**" type="text/css" charset="utf-8"/>
+    <link rel="stylesheet" href="{{skin_stylesheet}}" type="text/css" charset="utf-8"/>
     <link rel="stylesheet" href="css/gitdox.css?version=3" type="text/css" charset="utf-8"/>
     <link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
     <meta charset="UTF-8"/>
@@ -38,18 +38,17 @@
 
 </head>
 <body>
-    **navbar**
+    {{{navbar_html}}}
     <div id="wrapper">
-        **header**
+        <div id="header">
+            {{> header}}
+        </div>
         <div id="content">
             <h1>GitDox: Edit</h1>
-            **editor_help_link**
+            {{{ editor_help_link_html }}}
             <hr>
 
             <div>
-
-
-
                 <link rel="stylesheet" href="codemirror-5.15.2/lib/codemirror.css">
                 <link rel="stylesheet" href="codemirror-5.15.2/addon/hint/show-hint.css">
                 <script src="codemirror-5.15.2/lib/codemirror.js"></script>
@@ -62,12 +61,12 @@
 
 
 
+                {{#doc_is_selected}}
                 <article>
-
                     <form name="hiddenForm" id="editor_form" method="post" action="editor.py" enctype="multipart/form-data">
-                        <input type="hidden" name="id" id="id" value="**id**">
-                        <input type="hidden" name="mode" id="mode" value="**mode**">
-                        <input type="hidden" name="schema" id="schema" value="**schema**">
+                        <input type="hidden" name="id" id="id" value="{{id}}">
+                        <input type="hidden" name="mode" id="mode" value="{{mode}}">
+                        <input type="hidden" name="schema" id="schema" value="{{schema}}">
                         <input type="hidden" name="nlp_xml" id="nlp_xml">
                         <input type="hidden" name="nlp_spreadsheet" id="nlp_spreadsheet">
                         <h2>Editor | <a href="index.py">back to document list</a> </h2>
@@ -77,17 +76,35 @@
                                 <col style="width:150px">
                             </colgroup>
                             <tbody>
-                                <tr><td>Document Name: </td>
+                                <tr>
+                                    <td>Document Name: </td>
                                     <td>
-                                        <input type="text" id="edit_docname" name="edit_docname" defaultValue="**docname**" value="**docname**" onblur="validate_docname();">
-                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+                                        <input type="text" id="edit_docname" name="edit_docname"
+                                               defaultValue="{{docname}}" value="{{docname}}"
+                                               {{^can_save}}disabled="disabled" class="disabled"{{/can_save}}
+                                               onblur="validate_docname();">
+                                        {{#can_save}}
+                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim">
+                                            <i class="fa fa-floppy-o"> </i>
+                                        </div>
+                                        {{/can_save}}
                                     </td>
-                                    <td><div class="button" id="validate_editor" onclick="validate_doc();">Validate</div></td>
-                                </tr>
-                                <tr><td>Corpus Name: </td>
                                     <td>
-                                        <input type="text" id="edit_corpusname" name="edit_corpusname" defaultValue="**corpusname**" value="**corpusname**" onblur="validate_corpusname();">
-                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+                                        <div class="button" id="validate_editor" onclick="validate_doc();">Validate</div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Corpus Name: </td>
+                                    <td>
+                                        <input type="text" id="edit_corpusname" name="edit_corpusname"
+                                               defaultValue="{{corpusname}}" value="{{corpusname}}"
+                                               {{^can_save}}disabled="disabled" class="disabled"{{/can_save}}
+                                               onblur="validate_corpusname();">
+                                        {{#can_save}}
+                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim">
+                                            <i class="fa fa-floppy-o"> </i>
+                                        </div>
+                                        {{/can_save}}
                                     </td>
                                     <td rowspan="6" class="report_container">
                                         <div id="validation_report">
@@ -96,27 +113,59 @@
                                 </tr>
                                 <tr>
                                     <td>Git Repo: </td>
-                                    <td><input type="text" id="edit_filename" name="edit_filename" value="**repo**" defaultValue="**repo**" onblur="validate_repo();">
-                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim"><i class="fa fa-floppy-o"> </i></div>
+                                    <td>
+                                        <input type="text" id="edit_filename" name="edit_filename"
+                                               value="{{repo}}" defaultValue="{{repo}}"
+                                               {{^can_save}}disabled="disabled" class="disabled"{{/can_save}}
+                                               onblur="validate_repo();">
+                                        {{#can_save}}
+                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim">
+                                            <i class="fa fa-floppy-o"> </i>
+                                        </div>
+                                        {{/can_save}}
                                     </td>
                                 </tr>
-                                <tr><td>XML Schema:</td><td>**edit_schema**</td></tr>
-                                <tr><td>Assigned to:</td><td>**edit_assignee**</td></tr>
-                                <tr><td>Status:</td><td>**edit_status**</td></tr>
-                                <tr><td>Mode:</td><td>**edit_mode**</td></tr>
+                                <tr>
+                                    <td>XML Schema:</td>
+                                    <td>
+                                        {{{edit_schema_html}}}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Assigned to:</td>
+                                    <td>
+                                        {{{edit_assignee_html}}}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Status:</td>
+                                    <td>
+                                        {{{edit_status_html}}}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Mode:</td>
+                                    <td>
+                                        {{{edit_mode_html}}}
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
 
-
-                        **embedded_editor**
+                        {{#ether_mode}}
+                            {{> ethercalc}}
+                        {{/ether_mode}}
+                        {{^ether_mode}}
+                            {{> codemirror}}
+                        {{/ether_mode}}
 
                         <h3>Metadata</h3>
-                        **metadata**
+                        {{{metadata}}}
 
                         <input type="hidden" name="metakey">
                         <input type="hidden" name="metavalue">
                         <br/><br/>
-                        **corpus_metadata**
+                        {{{corpus_metadata_html}}}
 
                         <div class="button" onClick="openPopup('popupPage.html')">
                             <i class="fa fa-info-circle"></i>
@@ -133,11 +182,20 @@
 
                     <div style="width:400px;padding-top:24px;">
                         <form id="form_clone" action="editor.py">
-                            <input type="hidden" name="id" id="id" value="**id**"/>
-                            <select id="source_doc" name="source_doc" style="width:100%;" **source_doc_attrs**>
-                                <option value="">-- Select document --</option>
-                                **existing_documents**
+                            <input type="hidden" name="id" id="id" value="{{id}}"/>
+                            {{#admin_gt_zero}}
+                            <select id="source_doc" name="source_doc" style="width: 240px;">
+                                <option value="">-- Select document to clone --</option>
+                                {{#docs}}
+                                    <option value="{{id}}">{{name}} ({{corpus}})</option>
+                                {{/docs}}
                             </select>
+                            {{/admin_gt_zero}}
+                            {{^admin_gt_zero}}
+                            <select id="source_doc" name="source_doc" style="width: 240px;" disabled="disabled">
+                                <option value="">-- Select document to clone --</option>
+                            </select>
+                            {{/admin_gt_zero}}
                             <br/>
                             <button type="button" id="clone_doc"
                                     onclick="document.getElementById('form_clone').submit();"
@@ -176,7 +234,12 @@
                     </div>
 
                 </article>
+                {{/doc_is_selected}}
+                {{^doc_is_selected}}
+                <h2>No document selected | <a href="index.py">back to document list</a> </h2>
+                {{/doc_is_selected}}
             </div>
         </div>
     </div>
 </body>
+
