@@ -42,12 +42,14 @@ class MetaValidator(Validator):
             raise Exception("Unknown metadata validation operator: '" + str(self.operator) + "'")
 
     def validate(self, metadata, doc_name, doc_corpus):
+        out_dict = {"report":"", "tooltip":""}
         if self.corpus is not None:
             if re.search(self.corpus, doc_corpus) is None:
                 return {"report": "", "tooltip": ""}, False
         if self.doc is not None:
             if re.search(self.doc, doc_name) is None:
                 return {"report": "", "tooltip": ""}, False
+
 
         report, tooltip = self._apply_rule(metadata)
         return {"report": report, "tooltip": tooltip}, True
