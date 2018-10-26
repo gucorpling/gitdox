@@ -202,13 +202,11 @@
 
                             <!-- edit button -->
                             <td style="text-align:center;">
-                                <form action="editor.py" method="post" id="form_edit_{{id}}">
-                                    <input type="hidden" name="id" value="{{id}}">
-                                    <div onclick="document.getElementById('form_edit_{{id}}').submit();"
-                                         class="button">
+                                <a href="editor.py?id={{id}}" style="color:black;">
+                                    <div class="button">
                                         <i class="fa fa-pencil-square-o"></i> edit
                                     </div>
-                                </form>
+                                </a>
                             </td>
 
                             <!-- delete button -->
