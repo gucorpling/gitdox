@@ -45,11 +45,11 @@ class MetaValidator(Validator):
         out_dict = {"report":"", "tooltip":""}
         if self.corpus is not None:
             if re.search(self.corpus, doc_corpus) is None:
-                return out_dict
+                return {"report": "", "tooltip": ""}, False
         if self.doc is not None:
             if re.search(self.doc, doc_name) is None:
-                return out_dict
+                return {"report": "", "tooltip": ""}, False
+
 
         report, tooltip = self._apply_rule(metadata)
-        return {"report": report,
-                "tooltip": tooltip}
+        return {"report": report, "tooltip": tooltip}, True

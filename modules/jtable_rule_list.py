@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 from gitdox_sql import *
 import json
@@ -11,12 +11,17 @@ def list_rules():
 	try:
 		parameter = cgi.FieldStorage()
 		sort = parameter.getvalue("jtSorting")
+		domain_filter = parameter.getvalue("domain")
 		if sort is not None:
 			rules = get_sorted_rules(sort)
 		else:
 			rules = get_validate_rules()
+
 		json_rules = []
 		for rule in rules:
+			if domain_filter and rule[2] != domain_filter:
+				continue
+
 			new_json_rule = {}
 			new_json_rule['corpus'] = rule[0]
 			new_json_rule['doc'] = rule[1]

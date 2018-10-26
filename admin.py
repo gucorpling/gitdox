@@ -30,7 +30,6 @@ scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 userdir = scriptpath + "users" + os.sep
 templatedir = scriptpath + "templates" + os.sep
 config = ConfigObj(userdir + 'config.ini')
-skin = config["skin"]
 project = config["project"]
 
 
@@ -244,9 +243,6 @@ def load_admin(user, admin, theform):
 	if sql_statements > 0:
 		render_data["sql_statements"] = sql_statements
 
-	render_data["navbar_html"] = get_menu()
-	render_data["skin_stylesheet"] = skin
-
 	return render("admin", render_data)
 
 
@@ -265,8 +261,6 @@ def load_user_config(user, admin, theform):
 
 	render_data['user'] = user
 	render_data['admin_eq_one'] = admin == "1"
-	render_data["navbar_html"] = get_menu()
-	render_data["skin_stylesheet"] = skin
 
 	return render("user_admin", render_data)
 

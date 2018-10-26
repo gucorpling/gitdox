@@ -211,11 +211,17 @@ def get_corpora():
 def get_validate_rules():
 		return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate", None)
 
+def get_xml_rules():
+	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'xml'", None)
+
 def get_meta_rules():
 	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'meta'", None)
 
 def get_ether_rules():
 	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'ether'", None)
+
+def get_export_rules():
+	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'export'", None)
 
 def get_sorted_rules(sort):
 	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate ORDER BY " + sort, None)  # parameterization doesn't work for order by
