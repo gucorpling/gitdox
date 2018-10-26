@@ -57,6 +57,7 @@
                         <table id="corpus_list_table">
                             <tr><td class="corp_label">Choose a corpus:</td><td>
                                 <select name="sel_corpus" onchange="this.form.submit();">
+                                    <option value="all">(show all)</option>
                                     {{#corpora}}
                                     {{#selected}}
                                     <option value="{{name}}" selected="selected">
@@ -69,7 +70,6 @@
                                     </option>
                                     {{/selected}}
                                     {{/corpora}}
-                                    <option value="all">(show all)</option>
                                 </select>
                             </td></tr>
                         </table>
