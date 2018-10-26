@@ -104,7 +104,8 @@ def validate_doc_meta(doc_id, editor):
 	else:
 		report["report"] = "<strong>Metadata Problems:</strong><br>" + report["report"]
 
-    return report
+	return report
+
 
 def validate_doc_ether(doc_id, editor=False):
 	ether_rules = [EtherValidator(x) for x in get_ether_rules()]
