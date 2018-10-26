@@ -419,7 +419,12 @@ def load_page(user,admin,theform):
 	else:
 		render_data['ether_mode'] = False
 
-	render_data['doc_is_selected'] = len(doc_id) != 0
+	# stop here if no doc selected
+	if doc_id:
+		render_data['doc_is_selected'] = len(doc_id) != 0
+	else:
+		return render("editor", render_data)
+
 	render_data['id'] = doc_id
 	render_data['mode'] = mode
 	render_data['schema'] = schema
