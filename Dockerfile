@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:16.04
 EXPOSE 80
 
 # install deps
@@ -14,7 +14,7 @@ RUN chmod +x /var/www/html/*.py
 RUN chmod +x /var/www/html/modules/*.py
 
 # keep these in sync with requirements.txt
-RUN pip install lxml requests github3.py==0.9.3 passlib pystache
+RUN pip install -r /var/www/html/requirements.txt
 
 # install ethercalc and run as a service
 RUN npm install -g ethercalc
