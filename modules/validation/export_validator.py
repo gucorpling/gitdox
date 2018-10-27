@@ -30,10 +30,10 @@ class ExportValidator(Validator):
         err = re.sub(r'/tmp/[A-Za-z0-9_]+:','XML schema: <br>',err)
         err = re.sub(r'/tmp/[A-Za-z0-9_]+','XML schema ',err)
         err = re.sub(r'\n','<br/>',err)
-        if err == "XML schema  validates":
+        if err == "XML schema validates":
             report = ""
         else:
             report = "Problems with exporting with " + self.config \
-                     + " and validating with " + self.schema + ":<br>" + err + "<br>"
+                     + " and validating with " + self.schema + ":<br>" + err.decode("utf8") + "<br>"
 
         return report, True
