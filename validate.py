@@ -98,9 +98,9 @@ def validate_doc_meta(doc_id, editor):
 			report["report"] += res['report']
 
 	if not meta_rule_fired:
-		report["report"] = "<strong>no applicable metadata rules<br></strong>"
-	elif len(report) == 0:
-		report["report"] = "<strong>metadata is valid<br></strong>"
+		report["report"] = "<strong>No applicable metadata rules<br></strong>"
+	elif len(report["report"]) == 0:
+		report["report"] = "<strong>Metadata is valid<br></strong>"
 	else:
 		report["report"] = "<strong>Metadata Problems:</strong><br>" + report["report"]
 
