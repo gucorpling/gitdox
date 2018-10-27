@@ -139,11 +139,11 @@ def validate_doc_ether(doc_id, editor=False):
 			report += res['report']
 		cells += res['cells']
 	if not ether_rule_fired:
-		report = "<strong>no applicable EtherCalc validation rules<br></strong>"
+		report = "<strong>No applicable spreadsheet validation rules<br></strong>"
 	elif report:
-		report = "<strong>Ether Problems:</strong><br>" + report
+		report = "<strong>Spreadsheet Problems:</strong><br>" + report
 	else:
-		report = "<strong>EtherCalc is valid</strong><br>"
+		report = "<strong>Spreadsheet is valid</strong><br>"
 
 	export_report = ""
 	export_rule_fired = False
@@ -152,11 +152,11 @@ def validate_doc_ether(doc_id, editor=False):
 		export_rule_fired = export_rule_fired or fired
 		export_report += res
 	if not export_rule_fired:
-		export_report = "<strong>no applicable export validation rules<br></strong>"
+		export_report = "<strong>No applicable export validation rules<br></strong>"
 	elif export_report:
 		export_report = "<strong>Export Problems:</strong><br>" + export_report
 	else:
-		export_report = "<strong>exports are valid</strong><br>"
+		export_report = "<strong>Export is valid</strong><br>"
 
 	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name)
@@ -189,11 +189,11 @@ def validate_doc_xml(doc_id, schema, editor=False):
 		xml_report += res
 		xml_rule_fired = xml_rule_fired or fired
 	if not xml_rule_fired:
-		xml_report = "<strong>no applicable XML schemas<br></strong>"
+		xml_report = "<strong>Mo applicable XML schemas<br></strong>"
 	elif xml_report:
-		xml_report = "<strong>Export Problems:</strong><br>" + xml_report
+		xml_report = "<strong>XML problems:</strong><br>" + xml_report
 	else:
-		xml_report = "<strong>xml is valid</strong><br>"
+		xml_report = "<strong>XML is valid</strong><br>"
 
 	meta_report = validate_doc_meta(doc_id, editor)
 
