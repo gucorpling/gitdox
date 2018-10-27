@@ -14,7 +14,7 @@ RUN chmod +x /var/www/html/*.py
 RUN chmod +x /var/www/html/modules/*.py
 
 # keep these in sync with requirements.txt
-RUN pip install lxml requests github3.py==0.9.3 passlib
+RUN pip install lxml requests github3.py==0.9.3 passlib pystache
 
 # install ethercalc and run as a service
 RUN npm install -g ethercalc

@@ -528,9 +528,9 @@ def deunique_properly_nested_tags(sgml):
 
 def ether_to_sgml(ether, doc_id,config=None):
 	"""
-
 	:param ether: String in SocialCalc format
 	:param doc_id: GitDox database internal document ID number as string
+	:param config: Name of an export config (.ini file) under schemas/
 	:return:
 	"""
 
@@ -636,8 +636,6 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 			# New row starting from this cell, sort previous lists for opening and closing orders
 			if row != last_row:
-				close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
-
 				for element in open_tags[last_row]:
 					open_tag_order[last_row].append(element)
 
@@ -649,16 +647,16 @@ def ether_to_sgml(ether, doc_id,config=None):
 					if prim_elt in open_tags[last_row] and prim_elt in open_tag_length:
 						if span == open_tag_length[prim_elt]:
 							open_tags[last_row][prim_elt].append((attr, val))
-							if prim_elt not in close_tags[last_row + span]:
-								close_tags[last_row+span-1].append(prim_elt)
+							close_tags[last_row + span].append(prim_elt)
 							prim_found = True
 					if not prim_found:
 						if sec_elt in open_tags[last_row] and sec_elt in open_tag_length:
 							if span == open_tag_length[sec_elt]:
 								open_tags[last_row][sec_elt].append((attr, val))
-								if sec_elt not in close_tags[last_row + span]:
-									close_tags[last_row + span - 1].append(sec_elt)
+								close_tags[last_row + span].append(sec_elt)
 				sec_element_checklist = []  # Purge sec_elements
+
+				close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 
 				last_row = row
 			if 't' in cell[2]:  # cell contains text
@@ -700,6 +698,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 					close_row = row + rowspan
 				else:
 					close_row = row + 1
+
 				# this introduces too many close tags for elts that have more than one attr.
 				# We take care of this later with close_tag_debt
 				close_tags[close_row].append(element)
@@ -734,8 +733,8 @@ def ether_to_sgml(ether, doc_id,config=None):
 				if attrib != "":
 					tag += ' ' + attrib + '="' + value + '"'
 					attr_count += 1
-					if attr_count > 1:
-						close_tag_debt[element] += 1
+			close_tag_debt[element] = len(open_tags[r][element]) - 1
+
 			if element in config.milestones:
 				tag += '/>\n'
 			else:
