@@ -19,11 +19,11 @@ function validate_all() {
                 var sort3 = '';
                 $.each(value, function(k,v) {
                     if (k == "ether") {
-                        if (v.indexOf("EtherCalc is valid") > -1) {
+                        if (v.indexOf("Spreadsheet is valid") > -1) {
                             color = 'green';
                             sort1 = 'v';
                         }
-                        else if (v.indexOf("no applicable") > -1) {
+                        else if (v.indexOf("No applicable") > -1) {
                             color = 'gray';
                             sort1 = 'n';
                         }
@@ -31,14 +31,14 @@ function validate_all() {
                             color = 'red';
                             sort1 = 'i';
                         }
-                        output1 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-table" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
+                        output1 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-table" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
                     }
                     else if (k == "meta") {
-                        if (v.indexOf("metadata is valid") > -1) {
+                        if (v.indexOf("Metadata is valid") > -1) {
                             color = 'green';
                             sort2 = 'v';
                         }
-                        else if (v.indexOf("no applicable") > -1) {
+                        else if (v.indexOf("No applicable") > -1) {
                             color = 'gray';
                             sort2 = 'n';
                         }
@@ -46,14 +46,14 @@ function validate_all() {
                             color = 'red';
                             sort2 = 'i';
                         }
-                        output2 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-tags" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
+                        output2 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-tags" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
                     }
                     else if (k == "xml") {
-                        if (v.indexOf("xml is valid") > -1) {
+                        if (v.indexOf("XML is valid") > -1) {
                             color = 'green';
                             sort1 = 'v';
                         }
-                        else if (v.indexOf("no applicable") > -1) {
+                        else if (v.indexOf("No applicable") > -1) {
                             color = 'gray';
                             sort1 = 'n';
                         }
@@ -61,14 +61,14 @@ function validate_all() {
                             color = 'red';
                             sort1 = 'i';
                         }
-                        output1 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-code" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
+                        output1 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-code" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
                     }
                     else if (k == "export") {
-                        if (v.indexOf("exports are valid") > -1) {
+                        if (v.indexOf("Export is valid") > -1) {
                             color = 'green';
                             sort3 = 'v';
                         }
-                        else if (v.indexOf("no applicable") > -1) {
+                        else if (v.indexOf("No applicable") > -1) {
                             color = 'gray';
                             sort3 = 'n';
                         }
