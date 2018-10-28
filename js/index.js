@@ -66,21 +66,24 @@ function validate_all() {
                     else if (k == "export") {
                         if (v.indexOf("Export is valid") > -1) {
                             color = 'green';
+                            disp = 'inline-block';
                             sort3 = 'v';
                         }
                         else if (v.indexOf("No applicable") > -1) {
                             color = 'gray';
+                            disp = 'none';
                             sort3 = 'n';
                         }
                         else {
                             color = 'red';
+                            disp = 'inline-block';
                             sort3 = 'i';
                         }
                         output3 += '<div class="tooltip" style="display:inline-block"><i class="fa fa-file" style="color:' + color + '">&nbsp;</i><span>' + v + '</span></div>';
                     }
                 });
                 if (!output3) {
-                    output3 = '<div class="tooltip" style="display:inline-block"><i class="fa fa-file" style="visibility:hidden;">&nbsp;</i><span> </span></div>';
+                    output3 = '<div class="tooltip" style="display:inline-block"><i class="fa fa-file" style="visibility:hidden;">&nbsp;</i><span class="msg"> </span></div>';
                 }
                 $("#validate_"+key).before("<i hidden>" + sort1 + sort2 + sort3 + "</i>");
                 $("#validate_"+key).html(output1 + output2 + output3);
