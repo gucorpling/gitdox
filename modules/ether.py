@@ -826,12 +826,28 @@ def sheet_exists(ether_path, name):
 	return len(get_socialcalc(ether_path,name)) > 0
 
 
-def get_socialcalc(ether_path, name):
+def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
+	"""
+	Get SocialCalc format serialization for an EtherCalc spreadsheet, or a cached serialization from the sqlite
+	DB is available for a specified doc_id
+
+	:param ether_path: The EtherCalc server base URL, e.g. http://server.com/ethercalc/
+	:param name: spreadsheet name, e.g. gd_corpname_docname
+	:param doc_id: optional doc_id in docs table to fetch/set SocialCalc from cache
+	:return: SocialCalc string
+	"""
+
+	if doc_id is not None and not dirty:
+		cache = get_cache(doc_id)[0][0]
+		if cache is not None:
+			return cache
 	command = "curl --netrc -X GET " + ether_path + "_/" + name
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
-	return stdout.decode("utf8")
-
+	socialcalc = stdout.decode("utf8")
+	if doc_id is not None:
+		set_cache(doc_id, socialcalc)
+	return socialcalc
 
 
 def get_timestamps(ether_path):
@@ -841,7 +857,6 @@ def get_timestamps(ether_path):
 	for room in times:
 		output[room.replace("timestamp-", "")] = times[room]
 	return output
-
 
 
 if __name__  == "__main__":

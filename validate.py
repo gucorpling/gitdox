@@ -15,8 +15,9 @@ from modules.validation.meta_validator import MetaValidator
 from modules.validation.ether_validator import EtherValidator
 from modules.validation.export_validator import ExportValidator
 
-def highlight_cells(cells, ether_url, ether_doc_name):
-	old_ether = get_socialcalc(ether_url, ether_doc_name)
+
+def highlight_cells(cells, ether_url, ether_doc_name, doc_id=None, dirty=True):
+	old_ether = get_socialcalc(ether_url, ether_doc_name, doc_id=doc_id, dirty=dirty)
 	old_ether_lines = old_ether.splitlines()
 	new_ether_lines = []
 
@@ -75,6 +76,7 @@ def highlight_cells(cells, ether_url, ether_doc_name):
 	new_ether = '\n'.join(new_ether_lines)
 	make_spreadsheet(new_ether, ether_url + "_/" + ether_doc_name, "socialcalc")
 
+
 def validate_doc_meta(doc_id, editor):
 	# metadata validation
 	report = {"report":"","tooltip":""}
@@ -106,8 +108,16 @@ def validate_doc_meta(doc_id, editor):
 
 	return report
 
+#@profile
+def validate_doc_ether(doc_id, editor=False, dirty=True):
+	"""
+	Validate a document in spreadsheet mode
 
-def validate_doc_ether(doc_id, editor=False):
+	:param doc_id: doc ID in the sqlite DB docs table
+	:param editor: boolean - is this being run by user from editor.py?
+	:param dirty: boolean - if spreadsheet already cached, has its SocialCalc changed since last recorded timestamp?
+	:return: dictionary with validation report
+	"""
 	ether_rules = [EtherValidator(x) for x in get_ether_rules()]
 	export_rules = [ExportValidator(x) for x in get_export_rules()]
 
@@ -116,7 +126,7 @@ def validate_doc_ether(doc_id, editor=False):
 	doc_corpus = doc_info[1]
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
-	socialcalc = get_socialcalc(ether_url, ether_doc_name)
+	socialcalc = get_socialcalc(ether_url, ether_doc_name, doc_id=doc_id, dirty=dirty)
 	parsed_ether = parse_ether(socialcalc)
 
 	report = ''
@@ -159,7 +169,7 @@ def validate_doc_ether(doc_id, editor=False):
 		export_report = "<strong>Export is valid</strong><br>"
 
 	if editor:
-		highlight_cells(cells, ether_url, ether_doc_name)
+		highlight_cells(cells, ether_url, ether_doc_name, doc_id=doc_id, dirty=dirty)
 		full_report = report + meta_validation["report"] + export_report
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
@@ -171,6 +181,7 @@ def validate_doc_ether(doc_id, editor=False):
 		json_report['export'] = export_report
 		return json_report
 
+#@profile
 def validate_doc_xml(doc_id, schema, editor=False):
 	rules = [XmlValidator(x) for x in get_xml_rules()]
 
@@ -214,6 +225,7 @@ def validate_doc_xml(doc_id, schema, editor=False):
 		json_report['meta'] = meta_report
 		return json_report
 
+#@profile
 def validate_all_docs():
 	docs = generic_query("SELECT id, name, corpus, mode, schema, validation, timestamp FROM docs", None)
 	doc_timestamps = get_timestamps(ether_url)
@@ -227,11 +239,18 @@ def validate_all_docs():
 				if timestamp == doc_timestamps[ether_name]:
 					reports[doc_id] = json.loads(validation)
 				else:
-					reports[doc_id] = validate_doc_ether(doc_id)
+					reports[doc_id] = validate_doc_ether(doc_id, dirty=True)
 					update_validation(doc_id, json.dumps(reports[doc_id]))
 					update_timestamp(doc_id, doc_timestamps[ether_name])
 			else:
-				reports[doc_id] = validate_doc_ether(doc_id)
+				if ether_name in doc_timestamps:
+					new_time = doc_timestamps[ether_name]
+				else:
+					new_time = None
+				if new_time == timestamp:
+					reports[doc_id] = validate_doc_ether(doc_id, dirty=False)
+				else:
+					reports[doc_id] = validate_doc_ether(doc_id, dirty=True)
 				#reports[doc_id] = {"ether":"sample_ether","meta":"sample_meta"}
 				update_validation(doc_id, json.dumps(reports[doc_id]))
 				if ether_name in doc_timestamps:
