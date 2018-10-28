@@ -258,9 +258,12 @@ if __name__ == "__main__":
 		from argparse import ArgumentParser
 		p = ArgumentParser()
 		p.add_argument("-d","--doc",help="doc ID in gitdox.db or 'all'", default="all")
+		p.add_argument("-i","--invalidate",action="store_true",help="invalidate all documents before running validation")
 
 		opts = p.parse_args()
 		doc_id = opts.doc
+		if opts.invalidate:
+			invalidate_doc_by_name("%","%")
 		if doc_id != "all":
 			_, _, _, _, _, mode, schema = get_doc_info(doc_id)
 	else:
