@@ -195,7 +195,8 @@ def validate_doc_xml(doc_id, schema, editor=False):
 	else:
 		xml_report = "<strong>XML is valid</strong><br>"
 
-	meta_report = validate_doc_meta(doc_id, editor)
+	meta_validation = validate_doc_meta(doc_id, editor)
+	meta_report = meta_validation["report"]
 
 	# report
 	if editor is True:
