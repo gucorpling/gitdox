@@ -31,7 +31,7 @@ def setup_db():
 
 	#docs table
 	cur.execute('''CREATE TABLE IF NOT EXISTS docs
-				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text)''')
+				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text, cache text)''')
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, corpus_meta text, UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key) ON CONFLICT REPLACE)''')
@@ -47,6 +47,23 @@ def setup_db():
 def create_document(doc_id, name, corpus, status, assigned_username, filename, content,mode="xml", schema='--none--'):
 	generic_query("INSERT INTO docs(id, name,corpus,status,assignee_username,filename,content,mode,schema) VALUES(?,?,?,?,?,?,?,'xml',?)",
 		(int(doc_id), name, corpus, status, assigned_username, filename, content, schema))
+
+
+def get_cache(doc_id):
+	try:
+		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
+	except sqlite3.Error as err: # Old schema without cache column
+		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
+		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
+	return cache
+
+
+def set_cache(doc_id, cache_contents):
+	try:
+		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
+	except sqlite3.Error as err:  # Old schema without cache column
+		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
+		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
 
 
 def generic_query(sql, params):

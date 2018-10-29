@@ -134,7 +134,7 @@ padding: 10px;
   position:relative;
 }
 
-.tooltip span
+.tooltip span.msg
 {
   display:none;
   -moz-border-radius:6px;
@@ -144,7 +144,7 @@ padding: 10px;
   background:white;
 }
 
-.tooltip:hover span
+.tooltip:hover span.msg
 {
   display:block;
   position:absolute;
