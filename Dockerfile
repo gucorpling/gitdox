@@ -13,7 +13,6 @@ RUN chown -R www-data:www-data /var/www/html
 RUN chmod +x /var/www/html/*.py
 RUN chmod +x /var/www/html/modules/*.py
 
-# keep these in sync with requirements.txt
 RUN pip install -r /var/www/html/requirements.txt
 
 # install ethercalc and run as a service
