@@ -27,13 +27,14 @@ def render(template_name, variables, template_dir='templates', file_ext=".mustac
     Returns:
         str: rendered HTML.
     """
-    # load shared Mustache templates so we can reference them in our large templates
-    partials_dir = prefix + template_dir + os.sep + 'partials' + os.sep
-    partials = dict([(filename[:-len(file_ext)], open(partials_dir + filename, 'r').read())
-                                    for filename in os.listdir(prefix + template_dir + os.sep + 'partials')
-                                    if filename.endswith(file_ext)])
-    renderer = Renderer(partials=partials)
+    template_dir = prefix + template_dir
+
+    # load Mustache templates so we can reference them in our large templates
+    templates = dict([(filename[:-len(file_ext)], open(template_dir + os.sep + filename, 'r').read())
+                      for filename in os.listdir(template_dir)
+                      if filename.endswith(file_ext)])
+    renderer = Renderer(partials=templates)
 
     variables['skin_stylesheet'] = config['skin']
     variables['navbar_html'] = get_menu()
-    return renderer.render_path(prefix + template_dir + os.sep + template_name + file_ext, variables)
+    return renderer.render_path(template_dir + os.sep + template_name + file_ext, variables)
