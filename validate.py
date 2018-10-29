@@ -200,7 +200,7 @@ def validate_doc_xml(doc_id, schema, editor=False):
 		xml_report += res
 		xml_rule_fired = xml_rule_fired or fired
 	if not xml_rule_fired:
-		xml_report = "<strong>Mo applicable XML schemas<br></strong>"
+		xml_report = "<strong>No applicable XML schemas<br></strong>"
 	elif xml_report:
 		xml_report = "<strong>XML problems:</strong><br>" + xml_report
 	else:
