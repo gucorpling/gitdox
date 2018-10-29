@@ -284,7 +284,7 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 		flushed += ("cell:"
 			+ colmap[alias][stack_len - 1]
 			+ str(last_start[alias][-1])
-			+ ":t:" + last_value[alias][-1]
+			+ ":t:" + str(last_value[alias][-1])
 			+ ":f:1:tvf:1" + span_string + "\n")
 
 		# pop the stack since we've closed a tag
@@ -295,12 +295,10 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 	return flushed
 
 
-def number_to_letter(number):
-	# Currently support up to 26 columns; no support for multiletter column headers beyond letter Z
-	if number < 27:
-		return chr(number + ord('a')-1).upper()
-	else:
-		return None
+def number_to_letters(number):
+	char1 = chr((number // 26) + ord('a')-1).upper()
+	char2 = chr((number % 26) + ord('a')-1).upper()
+	return char1 + char2
 
 
 def sgml_to_ether(sgml, ignore_elements=False):
@@ -383,11 +381,11 @@ version:1.5
 
 				if anno_name not in colmap:
 					maxcol += 1
-					colmap[anno_name] = [number_to_letter(maxcol)]
+					colmap[anno_name] = [number_to_letters(maxcol)]
 				elif anno_name in colmap and \
 					 len(last_start[anno_name]) > len(colmap[anno_name]):
 					maxcol += 1
-					colmap[anno_name].append(number_to_letter(maxcol))
+					colmap[anno_name].append(number_to_letters(maxcol))
 
 		elif len(line) > 0:  # Token
 			token = line.strip()
