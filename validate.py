@@ -41,15 +41,20 @@ def highlight_cells(cells, ether_url, ether_doc_name, doc_id=None, dirty=True):
 			if parts[2] == "f":  # Pure formatting cell, no content
 				continue
 
-		parsed_cell = re.match(r'cell:([A-Z]+\d+)(:.*)$', line)
+		parsed_cell = re.match(r'cell:([A-Z]+)(\d+)(:.*)$', line)
 		if parsed_cell is not None:
-			col_row = parsed_cell.group(1)
-			other = parsed_cell.group(2)
+			col = parsed_cell.group(1)
+			row = parsed_cell.group(2)
+			col_row = col + row
+			other = parsed_cell.group(3)
 			bg = re.search(r':bg:(\d+)($|:)', other)
 			if bg is not None:
 				bg = bg.group(1)
+			span = parts[-1] if "rowspan:" in line else "1"
 
-			if col_row in cells:
+			spanned_rows = [col + str(int(row) + x) for x in range(int(span))]
+			highlighted_spanned_rows = [x for x in spanned_rows if x in cells]
+			if len(highlighted_spanned_rows) > 0:
 				if bg is not None:
 					if bg != new_color_number:
 						new_line = re.sub(r':bg:' + bg, r':bg:' + new_color_number, line)
