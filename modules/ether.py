@@ -616,6 +616,11 @@ def ether_to_sgml(ether, doc_id,config=None):
 				element = col_name
 				attrib = element
 
+			# Check whether attrib contains a constant value instruction
+			const_val = ""
+			if "=" in attrib:
+				attrib, const_val = attrib.split("=",1)
+
 			# Check to see if the cell has been merged with other cells
 			if 'rowspan' in cell[2]:
 				rowspan = int(cell[2]['rowspan'])
@@ -657,12 +662,16 @@ def ether_to_sgml(ether, doc_id,config=None):
 				close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 
 				last_row = row
-			if 't' in cell[2]:  # cell contains text
-				content = cell[2]['t']
-			elif 'v' in cell[2]: # cell contains numerical value
-				content = cell[2]['v']
-			elif col_name != 'tok':
-				continue  # cell does not contain a value and this is not a token entry
+
+			if const_val != "":
+				content = const_val
+			else:
+				if 't' in cell[2]:  # cell contains text
+					content = cell[2]['t']
+				elif 'v' in cell[2]: # cell contains numerical value
+					content = cell[2]['v']
+				elif col_name != 'tok':
+					continue  # cell does not contain a value and this is not a token entry
 
 			if col_name == 'tok':
 				if "<" in content or "&" in content or ">" in content:
