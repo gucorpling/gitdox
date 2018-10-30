@@ -296,9 +296,12 @@ def flush_close(closing_element, last_value, last_start, row_num, colmap, aliase
 
 
 def number_to_letters(number):
-	char1 = chr((number // 26) + ord('a')-1).upper()
-	char2 = chr((number % 26) + ord('a')-1).upper()
-	return char1 + char2
+	if number < 27:
+		return chr(number + ord('a') - 1).upper()
+	else:
+		char1 = chr((number // 26) + ord('a')-1).upper()
+		char2 = chr((number % 26) + ord('a')-1).upper()
+		return char1 + char2
 
 
 def sgml_to_ether(sgml, ignore_elements=False):
