@@ -32,11 +32,12 @@
                 {{> header}}
             </div>
             <div id="content">
-                <h1>GitDox - Validation</h1>
-                <p style="border-bottom:groove;">
-                    <i>validation rule management</i> | <a href="index.py">back to document list</a>
+                <h1>GitDox - Validation Rules</h1>
+                <p style="margin-bottom:24px;">
+                    <a href="index.py"><i class="fa fa-arrow-left"></i> return to index</a>
                 </p>
 
+                <!-- override jtable styles for aesthetic consistency -->
                 <style>
                 .jtable-title {
                     font-size: 16px !important;
@@ -53,17 +54,17 @@
                 }
                 </style>
 
+                <ul class="tabs">
+                    <li data-tab="xml-table-container" class="tab-link current">XML</li>
+                    <li data-tab="meta-table-container" class="tab-link">Metadata</li>
+                    <li data-tab="ether-table-container" class="tab-link">EtherCalc</li>
+                    <li data-tab="export-table-container" class="tab-link">Export</li>
+                </ul>
                 <div style="padding-bottom: 32px;">
-                    <div id="xml-table-container"></div>
-                </div>
-                <div style="padding-bottom: 32px;">
-                    <div id="meta-table-container"></div>
-                </div>
-                <div style="padding-bottom: 32px;">
-                    <div id="ether-table-container"></div>
-                </div>
-                <div style="padding-bottom: 32px;">
-                    <div id="export-table-container"></div>
+                    <div id="xml-table-container" class="tab-content current"></div>
+                    <div id="meta-table-container" class="tab-content"></div>
+                    <div id="ether-table-container" class="tab-content"></div>
+                    <div id="export-table-container" class="tab-content"></div>
                 </div>
             </div>
         </div>
