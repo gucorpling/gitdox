@@ -113,7 +113,20 @@ class EtherValidator(Validator):
                     if row not in all_rows:
                         all_rows.append(row)
 
-        return name_letters, arg_letters, name_tuples, arg_tuples, start_rows, all_rows
+        name_start_cells = []
+        name_start_rows = set() # for O(1) lookup
+        for letter in name_letters:
+            name_start_cells += [(letter, row) for row in start_rows[letter]]
+            name_start_rows = name_start_rows.union(set(row for row in start_rows[letter]))
+
+        arg_start_cells = []
+        arg_start_rows = set()
+        for letter in arg_letters:
+            arg_start_cells += [(letter, row) for row in start_rows[letter]]
+            arg_start_rows = arg_start_rows.union(set(row for row in start_rows[letter]))
+
+        return name_letters, arg_letters, name_tuples, arg_tuples, start_rows, all_rows, \
+            name_start_cells, name_start_rows, arg_start_cells, arg_start_rows
 
     def _apply_subspan(self, parsed_ether):
         report = ''
@@ -128,7 +141,9 @@ class EtherValidator(Validator):
             return report, tooltip, cells
 
         name_letters, arg_letters, name_tuples, \
-                arg_tuples, start_rows, all_rows = self._binary_op_setup(parsed_ether)
+                arg_tuples, start_rows, all_rows, \
+                name_start_cells, name_start_rows, \
+                arg_start_cells, arg_start_rows = self._binary_op_setup(parsed_ether)
 
         for row in all_rows:
             # check to see if all cells in rhs are contained within cells on lhs
@@ -154,24 +169,44 @@ class EtherValidator(Validator):
             return report, tooltip, cells
 
         name_letters, arg_letters, name_tuples, \
-                arg_tuples, start_rows, all_rows = self._binary_op_setup(parsed_ether)
+                arg_tuples, start_rows, all_rows, \
+                name_start_cells, name_start_rows, \
+                arg_start_cells, arg_start_rows = self._binary_op_setup(parsed_ether)
 
         for row in all_rows:
+            if row == "1":
+                continue
             name_len = len(name_tuples[row])
             arg_len = len(arg_tuples[row])
 
             if name_len > arg_len:
                 for letter, _ in name_tuples[row][arg_len:]:
-                    cells.append(letter + row)
-                    report += ("Cell " + letter + row
-                            + " lacks a corresponding value in one of these columns: "
-                            + ", ".join(arg_letters) + "<br/>")
+                    if row not in name_start_rows:
+                        cells.append(letter + row)
+                        report += ("Cell " + letter + row
+                                + " has no corresponding value in one of these columns: "
+                                + ", ".join(arg_letters) + "<br/>")
             elif arg_len > name_len:
                 for letter, _ in arg_tuples[row][name_len:]:
-                    cells.append(letter + row)
-                    report += ("Cell " + letter + row
-                            + " lacks a corresponding value in one of these columns: "
-                            + ", ".join(name_letters) + "<br/>")
+                    if row not in arg_start_rows:
+                        cells.append(letter + row)
+                        report += ("Cell " + letter + row
+                                + " has no corresponding value in one of these columns: "
+                                + ", ".join(name_letters) + "<br/>")
+
+        for letter, row in name_start_cells:
+            if row not in arg_start_rows:
+                cells.append(letter + row)
+                report += ("Cell " + letter + row
+                           + " needs a span of equal length beginning in one of these columns: "
+                           + ", ".join(arg_letters) + "<br/>")
+
+        for letter, row in arg_start_cells:
+            if row not in name_start_rows:
+                cells.append(letter + row)
+                report += ("Cell " + letter + row
+                           + " needs a span of equal length beginning in one of these columns: "
+                           + ", ".join(name_letters) + "<br/>")
 
         return report, tooltip, cells
 
@@ -187,37 +222,58 @@ class EtherValidator(Validator):
             report += err
             return report, tooltip, cells
 
+
         name_letters, arg_letters, name_tuples, \
-                arg_tuples, start_rows, all_rows = self._binary_op_setup(parsed_ether)
+                arg_tuples, start_rows, all_rows, \
+                name_start_cells, name_start_rows, \
+                arg_start_cells, arg_start_rows = self._binary_op_setup(parsed_ether)
 
         for row in all_rows:
+            if row == "1":
+                continue
+
             name_len = len(name_tuples[row])
             arg_len = len(arg_tuples[row])
 
             if name_len > arg_len:
                 for letter, _ in name_tuples[row][arg_len:]:
-                    cells.append(letter + row)
-                    report += ("Cell " + letter + row
-                            + " lacks a corresponding value in one of these columns: "
-                            + ", ".join(arg_letters) + "<br/>")
+                    if row not in name_start_rows:
+                        cells.append(letter + row)
+                        report += ("Cell " + letter + row
+                                + " has no corresponding value in one of these columns: "
+                                + ", ".join(arg_letters) + "<br/>")
             elif arg_len > name_len:
                 for letter, _ in arg_tuples[row][name_len:]:
-                    cells.append(letter + row)
-                    report += ("Cell " + letter + row
-                            + " lacks a corresponding value in one of these columns: "
-                            + ", ".join(name_letters) + "<br/>")
+                    if row not in arg_start_rows:
+                        cells.append(letter + row)
+                        report += ("Cell " + letter + row
+                                + " has no corresponding value in one of these columns: "
+                                + ", ".join(name_letters) + "<br/>")
 
-            if row != "1":
-                for i in range(min(len(name_tuples[row]), len(arg_tuples[row]))):
-                    name_letter, name_content = name_tuples[row][i]
-                    arg_letter, arg_content = arg_tuples[row][i]
+            for i in range(min(len(name_tuples[row]), len(arg_tuples[row]))):
+                name_letter, name_content = name_tuples[row][i]
+                arg_letter, arg_content = arg_tuples[row][i]
 
-                    if arg_content != name_content and (row in start_rows[arg_letter] or row in start_rows[name_letter]):
-                        cells.append(name_letter + row)
-                        cells.append(arg_letter + row)
-                        report += ("Cells " + name_letter + row
-                                + " and " + arg_letter + row
-                                + " must have equivalent content.<br/>")
+                if arg_content != name_content and (row in start_rows[arg_letter] or row in start_rows[name_letter]):
+                    cells.append(name_letter + row)
+                    cells.append(arg_letter + row)
+                    report += ("Cells " + name_letter + row
+                            + " and " + arg_letter + row
+                            + " must have equivalent content.<br/>")
+
+        for letter, row in name_start_cells:
+            if row not in arg_start_rows:
+                cells.append(letter + row)
+                report += ("Cell " + letter + row
+                           + " needs a span of equal length beginning in one of these columns: "
+                           + ", ".join(arg_letters) + "<br/>")
+
+        for letter, row in arg_start_cells:
+            if row not in name_start_rows:
+                cells.append(letter + row)
+                report += ("Cell " + letter + row
+                           + " needs a span of equal length beginning in one of these columns: "
+                           + ", ".join(name_letters) + "<br/>")
 
         return report, tooltip, cells
 
