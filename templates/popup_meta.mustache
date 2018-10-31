@@ -2,8 +2,8 @@
     <head>
         <script>
          function copyForm() {
-             opener.document.hiddenForm.metakey.value = document.popupForm.metakey.value;
-             opener.document.hiddenForm.metavalue.value = document.popupForm.metavalue.value;
+             opener.document.hiddenForm.{{prefix}}metakey.value = document.popupForm.metakey.value;
+             opener.document.hiddenForm.{{prefix}}metavalue.value = document.popupForm.metavalue.value;
 
              opener.document.hiddenForm.submit();
              window.close();

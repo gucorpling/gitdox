@@ -60,9 +60,10 @@ def get_default_key_options():
 def create_metadata():
     resp = {}
     try:
-        save_meta(int(docid), key.decode("utf8"), value.decode("utf8"))
+        id = save_meta(int(docid), key.decode("utf8"), value.decode("utf8"))
         resp['Result'] = 'OK'
-        resp['Record'] = {'docid': docid,
+        resp['Record'] = {'id': id,
+                          'docid': docid,
                           'key': key,
                           'value': value}
         print json.dumps(resp)

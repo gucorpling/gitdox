@@ -49,7 +49,8 @@ def gen_meta_popup():
 
 	options = read_options(file='corpus_metadata_fields.tab')
 	with open(prefix + 'popupPageCorpus.html', 'w') as f:
-		f.write(render("popup_meta", {"options": options}))
+		f.write(render("popup_meta", {"options": options,
+                                      "prefix": "corpus_"}))
 
 def load_landing(user, admin, theform):
 	gen_meta_popup()

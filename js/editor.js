@@ -84,14 +84,28 @@ $(document).ready(function () {
                 type: 'hidden'
             },
             key: {
-                title: 'Key',
-                options: 'modules/editor_metadata.py?action=keys'
+                title: 'Key'
             },
             value: {
                 title: 'Value'
             }
+        },
+        // for autocomplete support https://github.com/volosoft/jtable/issues/115
+        formCreated: function(event, formData) {
+            $.ajax({
+                url: 'modules/editor_metadata.py?action=keys',
+                type: 'POST',
+                dataType: 'json',
+                data: {},
+                success: function(data) {
+                    formData.form.find('[name=key]').autocomplete({
+                        source: data['Options']
+                    });
+                }
+            });
         }
     });
+
     $('#metadata-table-container').jtable('load');
 });
 

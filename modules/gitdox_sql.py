@@ -66,7 +66,7 @@ def set_cache(doc_id, cache_contents):
 		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
 
 
-def generic_query(sql, params):
+def generic_query(sql, params, return_new_id=False):
 	# generic_query("DELETE FROM rst_nodes WHERE doc=? and project=?",(doc,project))
 
 	dbpath = os.path.dirname(os.path.realpath(__file__)) + os.sep + ".." + os.sep + "gitdox.db"
@@ -79,8 +79,11 @@ def generic_query(sql, params):
 		else:
 			cur.execute(sql)
 
-		rows = cur.fetchall()
-		return rows
+		if return_new_id:
+			return cur.lastrowid
+		else:
+			rows = cur.fetchall()
+			return rows
 
 
 def invalidate_doc_by_name(doc,corpus):
@@ -178,10 +181,12 @@ def print_meta(doc_id, corpus=False):
 def save_meta(doc_id,key,value,corpus=False):
 	if corpus:
 		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name))
+		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name), return_new_id = True)
 	else:
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None))
+		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None), return_new_id = True)
 		invalidate_doc_by_id(doc_id)
+
+	return new_id
 
 def delete_meta(metaid, doc_id, corpus=False):
 	generic_query("DELETE FROM metadata WHERE metaid=?", (metaid,))
