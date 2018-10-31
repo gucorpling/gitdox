@@ -178,13 +178,24 @@ $(document).ready(function () {
 
 
 $(document).ready(function(){
-    $('ul.tabs li').click(function(){
-        var tab_id = $(this).attr('data-tab');
-
+    function activateTab(liId, divId) {
         $('ul.tabs li').removeClass('current');
         $('.tab-content').removeClass('current');
+        $("#"+liId).addClass('current');
+        $("#"+divId).addClass('current');
+    }
 
-        $(this).addClass('current');
-        $("#"+tab_id).addClass('current');
+    var liId = localStorage.getItem(location.pathname + "activeLiId");
+    var divId = localStorage.getItem(location.pathname + "activeDivId");
+    if (liId && divId) {
+        activateTab(liId, divId);
+    }
+
+    $('ul.tabs li').click(function() {
+        var liId = $(this).attr('id');
+        var divId = $(this).attr('data-tab');
+        activateTab(liId, divId);
+        localStorage.setItem(location.pathname + "activeLiId", liId);
+        localStorage.setItem(location.pathname + "activeDivId", divId);
     });
 });
