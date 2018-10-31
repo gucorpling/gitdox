@@ -7,7 +7,7 @@ $(document).ready(function () {
                 jtParams.domain = 'xml';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
-                        url: 'modules/jtable_rule_list.py',
+                        url: 'validation_rules_service.py?action=list',
                         type: 'POST',
                         dataType: 'json',
                         data: jtParams,
@@ -20,9 +20,9 @@ $(document).ready(function () {
                     });
                 });
             },
-            createAction: 'modules/jtable_create_rule.py',
-            updateAction: 'modules/jtable_update_rule.py',
-            deleteAction: 'modules/jtable_delete_rule.py'
+            createAction: 'validation_rules_service.py?action=create',
+            updateAction: 'validation_rules_service.py?action=update',
+            deleteAction: 'validation_rules_service.py?action=delete'
         },
         fields: {
             id: {
@@ -31,9 +31,8 @@ $(document).ready(function () {
                 visibility:'hidden'
             },
             domain: {
-                title: 'Domain',
-                options: ['xml'],
-                visibility: 'hidden'
+                defaultValue: 'xml',
+                type: 'hidden'
             },
             doc: {
                 title: 'Document'
@@ -43,7 +42,7 @@ $(document).ready(function () {
             },
             name: {
                 title: 'XSD Schema',
-                options: 'modules/jtable_schema_list.py?extension=xsd'
+                options: 'validation_rules_service.py?action=listschemas&extension=xsd'
             }
         }
     });
@@ -59,7 +58,7 @@ $(document).ready(function () {
                 jtParams.domain = 'meta';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
-                        url: 'modules/jtable_rule_list.py',
+                        url: 'validation_rules_service.py?action=list',
                         type: 'POST',
                         dataType: 'json',
                         data: jtParams,
@@ -72,9 +71,9 @@ $(document).ready(function () {
                     });
                 });
             },
-            createAction: 'modules/jtable_create_rule.py',
-            updateAction: 'modules/jtable_update_rule.py',
-            deleteAction: 'modules/jtable_delete_rule.py'
+            createAction: 'validation_rules_service.py?action=create',
+            updateAction: 'validation_rules_service.py?action=update',
+            deleteAction: 'validation_rules_service.py?action=delete'
         },
         fields: {
             id: {
@@ -83,9 +82,8 @@ $(document).ready(function () {
                 visibility:'hidden'
             },
             domain: {
-                title: 'Domain',
-                options: ['meta'],
-                visibility: 'hidden'
+                defaultValue: 'meta',
+                type: 'hidden'
             },
             doc: {
                 title: 'Document'
@@ -117,7 +115,7 @@ $(document).ready(function () {
                 jtParams.domain = 'ether';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
-                        url: 'modules/jtable_rule_list.py',
+                        url: 'validation_rules_service.py?action=list',
                         type: 'POST',
                         dataType: 'json',
                         data: jtParams,
@@ -130,9 +128,9 @@ $(document).ready(function () {
                     });
                 });
             },
-            createAction: 'modules/jtable_create_rule.py',
-            updateAction: 'modules/jtable_update_rule.py',
-            deleteAction: 'modules/jtable_delete_rule.py'
+            createAction: 'validation_rules_service.py?action=create',
+            updateAction: 'validation_rules_service.py?action=update',
+            deleteAction: 'validation_rules_service.py?action=delete'
         },
         fields: {
             id: {
@@ -141,9 +139,8 @@ $(document).ready(function () {
                 visibility:'hidden'
             },
             domain: {
-                title: 'Domain',
-                options: ['ether'],
-                visibility: 'hidden'
+                defaultValue: 'ether',
+                type: 'hidden'
             },
             doc: {
                 title: 'Document'
@@ -175,7 +172,7 @@ $(document).ready(function () {
                 jtParams.domain = 'export';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
-                        url: 'modules/jtable_rule_list.py',
+                        url: 'validation_rules_service.py?action=list',
                         type: 'POST',
                         dataType: 'json',
                         data: jtParams,
@@ -188,9 +185,9 @@ $(document).ready(function () {
                     });
                 });
             },
-            createAction: 'modules/jtable_create_rule.py',
-            updateAction: 'modules/jtable_update_rule.py',
-            deleteAction: 'modules/jtable_delete_rule.py'
+            createAction: 'validation_rules_service.py?action=create',
+            updateAction: 'validation_rules_service.py?action=update',
+            deleteAction: 'validation_rules_service.py?action=delete'
         },
         fields: {
             id: {
@@ -199,9 +196,8 @@ $(document).ready(function () {
                 visibility:'hidden'
             },
             domain: {
-                title: 'Domain',
-                options: ['export'],
-                visibility: 'hidden'
+                defaultValue: 'export',
+                type: 'hidden'
             },
             doc: {
                 title: 'Document'
@@ -211,11 +207,11 @@ $(document).ready(function () {
             },
             name: {
                 title: 'Export Spec',
-                options: 'modules/jtable_schema_list.py?extension=ini'
+                options: 'validation_rules_service.py?action=listschemas&extension=ini'
             },
             argument: {
                 title: 'XSD Schema',
-                options: 'modules/jtable_schema_list.py?extension=xsd'
+                options: 'validation_rules_service.py?action=listschemas&extension=xsd'
             }
         }
     });
