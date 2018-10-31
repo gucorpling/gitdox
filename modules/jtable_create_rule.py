@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 from gitdox_sql import *
 import json
@@ -17,9 +17,10 @@ def create_rule():
 		operator = parameter.getvalue("operator")
 		argument = parameter.getvalue("argument")
 		
-		create_validate_rule(doc,corpus,domain,name,operator,argument)
+		id = create_validate_rule(doc,corpus,domain,name,operator,argument)
 		
 		new_json_rule = {}
+		new_json_rule['id'] = id
 		new_json_rule['doc'] = doc
 		new_json_rule['corpus'] = corpus
 		new_json_rule['domain'] = domain

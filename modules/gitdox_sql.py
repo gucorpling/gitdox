@@ -249,11 +249,12 @@ def get_sorted_rules(sort):
 	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate ORDER BY " + sort, None)  # parameterization doesn't work for order by
 
 def create_validate_rule(doc, corpus, domain, name, operator, argument):
-	generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument))
+	new_id = generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument), return_new_id = True)
 	if domain == "meta":
 		invalidate_doc_by_name("%","%")
 	else:
 		invalidate_ether_docs("%","%")
+	return new_id
 
 def delete_validate_rule(id):
 	generic_query("DELETE FROM validate WHERE id=?", (int(id),))
