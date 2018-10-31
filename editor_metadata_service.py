@@ -103,12 +103,14 @@ def open_main_server():
     print "Content-type:application/json\r\n\r\n"
     if action == "list":
         get_metadata()
+    elif action == "keys":
+        get_default_key_options()
+    elif user == "demo":
+        print json.dumps({'Result': 'Error', 'Message': 'Demo user may not make changes.'})
     elif action == "create":
         create_metadata()
     elif action == "delete":
         delete_metadata()
-    elif action == "keys":
-        get_default_key_options()
     else:
         print json.dumps({'Result': 'Error',
                           'Message': 'Unknown action: "' + str(action) + '"'})

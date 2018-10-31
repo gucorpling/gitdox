@@ -118,14 +118,16 @@ def open_main_server():
     print "Content-type:application/json\r\n\r\n"
     if action == "list":
         list_rules()
+    elif action == "listschemas":
+        list_schemas()
+    elif user == "demo":
+        print json.dumps({'Result': 'Error', 'Message': 'Demo user may not make changes.'})
     elif action == "create":
         create_rule()
     elif action == "update":
         update_rule()
     elif action == "delete":
         delete_rule()
-    elif action == "listschemas":
-        list_schemas()
     else:
         print json.dumps({'Result': 'Error',
                           'Message': 'Unknown action: "' + str(action) + '"'})
