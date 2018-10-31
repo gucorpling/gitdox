@@ -136,48 +136,6 @@ def cell(text):
 		text = str(text)
 	return "\n	<td>" + text + "</td>"
 
-def print_meta(doc_id, corpus=False):
-	meta = get_doc_meta(doc_id, corpus=corpus)
-	if meta is None:
-		meta = []
-	# docid,metaid,key,value - four cols
-	metaid_id = "metaid" if not corpus else "corpus_metaid"
-	table_id = "meta_table" if not corpus else "meta_table_corpus"
-	table='''<input type="hidden" id="'''+ metaid_id +'''" name="'''+metaid_id+'''" value="">
-	<table id="'''+table_id+'''"'''
-	if corpus:
-		table += ' class="corpus_metatable"'
-	table +=""">
-	<colgroup>
-    	<col>
-    	<col>
-    	<col style="width: 40px">
-  	</colgroup>
-  		<tbody>
-	"""
-	for item in meta:
-		# Each item appears in one row of the table
-		row = "\n <tr>"
-		metaid = str(item[1])
-		('metaid:'+str(metaid))
-		id = str(doc_id)
-		for i in item[2:-1]:
-			cell_contents = cell(i)
-			cell_contents = re.sub(r'(<td>)(https?://[^ <>]+)',r'\1<a href="\2">\2</a>',cell_contents)
-			row += cell_contents
-
-		# delete meta
-		metaid_code="""<div class="button slim" onclick="document.getElementById('"""+metaid_id+"""').value='"""+metaid+"""'; document.getElementById('editor_form').submit();"><i class="fa fa-trash"></i> </div>"""
-
-		button_delete=""
-		button_delete+=metaid_code
-		row += cell(button_delete)
-		row += "\n </tr>"
-		table += row
-	table += "\n</tbody>\n</table>\n"
-	return table
-
-
 def save_meta(doc_id,key,value,corpus=False):
 	if corpus:
 		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
@@ -207,7 +165,7 @@ def get_doc_content(doc_id):
 def get_all_docs(corpus=None, status=None):
 	if corpus is None:
 		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None) 
 		else:
 			return generic_query("SELECT id, name, corpus, mode, content FROM docs where status=?", (status,))
 	else:

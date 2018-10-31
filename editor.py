@@ -357,26 +357,6 @@ def load_page(user,admin,theform):
 	edit_mode = '''<select name="edit_mode" id="edit_mode" onchange="do_save();">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
 	edit_mode = edit_mode.replace(mode+'"', mode+'" selected="selected"')
 
-	# Metadata
-	if theform.getvalue('metakey'):
-		metakey = theform.getvalue('metakey')
-		metavalue = theform.getvalue('metavalue').replace("\t","").replace("\n","").replace("\r","")
-		if user != "demo":
-			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
-	if theform.getvalue('metaid'):
-		metaid = theform.getvalue('metaid')
-		if user != "demo":
-			delete_meta(metaid, doc_id)
-	if theform.getvalue('corpus_metakey'):
-		metakey = theform.getvalue('corpus_metakey')
-		metavalue = theform.getvalue('corpus_metavalue').replace("\t","").replace("\n","").replace("\r","")
-		if user != "demo":
-			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"),corpus=True)
-	if theform.getvalue('corpus_metaid'):
-		metaid = theform.getvalue('corpus_metaid')
-		if user != "demo":
-			delete_meta(metaid, doc_id, corpus=True)
-
 	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();"> """ + xml_nlp_button + """</div>""" + \
 				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">"""+ spreadsheet_nlp_button + """</div>"""
 	nlp_service = nlp_service.decode("utf8")
@@ -437,8 +417,6 @@ def load_page(user,admin,theform):
 	render_data['edit_status_html'] = edit_status
 	render_data['edit_assignee_html'] = edit_assignee
 	render_data['edit_mode_html'] = edit_mode
-	render_data['metadata_html'] = print_meta(doc_id)
-	render_data['corpus_metadata_html'] = print_meta(doc_id,corpus=True)
 
 	render_data['disabled_nlp_html'] = disabled_nlp_service
 	render_data['nlp_html'] = nlp_service
