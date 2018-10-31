@@ -44,3 +44,54 @@ function export_ether(){
 
     window.open('export.py?docs=' + doc_id + '&stylesheet=' + stylesheet, '_new');
 }
+
+$(document).ready(function () {
+    // get id from hidden form element. Watch out, might break in the future
+    var docid = $("#id").val();
+    $('#metadata-table-container').jtable({
+        title: 'Metadata',
+        sorting: true,
+        actions: {
+            listAction: function (postData, jtParams) {
+                jtParams.domain = 'meta';
+                return $.Deferred(function ($dfd) {
+                    $.ajax({
+                        url: 'modules/editor_metadata.py?action=list&docid=' + docid,
+                        type: 'POST',
+                        dataType: 'json',
+                        data: jtParams,
+                        success: function (data) {
+                            $dfd.resolve(data);
+                        },
+                        error: function() {
+                            $dfd.reject();
+                        }
+                    });
+                });
+            },
+            createAction: 'modules/editor_metadata.py?action=create',
+            deleteAction: 'modules/editor_metadata.py?action=delete&docid=' + docid
+        },
+        fields: {
+            id: {
+                title: 'ID',
+                key: true,
+                visibility:'hidden'
+            },
+            docid: {
+                title: 'Document ID',
+                defaultValue: docid,
+                type: 'hidden'
+            },
+            key: {
+                title: 'Key',
+                options: 'modules/editor_metadata.py?action=keys'
+            },
+            value: {
+                title: 'Value'
+            }
+        }
+    });
+    $('#metadata-table-container').jtable('load');
+});
+

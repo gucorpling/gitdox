@@ -198,6 +198,22 @@ ul.tabs li.current{
     display: inherit;
 }
 
+/* override jtable styles for consistency with rest of gitdox */
+.jtable-title {
+    font-size: 16px !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #eeeeee !important;
+}
+table.jtable {
+    border: none !important;
+}
+
+.ui-widget-overlay {
+    opacity: 0.5 !important;
+}
+
+
 .jtable td{
     word-break: break-all;
 }
