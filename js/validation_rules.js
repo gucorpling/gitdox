@@ -156,7 +156,7 @@ $(document).ready(function () {
             },
             operator: {
                 title: 'Operator',
-                options: ['~', '|', '=', '==', '>', 'exists']
+                options: ['~', '|', '=', '==', '>', 'exists', 'doesntexist']
             },
             argument: {
                 title: 'Argument'
