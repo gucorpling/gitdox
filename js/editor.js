@@ -49,7 +49,7 @@ $(document).ready(function () {
     // get id from hidden form element. Watch out, might break in the future
     var docid = $("#id").val();
     $('#metadata-table-container').jtable({
-        title: 'Metadata',
+        title: '&nbsp;',
         sorting: true,
         actions: {
             listAction: function (postData, jtParams) {
@@ -111,3 +111,81 @@ $(document).ready(function () {
     $('#metadata-table-container').jtable('load');
 });
 
+$(document).ready(function () {
+    // get id from hidden form element. Watch out, might break in the future
+    var docid = $("#id").val();
+    $('#corpus-metadata-table-container').jtable({
+        title: '&nbsp;',
+        sorting: true,
+        actions: {
+            listAction: function (postData, jtParams) {
+                jtParams.domain = 'meta';
+                return $.Deferred(function ($dfd) {
+                    $.ajax({
+                        url: 'modules/editor_metadata.py?corpus=true&action=list&docid=' + docid,
+                        type: 'POST',
+                        dataType: 'json',
+                        data: jtParams,
+                        success: function (data) {
+                            $dfd.resolve(data);
+                        },
+                        error: function() {
+                            $dfd.reject();
+                        }
+                    });
+                });
+            },
+            createAction: 'modules/editor_metadata.py?corpus=true&action=create',
+            deleteAction: 'modules/editor_metadata.py?corpus=true&action=delete&docid=' + docid
+        },
+        fields: {
+            id: {
+                title: 'ID',
+                key: true,
+                visibility:'hidden'
+            },
+            docid: {
+                title: 'Document ID',
+                defaultValue: docid,
+                type: 'hidden'
+            },
+            key: {
+                title: 'Key',
+                sorting: false
+            },
+            value: {
+                title: 'Value',
+                sorting: false
+            }
+        },
+        // for autocomplete support https://github.com/volosoft/jtable/issues/115
+        formCreated: function(event, formData) {
+            $.ajax({
+                url: 'modules/editor_metadata.py?corpus=true&action=keys',
+                type: 'POST',
+                dataType: 'json',
+                data: {},
+                success: function(data) {
+                    formData.form.find('[name=key]').autocomplete({
+                        source: data['Options']
+                    });
+                }
+            });
+        }
+    });
+
+    $('#corpus-metadata-table-container').jtable('load');
+});
+
+
+$(document).ready(function(){
+    $('ul.tabs li').click(function(){
+        var tab_id = $(this).attr('data-tab');
+
+        $('ul.tabs li').removeClass('current');
+        $('.tab-content').removeClass('current');
+
+        $(this).addClass('current');
+        $("#"+tab_id).addClass('current');
+    });
+});

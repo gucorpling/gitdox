@@ -143,7 +143,12 @@
                             {{> codemirror}}
                         {{/ether_mode}}
 
-                        <div id="metadata-table-container" style="max-width: 1000px;margin: 18px 0;"></div>
+                        <ul class="tabs" style="margin-top: 18px;">
+                            <li data-tab="metadata-table-container" class="tab-link current">Document Metadata</li>
+                            <li data-tab="corpus-metadata-table-container" class="tab-link">Corpus Metadata</li>
+                        </ul>
+                        <div id="metadata-table-container" class="tab-content current" style="max-width: 1000px;"></div>
+                        <div id="corpus-metadata-table-container" class="tab-content" style="max-width: 1000px;"></div>
 
                         <input type="hidden" name="metakey">
                         <input type="hidden" name="metavalue">

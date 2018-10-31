@@ -13,6 +13,7 @@ id = parameter.getvalue("id")
 docid = parameter.getvalue("docid")
 key = parameter.getvalue("key")
 value = parameter.getvalue("value")
+corpus = parameter.getvalue("corpus")
 
 if platform.system() == "Windows":
     prefix = "transc\\"
@@ -39,7 +40,7 @@ def get_metadata():
     resp = {}
     try:
         resp['Result'] = 'OK'
-        resp['Records'] = [row_to_dict(r) for r in get_doc_meta(docid)]
+        resp['Records'] = [row_to_dict(r) for r in get_doc_meta(docid, corpus=corpus)]
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
@@ -50,7 +51,10 @@ def get_default_key_options():
     resp = {}
     try:
         resp['Result'] = 'OK'
-        resp['Options'] = read_options(file='..' + os.sep + 'metadata_fields.tab')
+        if not corpus:
+            resp['Options'] = read_options(file='..' + os.sep + 'metadata_fields.tab')
+        else:
+            resp['Options'] = read_options(file='..' + os.sep + 'corpus_metadata_fields.tab')
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
@@ -60,7 +64,7 @@ def get_default_key_options():
 def create_metadata():
     resp = {}
     try:
-        id = save_meta(int(docid), key.decode("utf8"), value.decode("utf8"))
+        id = save_meta(int(docid), key.decode("utf8"), value.decode("utf8"), corpus=corpus)
         resp['Result'] = 'OK'
         resp['Record'] = {'id': id,
                           'docid': docid,
@@ -75,7 +79,7 @@ def create_metadata():
 def delete_metadata():
     resp = {}
     try:
-        delete_meta(int(id), int(docid))
+        delete_meta(int(id), int(docid), corpus=corpus)
         resp['Result'] = 'OK'
         print json.dumps(resp)
     except:
