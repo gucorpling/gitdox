@@ -229,3 +229,13 @@ tfoot {
 
 #filter_id{width:30px}
 #filter_mode{width:60px}
+
+
+table.admin {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+}
+table.admin td, table.admin th {
+    text-align: left;
+    padding: 8px;
+}
