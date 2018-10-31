@@ -84,10 +84,12 @@ $(document).ready(function () {
                 type: 'hidden'
             },
             key: {
-                title: 'Key'
+                title: 'Key',
+                sorting: false
             },
             value: {
-                title: 'Value'
+                title: 'Value',
+                sorting: false
             }
         },
         // for autocomplete support https://github.com/volosoft/jtable/issues/115
