@@ -181,7 +181,7 @@ def get_doc_meta(doc_id, corpus=False):
 			_, corpus_name, _, _, _, _, _ = fields
 			return generic_query("SELECT * FROM metadata WHERE corpus_meta=? ORDER BY key COLLATE NOCASE",(corpus_name,))
 		else:
-			return None
+			return []
 	else:
 		return generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE", (int(doc_id),))
 
