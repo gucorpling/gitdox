@@ -16,7 +16,7 @@ from requests.auth import HTTPBasicAuth
 import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
-	build_meta_tag, get_ether_stylesheet_select, get_file_list
+	build_meta_tag, get_ether_stylesheets, get_file_list
 from modules.renderer import render
 
 # Support IIS site prefix on Windows
@@ -375,12 +375,9 @@ def load_page(user,admin,theform):
 	# prepare embedded editor html
 	if mode == "ether":
 		render_data['ether_mode'] = True
-
 		ether_url += "gd_" + corpus + "_" + docname
 		render_data['ether_url'] = ether_url
-
-		stylesheet_select = get_ether_stylesheet_select()
-		render_data['ether_stylesheet_select_html'] = stylesheet_select
+		render_data['ether_stylesheets'] = get_ether_stylesheets()
 
 		if "file" in theform and user != "demo":
 			fileitem = theform["file"]
