@@ -188,23 +188,27 @@ def get_doc_meta(doc_id, corpus=False):
 def get_corpora():
 	return generic_query("SELECT DISTINCT corpus FROM docs ORDER BY corpus COLLATE NOCASE", None)
 
-def get_validate_rules():
-		return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate", None)
+def get_validate_rules(sort=None, domain=None):
+	query = "SELECT corpus, doc, domain, name, operator, argument, id FROM validate"
+	args = []
+	if domain:
+		query += " WHERE domain=? "
+		args.append(domain)
+	if sort:
+		query += " ORDER BY " + sort
+	return generic_query(query, args)
 
 def get_xml_rules():
-	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'xml'", None)
+	return get_validate_rules(domain='xml')
 
 def get_meta_rules():
-	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'meta'", None)
+	return get_validate_rules(domain='meta')
 
 def get_ether_rules():
-	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'ether'", None)
+	return get_validate_rules(domain='ether')
 
 def get_export_rules():
-	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate WHERE domain = 'export'", None)
-
-def get_sorted_rules(sort):
-	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate ORDER BY " + sort, None)  # parameterization doesn't work for order by
+	return get_validate_rules(domain='export')
 
 def create_validate_rule(doc, corpus, domain, name, operator, argument):
 	new_id = generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument), return_new_id = True)

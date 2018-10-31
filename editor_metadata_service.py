@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from gitdox_sql import *
 import json
 import cgi
 import os
 import platform
+from modules.gitdox_sql import *
+from modules.logintools import login
 
 parameter = cgi.FieldStorage()
 action = parameter.getvalue("action")
@@ -21,14 +22,14 @@ else:
     prefix = ""
 
 def read_options(**kwargs):
-	if "file" in kwargs:
-		kwargs["file"] = prefix + kwargs["file"]
-		names = open(kwargs["file"],'r').read().replace("\r","").split("\n")
-		names = list(name[:name.find("\t")] for name in names)
-	elif "names" in kwargs:
-		names = kwargs[names]
-	selected = kwargs["selected"] if "selected" in kwargs else None
-	return names
+    if "file" in kwargs:
+        kwargs["file"] = prefix + kwargs["file"]
+        names = open(kwargs["file"],'r').read().replace("\r","").split("\n")
+        names = list(name[:name.find("\t")] for name in names)
+    elif "names" in kwargs:
+        names = kwargs[names]
+    selected = kwargs["selected"] if "selected" in kwargs else None
+    return names
 
 def row_to_dict(row):
     return {'id': row[1],
@@ -87,15 +88,30 @@ def delete_metadata():
         resp['Message'] = 'Could not delete metadata'
         print json.dumps(resp)
 
-print "Content-type:application/json\r\n\r\n"
-if action == "list":
-    get_metadata()
-elif action == "create":
-    create_metadata()
-elif action == "delete":
-    delete_metadata()
-elif action == "keys":
-    get_default_key_options()
-else:
-    print json.dumps({'Result': 'Error',
-                      'Message': 'Unknown action: "' + str(action) + '"'})
+
+
+def open_main_server():
+    thisscript = os.environ.get('SCRIPT_NAME', '')
+    loginaction = None
+    theform = cgi.FieldStorage()
+    scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+    userdir = scriptpath + "users" + os.sep
+    loginaction, userconfig = login(theform, userdir, thisscript, loginaction)
+    user = userconfig["username"]
+    admin = userconfig["admin"]
+
+    print "Content-type:application/json\r\n\r\n"
+    if action == "list":
+        get_metadata()
+    elif action == "create":
+        create_metadata()
+    elif action == "delete":
+        delete_metadata()
+    elif action == "keys":
+        get_default_key_options()
+    else:
+        print json.dumps({'Result': 'Error',
+                          'Message': 'Unknown action: "' + str(action) + '"'})
+
+if __name__ == '__main__':
+    open_main_server()

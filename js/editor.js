@@ -56,7 +56,7 @@ $(document).ready(function () {
                 jtParams.domain = 'meta';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
-                        url: 'modules/editor_metadata.py?action=list&docid=' + docid,
+                        url: 'editor_metadata_service.py?action=list&docid=' + docid,
                         type: 'POST',
                         dataType: 'json',
                         data: jtParams,
@@ -69,8 +69,8 @@ $(document).ready(function () {
                     });
                 });
             },
-            createAction: 'modules/editor_metadata.py?action=create',
-            deleteAction: 'modules/editor_metadata.py?action=delete&docid=' + docid
+            createAction: 'editor_metadata_service.py?action=create',
+            deleteAction: 'editor_metadata_service.py?action=delete&docid=' + docid
         },
         fields: {
             id: {
@@ -95,7 +95,7 @@ $(document).ready(function () {
         // for autocomplete support https://github.com/volosoft/jtable/issues/115
         formCreated: function(event, formData) {
             $.ajax({
-                url: 'modules/editor_metadata.py?action=keys',
+                url: 'editor_metadata_service.py?action=keys',
                 type: 'POST',
                 dataType: 'json',
                 data: {},
@@ -122,7 +122,7 @@ $(document).ready(function () {
                 jtParams.domain = 'meta';
                 return $.Deferred(function ($dfd) {
                     $.ajax({
-                        url: 'modules/editor_metadata.py?corpus=true&action=list&docid=' + docid,
+                        url: 'editor_metadata_service.py?corpus=true&action=list&docid=' + docid,
                         type: 'POST',
                         dataType: 'json',
                         data: jtParams,
@@ -135,8 +135,8 @@ $(document).ready(function () {
                     });
                 });
             },
-            createAction: 'modules/editor_metadata.py?corpus=true&action=create',
-            deleteAction: 'modules/editor_metadata.py?corpus=true&action=delete&docid=' + docid
+            createAction: 'editor_metadata_service.py?corpus=true&action=create',
+            deleteAction: 'editor_metadata_service.py?corpus=true&action=delete&docid=' + docid
         },
         fields: {
             id: {
@@ -145,7 +145,6 @@ $(document).ready(function () {
                 visibility:'hidden'
             },
             docid: {
-                title: 'Document ID',
                 defaultValue: docid,
                 type: 'hidden'
             },
@@ -161,7 +160,7 @@ $(document).ready(function () {
         // for autocomplete support https://github.com/volosoft/jtable/issues/115
         formCreated: function(event, formData) {
             $.ajax({
-                url: 'modules/editor_metadata.py?corpus=true&action=keys',
+                url: 'editor_metadata_service.py?corpus=true&action=keys',
                 type: 'POST',
                 dataType: 'json',
                 data: {},
