@@ -389,6 +389,7 @@ def load_page(user,admin,theform):
 
 	render_data["can_save"] = not (int(admin) < 3)
 	render_data["editor_help_link_html"] = editor_help_link
+	render_data["first_load"] = len(theform.keys()) == 1
 
 	return render("editor", render_data)
 

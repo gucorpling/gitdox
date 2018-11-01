@@ -1,11 +1,5 @@
 myPopup = '';
 
-function openPopup(url) {
-    myPopup = window.open(url,'popupWindow','width=640,height=480');
-    if (!myPopup.opener)
-         myPopup.opener = self;
-}
-
 function validate_doc() {
 	$("#validate_editor").addClass("disabledbutton");
 	$("#validation_report").html("Validating...");

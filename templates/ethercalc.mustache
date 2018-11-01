@@ -1,8 +1,19 @@
-<iframe width="99.8%" height="800px" src="{{ether_url}}"
+<iframe id="ethercalc" width="99.8%" height="800px" src="{{ether_url}}"
         style="background-color: white; border: solid black 1px; padding: 0px; margin: 0px"></iframe>
+<!-- hack to make the back button work as expected -->
+<script>
+ $(document).ready(function() {
+     var w = $("#ethercalc")[0].contentWindow;
+     w.onpopstate = function() {
+         w.history.back();
+     };
+ });
+</script>
+
 <div class="button disabled h128">
     <i class="fa fa-floppy-o"> </i> Save
 </div>
+
 {{#nlp_service}}
     {{#disabled}}
     <div class="button disabled h128" name="nlp_xml_button">{{{xml_button_html}}}</div>

@@ -21,22 +21,19 @@
                         <button class="button" onclick="document.getElementById('form_logout').submit()"><i class="fa fa-sign-out"> </i> logout</button>
                     </form>
 
-                    <form action='admin.py' id="form_admin" method="post" style="display:inline-block"> <div onclick="document.getElementById('form_admin').submit();" class="button">
-                        <i class="fa fa-shield"></i>
-                        admin</div>
-                    </form>
+                    <a href="admin.py" class="button" style="color:black">
+                        <i class="fa fa-shield"></i> admin
+                    </a>
 
                     {{#admin_eq_three}}
-                    <form action='validation_rules.py' id="form_validation_rules" method="post" style="display:inline-block">
-                        <div onclick="document.getElementById('form_validation_rules').submit();" class="button">
-                            <i class="fa fa-table"></i> validation rules
-                        </div>
-                    </form>
+                    <a href="validation_rules.py" class="button" style="color:black;">
+                        <i class="fa fa-table"></i> validation rules
+                    </a>
                     {{/admin_eq_three}}
 
                     <div id="validate_landing" style="display:inline-block" onclick="validate_all();" class="button">
-                        <i class="fa fa-check"></i>
-                        validate</div>
+                        <i class="fa fa-check"></i> validate
+                    </div>
                 </div>
                 <p style="margin-bottom: 50px;">For help getting started see the <a target="_wiki" href="http://wiki.copticscriptorium.org/doku.php?id=gitdox_workflow">wiki</a></p>
                 <div>
