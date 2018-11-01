@@ -20,8 +20,30 @@
 <div class="button h128" onclick="do_save();" >
     <i class="fa fa-floppy-o"> </i> Save
 </div>
-{{{nlp_html}}}
-{{{github_push_html}}}
+{{#nlp_service}}
+    {{#disabled}}
+    <div class="button disabled h128" name="nlp_xml_button">{{{xml_button_html}}}</div>
+    <div class="button disabled h128" name="nlp_spreadsheet_button">{{{spreadsheet_button_html}}}</div>
+    {{/disabled}}
+    {{^disabled}}
+    <div class="button h128" name="nlp_xml_button"
+        onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();">
+        {{{xml_button_html}}}
+    </div>
+    <div class="button h128" name="nlp_ether_button"
+         onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">
+        {{{spreadsheet_button_html}}}
+    </div>
+    {{/disabled}}
+{{/nlp_service}}
+<!-- github buttons -->
+<input type="hidden" name="push_git" id="push_git" value="">
+<input type="text" name="commit_msg" id="commit_msg" placeholder="commit message" style="width:140px">
+{{#git_2fa}}<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">{{/git_2fa}}
+<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
+{{#git_commit_response}}
+<p style="color:red;">{{.}} successful</p>
+{{/git_commit_response}}
 
 <!-- enable manual scroll -->
 <!-- from https://jsfiddle.net/mindplay/rs2L2vtb/2/ -->

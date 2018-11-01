@@ -66,6 +66,11 @@ def serialize_file(text_content,file_name):
 	f.write(text_content)#.encode("utf8"))
 	f.close()
 
+def get_user_list():
+	user_list=[]
+	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+	userdir = scriptpath + "users" + os.sep
+	return get_file_list(userdir,"ini",forbidden=["admin","default","config"],hide_extension=True)
 
 def load_page(user,admin,theform):
 	global ether_url
@@ -93,6 +98,9 @@ def load_page(user,admin,theform):
 		git_username, git_token, git_2fa = get_git_credentials(user, admin, code_2fa)
 	else:
 		git_username, git_token, git_2fa = (None, None, None)
+
+	# dict of variables we'll need to render the html
+	render_data = {}
 
 	if theform.getvalue('id'):
 		doc_id = theform.getvalue('id')
@@ -313,64 +321,18 @@ def load_page(user,admin,theform):
 	# Editing options
 	# Docname
 	# Filename
-	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
-	<input type="text" name="commit_msg" id="commit_msg" placeholder="commit message here" style="width:140px">"""
-	if git_2fa == "true":
-		push_git += """<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">"""
-	push_git += """<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
-	"""
-
+	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
+	render_data['status_options'] = [{'text': x, 'selected': x == status} for x in status_list]
+	render_data['assignee_options'] = [{'text': x, 'selected': x == assignee} for x in get_user_list()]
+	render_data['mode_options'] = [{'text': x, 'selected': x == mode} for x in ["xml", "ether"]]
+	render_data['nlp_service'] = {'xml_button_html': xml_nlp_button.decode("utf8"),
+                                  'spreadsheet_button_html': spreadsheet_nlp_button.decode("utf8"),
+                                  'disabled': user == "demo" or mode == "ether"}
+	render_data['git_2fa'] = git_2fa == "true"
 	if git_status:
 		# Remove some html keyword symbols in the commit message returned by github3
-		push_msg=git_status.replace('<','')
-		push_msg=push_msg.replace('>','')
-		push_git+="""<p style='color:red;'>""" + push_msg + ' successful' + """</p>"""
+		render_data['git_commit_response'] = git_status.replace('<','').replace('>','')
 
-	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
-
-	options = ""
-	for stat in status_list:
-		options +='<option value="'+stat+'">'+stat+'</option>\n'
-	options = options.replace('">'+status +'<', '" selected="selected">'+status+'<')
-
-	edit_status="""<select name="edit_status" onchange='do_save();'>"""
-
-	edit_status += options+"</select>"
-
-	# Get user_list from the logintools
-	user_list=[]
-	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
-	userdir = scriptpath + "users" + os.sep
-
-	user_list = get_file_list(userdir,"ini",forbidden=["admin","default","config"],hide_extension=True)
-
-	edit_assignee="""<select name="edit_assignee" onchange="do_save();">"""
-	for list_user in user_list:
-		assignee_select=""
-		user_name=list_user
-		if user_name==assignee:
-			assignee_select="selected"
-		edit_assignee+="""<option value='""" + user_name + "' %s>" + user_name + """</option>"""
-		edit_assignee=edit_assignee%assignee_select
-	edit_assignee+="</select>"
-
-	edit_mode = '''<select name="edit_mode" id="edit_mode" onchange="do_save();">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
-	edit_mode = edit_mode.replace(mode+'"', mode+'" selected="selected"')
-
-	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();"> """ + xml_nlp_button + """</div>""" + \
-				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">"""+ spreadsheet_nlp_button + """</div>"""
-	nlp_service = nlp_service.decode("utf8")
-
-	disabled_nlp_service = """<div class="button disabled h128" name="nlp_xml_button">"""+xml_nlp_button+"""</div>""" + \
-						   """<div class="button disabled h128" name="nlp_ether_button">""" +spreadsheet_nlp_button + """</div>"""
-	disabled_nlp_service = disabled_nlp_service.decode("utf8")
-
-	# Disable NLP services in demo
-	if user == "demo":
-		nlp_service = disabled_nlp_service
-
-	# dict of variables we'll need to render the html
-	render_data = {}
 
 	# prepare embedded editor html
 	if mode == "ether":
@@ -411,13 +373,6 @@ def load_page(user,admin,theform):
 	render_data['text_content'] = text_content
 	render_data['repo'] = repo_name
 
-	render_data['edit_status_html'] = edit_status
-	render_data['edit_assignee_html'] = edit_assignee
-	render_data['edit_mode_html'] = edit_mode
-
-	render_data['disabled_nlp_html'] = disabled_nlp_service
-	render_data['nlp_html'] = nlp_service
-
 	render_data["admin_gt_zero"] = int(admin) > 0
 	render_data["admin_eq_three"] = admin == "3"
 
@@ -431,8 +386,6 @@ def load_page(user,admin,theform):
 			doc_vars["corpus"] = doc[1]
 			doc_vars["name"] = doc[2]
 			render_data['docs'].append(doc_vars)
-
-		render_data["github_push_html"] = push_git
 
 	render_data["can_save"] = not (int(admin) < 3)
 	render_data["editor_help_link_html"] = editor_help_link

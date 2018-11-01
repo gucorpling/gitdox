@@ -82,29 +82,48 @@
                                 <tr>
                                     <td>Assigned to:</td>
                                     <td>
-                                        {{{edit_assignee_html}}}
+                                        <select name="edit_assignee" onchange="do_save()">
+                                        {{#assignee_options}}
+                                        <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                            {{text}}
+                                        </option>
+                                        {{/assignee_options}}
+                                        </select>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td>Status:</td>
                                     <td>
-                                        {{{edit_status_html}}}
+                                        <select name="edit_status" onchange="do_save();">
+                                            {{#status_options}}
+                                            <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                                {{text}}
+                                            </option>
+                                            {{/status_options}}
+                                        </select>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td>Mode:</td>
                                     <td>
-                                        {{{edit_mode_html}}}
+                                        <select name="edit_mode" onchange="do_save();">
+                                            {{#mode_options}}
+                                            <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                                {{text}}
+                                            </option>
+                                            {{/mode_options}}
+                                        </select>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
 
                         {{#ether_mode}}
-                            {{> ethercalc}}
+                        {{> ethercalc}}
                         {{/ether_mode}}
+
                         {{^ether_mode}}
-                            {{> codemirror}}
+                        {{> codemirror}}
                         {{/ether_mode}}
 
                         <ul class="tabs" style="margin-top: 18px;">
@@ -122,7 +141,7 @@
                             <select id="source_doc" name="source_doc" style="width: 240px;">
                                 <option value="">-- Select document to clone --</option>
                                 {{#docs}}
-                                    <option value="{{id}}">{{name}} ({{corpus}})</option>
+                                <option value="{{id}}">{{name}} ({{corpus}})</option>
                                 {{/docs}}
                             </select>
                             {{/admin_gt_zero}}

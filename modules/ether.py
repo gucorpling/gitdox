@@ -241,18 +241,6 @@ def get_ether_stylesheets():
 	return stylesheet_list
 
 
-def get_corpus_select():
-
-	corpora = get_corpora()
-	select = """<select name="corpus_select" id="corpus_select">\n"""
-	select += '\t<option value="--ALL--">[all corpora]</option>\n'
-
-	for corpus in corpora:
-		select += '\t<option value="' + corpus[0] + '">' + corpus[0] + '</option>\n'
-	select += "</select>\n"
-	return select
-
-
 def flush_open(annos, row_num, colmap):
 	flushed = ""
 	for anno in annos:
