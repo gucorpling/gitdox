@@ -1,35 +1,15 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="{{skin_stylesheet}}" type="text/css" charset="utf-8"/>
-        <link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
-        <link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
+        <title>GitDox - Admin</title>
+        {{> shared_head_content }}
         <script src="js/validate.js"></script>
         <script src="js/admin.js?version=2"></script>
-        <meta charset="UTF-8"/>
-        <meta name="viewport" content="width=800">
-        <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-        <link rel="icon" href="favicon.ico" type="image/x-icon">
-        <style>
-         table {
-             font-family: arial, sans-serif;
-             border-collapse: collapse;
-         }
-
-         td, th {
-             text-align: left;
-             padding: 8px;
-         }
-
-        </style>
-        <script src="js/jquery-1.11.3.min.js"></script>
     </head>
     <body>
         {{{ navbar_html }}}
         <div id="wrapper">
-            <div id="header">
-                {{> header }}
-            </div>
+            {{> header }}
             <div id="content">
                 <h1>GitDox - Administration</h1>
                 <p style="border-bottom:groove;">
@@ -59,7 +39,7 @@
                 <h3>Enter user info to create new user:</h3>
                 <br>
                 <form id="form_new_user" class="admin_form" action='admin.py' method='post'>
-                    <table id="user_data">
+                    <table id="user_data" class="admin">
                         <colgroup>
                             <col style="width:150px">
                         </colgroup>
@@ -127,9 +107,21 @@
                     <li>You can choose custom configurations for exporting spreadsheet data if .ini files are available in the schemas/ directory</li>
                 </ul>
                 <div>Corpora to export:</div>
-                {{{ corpus_select_html }}}
+                {{#corpora}}
+                <select name="corpus_select" id="corpus_select">
+                    <option value="--ALL--">[all corpora]</option>\n'
+                    <option value="{{.}}">{{.}}</option>
+                </select>
+                {{/corpora}}
+
                 <br/><br/>
                 <div>Filter by status:</div>
+                <select name="status_select" id="status_select">
+                    <option value="--ALL--">[all statuses]</option>
+                    {{#statuses}}
+                    <option value="{{.}}">{{.}}</option>
+                    {{/statuses}}
+                </select>
                 {{{ status_select_html }}}
                 <br/><br/>
                 <div>Extension for spreadsheet files:</div>
@@ -140,7 +132,12 @@
                 </select>
                 <br/><br/>
                 <div>Export configuration for spreadsheets:</div>
-                {{{ stylesheet_select_html }}}
+                <select name="ether_stylesheet" id="ether_stylesheet">
+                    <option>[CSV]</option>
+                    {{#ether_stylesheets}}
+                        <option value="{{.}}">{{.}}</option>
+                    {{/ether_stylesheets}}
+                </select>
                 <br/><br/>
                 <div onclick="export_all();" class="button">
                     <i class="fa fa-cloud-download"></i> download
@@ -156,7 +153,7 @@
                 </ul>
                 <form id="batch_upload" name="batch_upload" method="post"
                       action="admin.py" enctype="multipart/form-data">
-                    <table>
+                    <table class="admin">
                         <tbody>
                             <tr>
                                 <td>Mode:

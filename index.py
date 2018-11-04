@@ -24,17 +24,6 @@ else:
 
 project = "Scriptorium"
 
-
-def read_options(**kwargs):
-	if "file" in kwargs:
-		kwargs["file"] = prefix + kwargs["file"]
-		names = open(kwargs["file"],'r').read().replace("\r","").split("\n")
-		names = list(name[:name.find("\t")] for name in names)
-	elif "names" in kwargs:
-		names = kwargs[names]
-	selected = kwargs["selected"] if "selected" in kwargs else None
-	return names
-
 def get_max_id():
 	#get current max of existing records in the db
 	current_max=generic_query("SELECT MAX(id) AS max_id FROM docs",())[0][0]
@@ -42,18 +31,7 @@ def get_max_id():
 	generic_query("UPDATE sqlite_sequence SET seq=? WHERE name=?",(current_max,"docs"))
 	return current_max
 
-def gen_meta_popup():
-	options = read_options(file='metadata_fields.tab')
-	with open(prefix + 'popupPage.html', 'w') as f:
-		f.write(render("popup_meta", {"options": options}))
-
-	options = read_options(file='corpus_metadata_fields.tab')
-	with open(prefix + 'popupPageCorpus.html', 'w') as f:
-		f.write(render("popup_meta", {"options": options}))
-
 def load_landing(user, admin, theform):
-	gen_meta_popup()
-
 	render_data = {}
 
 	# delete doc if requested

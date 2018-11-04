@@ -21,7 +21,19 @@ class EtherValidator(Validator):
         col_letters = colmap[self.name]     # list of letters with col name
 
         if len(col_letters) == 0:
-            report += "Column named " + self.name + " not found<br/>"
+            report += "Column named '" + self.name + "' not found<br/>"
+        return report, tooltip, cells
+
+    def _apply_doesntexist(self, parsed_ether):
+        report = ''
+        tooltip = ''
+        cells = []
+        colmap = parsed_ether['__colmap__'] # name -> list of col letters
+        col_letters = colmap[self.name]     # list of letters with col name
+
+        if len(col_letters) > 0:
+            report += "Columns named '" + self.name + "' are not allowed<br/>"
+            cells += [letter + "1" for letter in col_letters]
         return report, tooltip, cells
 
     def _apply_span_equals_number(self, parsed_ether):
@@ -283,6 +295,8 @@ class EtherValidator(Validator):
 
         if self.operator == "exists":
             return self._apply_exists(parsed_ether)
+        if self.operator == "doesntexist":
+            return self._apply_doesntexist(parsed_ether)
         elif self.operator == "|":
             return self._apply_span_equals_number(parsed_ether)
         elif self.operator == "~":

@@ -1,66 +1,26 @@
 <!DOCTYPE html>
-<title>{{docname}} - GitDox: Edit</title>
-<meta charset="utf-8"/>
-
-
 <head>
-    <link rel="stylesheet" href="{{skin_stylesheet}}" type="text/css" charset="utf-8"/>
-    <link rel="stylesheet" href="css/gitdox.css?version=3" type="text/css" charset="utf-8"/>
-    <link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=800">
-    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <script src="js/jquery-1.11.3.min.js"></script>
+    <title>{{docname}} - GitDox: Edit</title>
+    {{> shared_head_content }}
     <script src="js/editor.js?version=4"></script>
-
-    <!--The following script tag downloads a font from the Adobe Edge Web Fonts server for use within the web page. We recommend that you do not modify it.-->
-    <script>var __adobewebfontsappname__="dreamweaver"</script>
-    <link rel="stylesheet" href="https://use.edgefonts.net/c/dbcb1c/1w;asul,2,WXx:W:n4/l" media="all"><script src="https://use.edgefonts.net/asul:n4:default.js" type="text/javascript"></script>
-
-
-    <style>
-     table {
-         font-family: arial, sans-serif;
-         border-collapse: collapse;
-         width:400pt;
-     }
-
-     td, th {
-         border: 1px solid #dddddd;
-         text-align: left;
-         padding: 8px;
-     }
-
-    </style>
-
     <script src="js/validate.js"></script>
-
+    <!-- hack to make back button work as expected -->
+    {{^first_load}}
+    <script>
+     history.back();
+    </script>
+    {{/first_load}}
 </head>
 <body>
     {{{navbar_html}}}
     <div id="wrapper">
-        <div id="header">
-            {{> header}}
-        </div>
+        {{> header}}
         <div id="content">
             <h1>GitDox: Edit</h1>
             {{{ editor_help_link_html }}}
             <hr>
 
             <div>
-                <link rel="stylesheet" href="codemirror-5.15.2/lib/codemirror.css">
-                <link rel="stylesheet" href="codemirror-5.15.2/addon/hint/show-hint.css">
-                <script src="codemirror-5.15.2/lib/codemirror.js"></script>
-                <script src="codemirror-5.15.2/addon/hint/show-hint.js"></script>
-                <script src="codemirror-5.15.2/addon/hint/xml-hint.js"></script>
-                <script src="codemirror-5.15.2/mode/xml/xml.js"></script>
-                <style type="text/css">
-                 .CodeMirror { border: 1px solid #eee; }
-                </style>
-
-
-
                 {{#doc_is_selected}}
                 <article>
                     <form name="hiddenForm" id="editor_form" method="post" action="editor.py" enctype="multipart/form-data">
@@ -128,50 +88,56 @@
                                 <tr>
                                     <td>Assigned to:</td>
                                     <td>
-                                        {{{edit_assignee_html}}}
+                                        <select name="edit_assignee" onchange="do_save()">
+                                        {{#assignee_options}}
+                                        <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                            {{text}}
+                                        </option>
+                                        {{/assignee_options}}
+                                        </select>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td>Status:</td>
                                     <td>
-                                        {{{edit_status_html}}}
+                                        <select name="edit_status" onchange="do_save();">
+                                            {{#status_options}}
+                                            <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                                {{text}}
+                                            </option>
+                                            {{/status_options}}
+                                        </select>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td>Mode:</td>
                                     <td>
-                                        {{{edit_mode_html}}}
+                                        <select name="edit_mode" onchange="do_save();">
+                                            {{#mode_options}}
+                                            <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                                {{text}}
+                                            </option>
+                                            {{/mode_options}}
+                                        </select>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
 
                         {{#ether_mode}}
-                            {{> ethercalc}}
+                        {{> ethercalc}}
                         {{/ether_mode}}
+
                         {{^ether_mode}}
-                            {{> codemirror}}
+                        {{> codemirror}}
                         {{/ether_mode}}
 
-                        <h3>Metadata</h3>
-                        {{{metadata_html}}}
-
-                        <input type="hidden" name="metakey">
-                        <input type="hidden" name="metavalue">
-                        <br/><br/>
-                        {{{corpus_metadata_html}}}
-
-                        <div class="button" onClick="openPopup('popupPage.html')">
-                            <i class="fa fa-info-circle"></i>
-                            Add Document Metadata
-                        </div>
-
-                        <input type="hidden" name="corpus_metakey">
-                        <input type="hidden" name="corpus_metavalue">
-                        <br/><br/>
-
-                        <div class="button corpusbutton" onClick="openPopup('popupPageCorpus.html')"><i class="fa fa-info-circle"> </i> Add Corpus Metadata</div>
-
+                        <ul class="tabs" style="margin-top: 18px;">
+                            <li id="metadata-tab" data-tab="metadata-table-container" class="tab-link current">Document Metadata</li>
+                            <li id="corpus-metadata-tab" data-tab="corpus-metadata-table-container" class="tab-link">Corpus Metadata</li>
+                        </ul>
+                        <div id="metadata-table-container" class="tab-content current" style="max-width: 1000px;"></div>
+                        <div id="corpus-metadata-table-container" class="tab-content" style="max-width: 1000px;"></div>
                     </form>
 
                     <div style="width:400px;padding-top:24px;">
@@ -181,7 +147,7 @@
                             <select id="source_doc" name="source_doc" style="width: 240px;">
                                 <option value="">-- Select document to clone --</option>
                                 {{#docs}}
-                                    <option value="{{id}}">{{name}} ({{corpus}})</option>
+                                <option value="{{id}}">{{name}} ({{corpus}})</option>
                                 {{/docs}}
                             </select>
                             {{/admin_gt_zero}}

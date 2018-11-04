@@ -234,31 +234,11 @@ def get_file_list(path,extension,hide_extension=False,forbidden=None):
 	return outfiles
 
 
-def get_ether_stylesheet_select():
-
+def get_ether_stylesheets():
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	stylesheet_dir = scriptpath + os.sep + ".." + os.sep + "schemas" + os.sep
-
 	stylesheet_list = get_file_list(stylesheet_dir,"ini",hide_extension=True)
-	select = """<select name="ether_stylesheet" id="ether_stylesheet">\n"""
-	select += "\t<option>[CSV]</option>\n"
-
-	for f in stylesheet_list:
-		select += '\t<option value="' + f + '">' + f + '</option>\n'
-	select += "</select>\n"
-	return select
-
-
-def get_corpus_select():
-
-	corpora = get_corpora()
-	select = """<select name="corpus_select" id="corpus_select">\n"""
-	select += '\t<option value="--ALL--">[all corpora]</option>\n'
-
-	for corpus in corpora:
-		select += '\t<option value="' + corpus[0] + '">' + corpus[0] + '</option>\n'
-	select += "</select>\n"
-	return select
+	return stylesheet_list
 
 
 def flush_open(annos, row_num, colmap):

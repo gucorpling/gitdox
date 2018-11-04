@@ -13,7 +13,7 @@ from modules.gitdox_sql import *
 from modules.dataenc import pass_dec, pass_enc
 from paths import get_menu
 from editor import harvest_meta
-from modules.ether import make_spreadsheet, get_ether_stylesheet_select, get_corpus_select
+from modules.ether import make_spreadsheet, get_ether_stylesheets
 from modules.renderer import render
 from passlib.apps import custom_app_context as pwd_context
 import github3
@@ -33,19 +33,8 @@ config = ConfigObj(userdir + 'config.ini')
 project = config["project"]
 
 
-def get_status_select():
-
-	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
-
-	select = """<select name="status_select" id="status_select">\n"""
-	options = ""
-	for stat in status_list:
-		options += '\t<option value="'+stat+'">'+stat+'</option>\n'
-
-	select += '\t<option value="--ALL--">[all statuses]</option>\n'
-
-	select += options + "</select>\n"
-	return select
+def get_statuses():
+	return open(prefix+"status.tab").read().replace("\r","").split("\n")
 
 
 def write_user_file(username,password,admin,email,realname,git_username,git_password,git_2fa=False):
@@ -158,9 +147,9 @@ def load_admin(user, admin, theform):
 			render_data['userfiles'].append(userfile)
 
 	# get html for dropdown selections
-	render_data['corpus_select_html'] = get_corpus_select()
-	render_data['status_select_html'] = get_status_select()
-	render_data['stylesheet_select_html'] = get_ether_stylesheet_select()
+	render_data['corpora'] = [x[0] for x in get_corpora()]
+	render_data['statuses'] = get_statuses()
+	render_data['ether_stylesheets'] = get_ether_stylesheets()
 
 	# handle upload
 	imported = 0

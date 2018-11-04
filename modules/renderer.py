@@ -4,7 +4,6 @@ from modules.configobj import ConfigObj
 from paths import get_menu
 from pystache.renderer import Renderer
 
-import cgitb; cgitb.enable()
 if platform.system() == "Windows":
 	prefix = "transc\\"
 else:

@@ -1,41 +1,21 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="{{skin_stylesheet}}" type="text/css" charset="utf-8"/>
-        <link rel="stylesheet" href="css/gitdox.css" type="text/css" charset="utf-8"/>
-        <link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
+        <title>GitDox - Admin</title>
+        {{> shared_head_content }}
         <script src="js/admin.js"></script>
-        <meta charset="UTF-8"/>
-        <meta name="viewport" content="width=800">
-        <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-        <link rel="icon" href="favicon.ico" type="image/x-icon">
-        <style>
-         table {
-             font-family: arial, sans-serif;
-             border-collapse: collapse;
-             width:400pt;
-         }
-
-         td, th {
-             text-align: left;
-             padding: 8px;
-         }
-        </style>
     </head>
-
     <body>
         {{{ navbar_html }}}
         <div id="wrapper">
-            <div id="header">
-                {{> header }}
-            </div>
+            {{> header }}
             <div id="content">
                 <h1 >Coptic XML transcription editor</h1>
                 <p style="border-bottom:groove;"><i>edit user info</i> | <a href="index.py">back to document list</a> </p>
 
                 <form action='admin.py' method='post'>
                     <h2>Change password</h2>
-                    <table>
+                    <table class="admin">
                         <tr>
                             <td>username</td>
                             <td>{{user}}</td>
@@ -52,7 +32,7 @@
 
                 {{#admin_eq_one}}
                 <form action='admin.py' method='post'>
-                    <table>
+                    <table class="admin">
                         <tr>
                             <td>new git username</td>
                             <td><input type='text' name='new_git_username'></td>

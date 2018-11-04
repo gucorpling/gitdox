@@ -2,29 +2,16 @@
 <html>
     <head>
         <title>GitDox: {{project}}</title>
-        <link rel="stylesheet" href="{{skin_stylesheet}}" type="text/css" charset="utf-8"/>
-        <link rel="stylesheet" href="css/gitdox.css?version=3" type="text/css" charset="utf-8"/>
-        <link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
-        <script src="js/jquery-1.11.3.min.js"></script>
+        {{> shared_head_content}}
         <script src="js/sorttable.js"></script>
         <script src="js/editor.js"></script>
-
-        <!--The following script tag downloads a font from the Adobe Edge Web Fonts server for use within the web page. We recommend that you do not modify it.-->
-        <script>var __adobewebfontsappname__="dreamweaver"</script>
-        <link rel="stylesheet" href="https://use.edgefonts.net/c/dbcb1c/1w;asul,2,WXx:W:n4/l" media="all"><script src="https://use.edgefonts.net/asul:n4:default.js" type="text/javascript"></script>
-        <meta charset="UTF-8"/>
-        <meta name="viewport" content="width=800">
-        <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-        <link rel="icon" href="favicon.ico" type="image/x-icon">
     </head>
     <body>
         <!-- triple braces means replace without escaping HTML -->
         {{{ navbar_html }}}
         <div id="wrapper">
             <!-- i.e., render templates/partials/header.mustache -->
-            <div id="header">
-                {{> header }}
-            </div>
+            {{> header }}
             <div id="content">
                 <h1>GitDox: Project {{project}}</h1>
                 <div style="float:right">
@@ -34,22 +21,19 @@
                         <button class="button" onclick="document.getElementById('form_logout').submit()"><i class="fa fa-sign-out"> </i> logout</button>
                     </form>
 
-                    <form action='admin.py' id="form_admin" method="post" style="display:inline-block"> <div onclick="document.getElementById('form_admin').submit();" class="button">
-                        <i class="fa fa-shield"></i>
-                        admin</div>
-                    </form>
+                    <a href="admin.py" class="button" style="color:black">
+                        <i class="fa fa-shield"></i> admin
+                    </a>
 
                     {{#admin_eq_three}}
-                    <form action='validation_rules.py' id="form_validation_rules" method="post" style="display:inline-block">
-                        <div onclick="document.getElementById('form_validation_rules').submit();" class="button">
-                            <i class="fa fa-table"></i> validation rules
-                        </div>
-                    </form>
+                    <a href="validation_rules.py" class="button" style="color:black;">
+                        <i class="fa fa-table"></i> validation rules
+                    </a>
                     {{/admin_eq_three}}
 
                     <div id="validate_landing" style="display:inline-block" onclick="validate_all();" class="button">
-                        <i class="fa fa-check"></i>
-                        validate</div>
+                        <i class="fa fa-check"></i> validate
+                    </div>
                 </div>
                 <p style="margin-bottom: 50px;">For help getting started see the <a target="_wiki" href="http://wiki.copticscriptorium.org/doku.php?id=gitdox_workflow">wiki</a></p>
                 <div>
