@@ -107,12 +107,12 @@
                     <li>You can choose custom configurations for exporting spreadsheet data if .ini files are available in the schemas/ directory</li>
                 </ul>
                 <div>Corpora to export:</div>
-                {{#corpora}}
                 <select name="corpus_select" id="corpus_select">
                     <option value="--ALL--">[all corpora]</option>\n'
+                    {{#corpora}}
                     <option value="{{.}}">{{.}}</option>
+                    {{/corpora}}
                 </select>
-                {{/corpora}}
 
                 <br/><br/>
                 <div>Filter by status:</div>
