@@ -1,11 +1,5 @@
 myPopup = '';
 
-function openPopup(url) {
-    myPopup = window.open(url,'popupWindow','width=640,height=480');
-    if (!myPopup.opener)
-         myPopup.opener = self;
-}
-
 function validate_doc() {
 	$("#validate_editor").addClass("disabledbutton");
 	$("#validation_report").html("Validating...");
@@ -13,7 +7,7 @@ function validate_doc() {
 	var mode = $("#mode").val();
 	var schema = $("#schema").val();
     $.ajax({
-		url: 'modules/validate_spreadsheet.py',
+		url: 'validate.py',
     	type: 'post',
     	data: {doc_id: docId, mode: mode, schema: schema},
     	dataType: "html",
@@ -31,9 +25,9 @@ function validate_doc() {
 
 function do_save(){
     if (document.getElementById('code')!=null){
-        val = document.getElementById('code').value.replace('&','&amp;');
-        document.getElementById('code').value = val;
+        val = document.getElementById('code').value.replace(/&(?!amp;)/g,'&amp;');
         editor.getDoc().setValue(val);
+        document.getElementById('code').value = val;
     }
     document.getElementById('editor_form').submit();
 }
@@ -44,3 +38,158 @@ function export_ether(){
 
     window.open('export.py?docs=' + doc_id + '&stylesheet=' + stylesheet, '_new');
 }
+
+$(document).ready(function () {
+    // get id from hidden form element. Watch out, might break in the future
+    var docid = $("#id").val();
+    $('#metadata-table-container').jtable({
+        title: '&nbsp;',
+        sorting: true,
+        actions: {
+            listAction: function (postData, jtParams) {
+                jtParams.domain = 'meta';
+                return $.Deferred(function ($dfd) {
+                    $.ajax({
+                        url: 'editor_metadata_service.py?action=list&docid=' + docid,
+                        type: 'POST',
+                        dataType: 'json',
+                        data: jtParams,
+                        success: function (data) {
+                            $dfd.resolve(data);
+                        },
+                        error: function() {
+                            $dfd.reject();
+                        }
+                    });
+                });
+            },
+            createAction: 'editor_metadata_service.py?action=create',
+            deleteAction: 'editor_metadata_service.py?action=delete&docid=' + docid
+        },
+        fields: {
+            id: {
+                title: 'ID',
+                key: true,
+                visibility:'hidden'
+            },
+            docid: {
+                title: 'Document ID',
+                defaultValue: docid,
+                type: 'hidden'
+            },
+            key: {
+                title: 'Key',
+                sorting: false
+            },
+            value: {
+                title: 'Value',
+                sorting: false
+            }
+        },
+        // for autocomplete support https://github.com/volosoft/jtable/issues/115
+        formCreated: function(event, formData) {
+            $.ajax({
+                url: 'editor_metadata_service.py?action=keys',
+                type: 'POST',
+                dataType: 'json',
+                data: {},
+                success: function(data) {
+                    formData.form.find('[name=key]').autocomplete({
+                        source: data['Options']
+                    });
+                }
+            });
+        }
+    });
+
+    $('#metadata-table-container').jtable('load');
+});
+
+$(document).ready(function () {
+    // get id from hidden form element. Watch out, might break in the future
+    var docid = $("#id").val();
+    $('#corpus-metadata-table-container').jtable({
+        title: '&nbsp;',
+        sorting: true,
+        actions: {
+            listAction: function (postData, jtParams) {
+                jtParams.domain = 'meta';
+                return $.Deferred(function ($dfd) {
+                    $.ajax({
+                        url: 'editor_metadata_service.py?corpus=true&action=list&docid=' + docid,
+                        type: 'POST',
+                        dataType: 'json',
+                        data: jtParams,
+                        success: function (data) {
+                            $dfd.resolve(data);
+                        },
+                        error: function() {
+                            $dfd.reject();
+                        }
+                    });
+                });
+            },
+            createAction: 'editor_metadata_service.py?corpus=true&action=create',
+            deleteAction: 'editor_metadata_service.py?corpus=true&action=delete&docid=' + docid
+        },
+        fields: {
+            id: {
+                title: 'ID',
+                key: true,
+                visibility:'hidden'
+            },
+            docid: {
+                defaultValue: docid,
+                type: 'hidden'
+            },
+            key: {
+                title: 'Key',
+                sorting: false
+            },
+            value: {
+                title: 'Value',
+                sorting: false
+            }
+        },
+        // for autocomplete support https://github.com/volosoft/jtable/issues/115
+        formCreated: function(event, formData) {
+            $.ajax({
+                url: 'editor_metadata_service.py?corpus=true&action=keys',
+                type: 'POST',
+                dataType: 'json',
+                data: {},
+                success: function(data) {
+                    formData.form.find('[name=key]').autocomplete({
+                        source: data['Options']
+                    });
+                }
+            });
+        }
+    });
+
+    $('#corpus-metadata-table-container').jtable('load');
+});
+
+
+$(document).ready(function(){
+    function activateTab(liId, divId) {
+        $('ul.tabs li').removeClass('current');
+        $('.tab-content').removeClass('current');
+        $("#"+liId).addClass('current');
+        $("#"+divId).addClass('current');
+    }
+
+    var liId = localStorage.getItem(location.pathname + "activeLiId");
+    var divId = localStorage.getItem(location.pathname + "activeDivId");
+    if (liId && divId) {
+        activateTab(liId, divId);
+    }
+
+    $('ul.tabs li').click(function() {
+        var liId = $(this).attr('id');
+        var divId = $(this).attr('data-tab');
+        activateTab(liId, divId);
+        localStorage.setItem(location.pathname + "activeLiId", liId);
+        localStorage.setItem(location.pathname + "activeDivId", divId);
+    });
+});

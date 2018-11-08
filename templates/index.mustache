@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>GitDox: {{project}}</title>
+        {{> shared_head_content}}
+        <script src="js/sorttable.js"></script>
+        <script src="js/editor.js"></script>
+    </head>
+    <body>
+        <!-- triple braces means replace without escaping HTML -->
+        {{{ navbar_html }}}
+        <div id="wrapper">
+            <!-- i.e., render templates/partials/header.mustache -->
+            {{> header }}
+            <div id="content">
+                <h1>GitDox: Project {{project}}</h1>
+                <div style="float:right">
+                    <span><i class="fa fa-user-circle"> </i> {{user}}</span>
+                    <form id="form_logout" action='index.py' style="display:inline-block">
+                        <input type='hidden' name='login' value='logout'/>
+                        <button class="button" onclick="document.getElementById('form_logout').submit()"><i class="fa fa-sign-out"> </i> logout</button>
+                    </form>
+
+                    <a href="admin.py" class="button" style="color:black">
+                        <i class="fa fa-shield"></i> admin
+                    </a>
+
+                    {{#admin_eq_three}}
+                    <a href="validation_rules.py" class="button" style="color:black;">
+                        <i class="fa fa-table"></i> validation rules
+                    </a>
+                    {{/admin_eq_three}}
+
+                    <div id="validate_landing" style="display:inline-block" onclick="validate_all();" class="button">
+                        <i class="fa fa-check"></i> validate
+                    </div>
+                </div>
+                <p style="margin-bottom: 50px;">For help getting started see the <a target="_wiki" href="http://wiki.copticscriptorium.org/doku.php?id=gitdox_workflow">wiki</a></p>
+                <div>
+                    <form id="corpus_table_form">
+                        <table id="corpus_list_table">
+                            <tr><td class="corp_label">Choose a corpus:</td><td>
+                                <select name="sel_corpus" onchange="this.form.submit();">
+                                    <option value="all">(show all)</option>
+                                    {{#corpora}}
+                                    {{#selected}}
+                                    <option value="{{name}}" selected="selected">
+                                        {{name}}
+                                    </option>
+                                    {{/selected}}
+                                    {{^selected}}
+                                    <option value="{{name}}">
+                                        {{name}}
+                                    </option>
+                                    {{/selected}}
+                                    {{/corpora}}
+                                </select>
+                            </td></tr>
+                        </table>
+                    </form>
+                </div>
+                <div style="padding: 18px 0 30px 0;">
+                    <form id="form_new" action='editor.py' style="display: inline-block;">
+                        <input type="hidden" name="id" value="{{max_id_plus1}}">
+                        {{#admin_gt_zero}}
+                        <div onclick="document.getElementById('form_new').submit();" class="button">
+                            <i class="fa fa-plus-circle"></i>
+                            New Document
+                        </div>
+                        {{/admin_gt_zero}}
+                        {{^admin_gt_zero}}
+                        <div class="button disabled">
+                            <i class="fa fa-plus-circle"></i>
+                            New Document
+                        </div>
+                        {{/admin_gt_zero}}
+                    </form>
+                    <form id="form_clone" action="editor.py" style="display: inline-block; float:right">
+                        <input type="hidden" name="id" id="id" value="{{max_id_plus1}}">
+                        {{#admin_gt_zero}}
+                        <select id="source_doc" name="source_doc" style="width: 240px;">
+                            <option value="">-- Select document to clone --</option>
+                            {{#docs}}
+                            <option value="{{id}}">{{name}} ({{corpus}})</option>
+                            {{/docs}}
+                        </select>
+                        {{/admin_gt_zero}}
+                        {{^admin_gt_zero}}
+                        <select id="source_doc" name="source_doc" style="width: 240px;" disabled="disabled">
+                            <option value="">-- Select document to clone --</option>
+                        </select>
+                        {{/admin_gt_zero}}
+                        <br/>
+                        <button type="button" id="clone_doc" onclick="document.getElementById('form_clone').submit();" class="button disabled" disabled="disabled">
+                            <i class="fa fa-copy"></i>
+                            New Document with Cloned Metadata
+                        </button>
+                        <script>
+                         // disable clone button if no doc is selected
+                         window.addEventListener("load", function() {
+                             var sourceDoc = document.getElementById("source_doc");
+                             var cloneDoc = document.getElementById("clone_doc");
+                             if (sourceDoc.value === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                         document.getElementById("source_doc").addEventListener("input", function(event) {
+                             var cloneDoc = document.getElementById("clone_doc");
+                             var v = event.target.value;
+                             if (v === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                        </script>
+                    </form>
+                </div>
+                <script src="js/index.js"></script>
+                <table id="doctable" class="sortable">
+                    <thead>
+                        <tr>
+                            <th>id</th>
+                            <th>corpus</th>
+                            <th>document</th>
+                            <th>status</th>
+                            <th>assigned</th>
+                            <th>mode</th>
+                            <th>validate</th>
+                            <th colspan="2" class="sorttable_nosort">actions</th>
+                        </tr>
+                    </thead>
+                    <tfoot>
+                        <tr>
+                            <td><input type="text" id="filter_id" onkeyup="filter()"></td>
+                            <td><input type="text" id="filter_corpus" onkeyup="filter()"></td>
+                            <td><input type="text" id="filter_document" onkeyup="filter()"></td>
+                            <td><input type="text" id="filter_status" onkeyup="filter()"></td>
+                            <td><input type="text" id="filter_assigned" onkeyup="filter()"></td>
+                            <td><input type="text" id="filter_mode" onkeyup="filter()" placeholder="xml/spreadsheet"></td>
+                            <td></td>
+                            <td colspan="2"></td></tr>
+                    </tfoot>
+                    <tbody>
+                        {{#docs}}
+                        <tr>
+                            <td>{{id}}</td>
+                            <td>{{corpus}}</td>
+                            <td>{{name}}</td>
+                            <td>{{status}}</td>
+                            <td>{{assignee}}</td>
+
+                            <!-- mode icon -->
+                            <td style="text-align:center;">
+                                {{#xml}}
+                                <i class="fa fa-code" title="xml">&nbsp;</i>
+                                {{/xml}}
+                                {{#ether}}
+                                <i class="fa fa-table" title="spreadsheet">&nbsp;</i>
+                                {{/ether}}
+                                {{#other_mode}}
+                                &#8209;
+                                {{/other_mode}}
+                            </td>
+
+                            <!-- validation icons -->
+                            <td style="text-align:center;">
+                                <div id="validate_{{id}}">
+                                    {{#xml}}
+                                    <i class="fa fa-code" title="xml">&nbsp;</i>
+                                    {{/xml}}
+                                    {{#ether}}
+                                    <i class="fa fa-table" title="spreadsheet">&nbsp;</i>
+                                    {{/ether}}
+                                    <i class="fa fa-tags" title="metadata" style="display:inline-block">&nbsp;</i>
+                                    {{#ether}}
+                                    <i class="fa fa-file" title="export">&nbsp;</i>
+                                    {{/ether}}
+                                </div>
+                            </td>
+
+                            <!-- edit button -->
+                            <td style="text-align:center;">
+                                <a href="editor.py?id={{id}}" style="color:black;">
+                                    <div class="button">
+                                        <i class="fa fa-pencil-square-o"></i> edit
+                                    </div>
+                                </a>
+                            </td>
+
+                            <!-- delete button -->
+                            <td style="text-align:center;">
+                                <form action="index.py" method="post" id="form_del_{{id}}">
+                                    <input type="hidden" name="id" value="{{id}}">
+                                    {{#admin_gt_zero}}
+                                    <input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/>
+                                    <div onclick="document.getElementById('form_del_{{id}}').submit();" class="button">
+                                        <i class="fa fa-trash-o"></i> delete
+                                    </div>
+                                    <input type="hidden" name="sel_corpus" value="{{sel_corpus}}">
+                                    {{/admin_gt_zero}}
+                                    {{^admin_gt_zero}}
+                                    <input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/>
+                                    <div class="button disabled">
+                                        <i class="fa fa-trash-o"></i> delete
+                                    </div>
+                                    <input type="hidden" name="sel_corpus" value="{{sel_corpus}}">
+                                    {{/admin_gt_zero}}
+                                </form>
+                            </td>
+                        </tr>
+                        {{/docs}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <script>window.addEventListener("load", validate_all);</script>
+    </body>
+</html>

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 import cgi
 from modules.gitdox_sql import *
@@ -104,7 +104,7 @@ if __name__ == "__main__":
 	#print("Content-type:text/html\r\n\r\n")
 
 	import cgitb
-	cgitb.enable()
+	#cgitb.enable()
 	from paths import ether_url
 
 	thisscript = os.environ.get('SCRIPT_NAME', '')

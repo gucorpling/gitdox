@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>GitDox - Validation Rules</title>
+        {{> shared_head_content}}
+        <script src="js/validation_rules.js" type="text/javascript"></script>
+    </head>
+    <body>
+        {{{navbar_html}}}
+        <div id="wrapper">
+            {{> header}}
+            <div id="content">
+                <h1>GitDox - Validation Rules</h1>
+                <p style="margin-bottom:24px;">
+                    <a href="index.py"><i class="fa fa-arrow-left"></i> return to index</a>
+                </p>
+
+                <ul class="tabs">
+                    <li id="xml-tab" data-tab="xml-table-container" class="tab-link current">XML</li>
+                    <li id="meta-tab" data-tab="meta-table-container" class="tab-link">Metadata</li>
+                    <li id="ether-tab" data-tab="ether-table-container" class="tab-link">Spreadsheet</li>
+                    <li id="export-tab" data-tab="export-table-container" class="tab-link">Export</li>
+                </ul>
+                <div style="padding-bottom: 32px;">
+                    <div id="xml-table-container" class="tab-content current"></div>
+                    <div id="meta-table-container" class="tab-content"></div>
+                    <div id="ether-table-container" class="tab-content"></div>
+                    <div id="export-table-container" class="tab-content"></div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

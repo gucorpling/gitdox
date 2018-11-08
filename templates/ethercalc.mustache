@@ -1,0 +1,63 @@
+<iframe id="ethercalc" width="99.8%" height="800px" src="{{ether_url}}"
+        style="background-color: white; border: solid black 1px; padding: 0px; margin: 0px"></iframe>
+<!-- hack to make the back button work as expected -->
+<script>
+ $(document).ready(function() {
+     var w = $("#ethercalc")[0].contentWindow;
+     w.onpopstate = function() {
+         w.history.back();
+     };
+ });
+</script>
+
+<div class="button disabled h128">
+    <i class="fa fa-floppy-o"> </i> Save
+</div>
+
+{{#nlp_service}}
+    {{#disabled}}
+    <div class="button disabled h128" name="nlp_xml_button">{{{xml_button_html}}}</div>
+    <div class="button disabled h128" name="nlp_spreadsheet_button">{{{spreadsheet_button_html}}}</div>
+    {{/disabled}}
+    {{^disabled}}
+    <div class="button h128" name="nlp_xml_button"
+        onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();">
+        {{{xml_button_html}}}
+    </div>
+    <div class="button h128" name="nlp_ether_button"
+        onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">
+        {{{spreadsheet_button_html}}}
+    </div>
+    {{/disabled}}
+{{/nlp_service}}
+
+<!-- github buttons -->
+<input type="hidden" name="push_git" id="push_git" value="">
+<input type="text" name="commit_msg" id="commit_msg" placeholder="commit message" style="width:140px">
+{{#git_2fa}}<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">{{/git_2fa}}
+<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
+{{#git_commit_response}}
+<p style="color:red;">{{.}} successful</p>
+{{/git_commit_response}}
+
+<h3>Export</h3>
+
+<p>Generate XML from this spreadsheet using a stylesheet</p>
+<div style="display: inline-block">
+    <select name="ether_stylesheet" id="ether_stylesheet">
+        <option>[CSV]</option>
+        {{#ether_stylesheets}}
+            <option value="{{.}}">{{.}}</option>
+        {{/ether_stylesheets}}
+    </select>
+    <input type="hidden" name="doc_id" id="doc_id" value="{{id}}">
+    <button onclick="export_ether();">Export</button>
+</div>
+
+<h3>Upload</h3>
+
+<p>Replace existing spreadsheet data by uploading an SGML or Excel file</p>
+<div style="display: inline-block">
+    <input id="file" type="file" name="file" style="width: 200px"/>
+    <button onclick="upload()">Upload</button>
+</div>

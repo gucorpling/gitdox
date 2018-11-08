@@ -1,0 +1,480 @@
+<link rel="stylesheet" href="codemirror-5.15.2/lib/codemirror.css">
+<link rel="stylesheet" href="codemirror-5.15.2/addon/hint/show-hint.css">
+<script src="codemirror-5.15.2/lib/codemirror.js"></script>
+<script src="codemirror-5.15.2/addon/hint/show-hint.js"></script>
+<script src="codemirror-5.15.2/addon/hint/xml-hint.js"></script>
+<script src="codemirror-5.15.2/mode/xml/xml.js"></script>
+<style type="text/css">
+.CodeMirror { border: 1px solid #eee; }
+</style>
+<script src="codemirror-5.15.2/addon/search/search.js"></script>
+<script src="codemirror-5.15.2/addon/search/searchcursor.js"></script>
+<script src="codemirror-5.15.2/addon/search/jump-to-line.js"></script>
+<script src="codemirror-5.15.2/addon/dialog/dialog.js"></script>
+<link rel="stylesheet" type="text/css" href="codemirror-5.15.2/addon/dialog/dialog.css">
+
+<div class="container">
+    <textarea id="code" name="code">{{text_content}}</textarea>
+</div>
+<div class="handle"></div>
+<div class="button h128" onclick="do_save();" >
+    <i class="fa fa-floppy-o"> </i> Save
+</div>
+{{#nlp_service}}
+    {{#disabled}}
+    <div class="button disabled h128" name="nlp_xml_button">{{{xml_button_html}}}</div>
+    <div class="button disabled h128" name="nlp_spreadsheet_button">{{{spreadsheet_button_html}}}</div>
+    {{/disabled}}
+    {{^disabled}}
+    <div class="button h128" name="nlp_xml_button"
+        onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();">
+        {{{xml_button_html}}}
+    </div>
+    <div class="button h128" name="nlp_ether_button"
+         onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">
+        {{{spreadsheet_button_html}}}
+    </div>
+    {{/disabled}}
+{{/nlp_service}}
+<!-- github buttons -->
+<input type="hidden" name="push_git" id="push_git" value="">
+<input type="text" name="commit_msg" id="commit_msg" placeholder="commit message" style="width:140px">
+{{#git_2fa}}<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">{{/git_2fa}}
+<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
+{{#git_commit_response}}
+<p style="color:red;">{{.}} successful</p>
+{{/git_commit_response}}
+
+<!-- enable manual scroll -->
+<!-- from https://jsfiddle.net/mindplay/rs2L2vtb/2/ -->
+<script>
+ (function(){
+
+
+
+ })();
+</script>
+
+<style>
+ .handle {
+     background: #f7f7f7;
+     height: 20px;
+     user-select: none;
+     cursor: row-resize;
+     border-top: 1px solid #ddd;
+     border-bottom: 1px solid #ddd;
+ }
+
+ .handle:before {
+     content: '\2261'; /* https://en.wikipedia.org/wiki/Triple_bar */
+     color: #999;
+     position: absolute;
+     left: 50%;
+ }
+
+ .handle:hover {
+     background: #f0f0f0;
+ }
+
+ .handle:hover:before {
+     color: #000;
+ }
+</style>
+<!-- end manual scroll -->
+
+
+
+<script>
+
+
+ var tags = {
+     "!top": [
+         "text",
+         "head",
+         "lg",
+         "sp",
+         "s",
+         "incident",
+         "date",
+         "gap",
+         "measure",
+         "sic",
+         "w",
+         "time",
+         "quote",
+         "figure",
+         "caption",
+         "p",
+         "list",
+         "item",
+         "add",
+         "l",
+         "hi",
+         "q",
+         "ref"
+     ],
+     "text": {
+         "attrs": {
+             "id": null,
+             "type": [
+                 "interview",
+                 "news",
+                 "voyage",
+                 "whow",
+                 "academic",
+                 "bio",
+                 "reddit",
+                 "fiction"
+             ]
+         },
+         "children": [
+             "figure",
+             "list",
+             "p",
+             "table",
+             "quote",
+             "s",
+             "head",
+             "sp",
+             "incident"
+         ]
+     },
+     "head": {
+         "attrs": {
+             "rend": null
+         },
+         "children": [
+             "s"
+         ]
+     },
+     "lg": {
+         "attrs": {
+             "type": null,
+             "n": null
+         },
+         "children": [
+             "s"
+         ]
+     },
+     "sp": {
+         "attrs": {
+             "who": null
+         },
+         "children": [
+             "s",
+             "list",
+             "p",
+             "hi"
+         ]
+     },
+     "s": {
+         "attrs": {
+             "type": [
+                 "decl",
+                 "sub",
+                 "imp",
+                 "q",
+                 "wh",
+                 "inf",
+                 "ger",
+                 "intj",
+                 "frag",
+                 "other"
+             ]
+         },
+         "children": [
+             "add",
+             "figure",
+             "hi",
+             "sp",
+             "q",
+             "w",
+             "quote",
+             "ref",
+             "date",
+             "gap",
+             "incident",
+             "l",
+             "list",
+             "measure",
+             "sic",
+             "time"
+         ]
+     },
+     "incident": {
+         "attrs": {
+             "type": null,
+             "who": null
+         }
+     },
+     "date": {
+         "attrs": {
+             "from": null,
+             "notAfter": null,
+             "notBefore": null,
+             "rend": null,
+             "to": null,
+             "when": null
+         }
+     },
+     "gap": {
+         "attrs": {
+             "reason": null
+         }
+     },
+     "measure": {
+         "attrs": {
+             "type": null
+         }
+     },
+     "sic": {
+         "children": [
+             "ref",
+             "w"
+         ]
+     },
+     "w": {},
+     "time": {
+         "attrs": {
+             "when": null,
+             "from": null,
+             "to": null
+         }
+     },
+     "quote": {
+         "attrs": {
+             "rend": null
+         },
+         "children": [
+             "add",
+             "q",
+             "ref",
+             "s",
+             "sic"
+         ]
+     },
+     "figure": {
+         "attrs": {
+             "rend": null
+         },
+         "children": [
+             "caption"
+         ]
+     },
+     "caption": {
+         "attrs": {
+             "rend": null
+         },
+         "children": [
+             "quote",
+             "s"
+         ]
+     },
+     "p": {
+         "attrs": {
+             "rend": null
+         },
+         "children": [
+             "add",
+             "figure",
+             "hi",
+             "lg",
+             "quote",
+             "list",
+             "s",
+             "sp"
+         ]
+     },
+     "table": {
+         "attrs": {
+             "rend": null,
+             "rows": null,
+             "cols": null
+         },
+         "children": [
+             "row",
+             "head"
+         ]
+     },
+     "row": {
+         "attrs": {
+             "n": null
+         },
+         "children": [
+             "cell"
+         ]
+     },
+     "cell": {
+         "attrs": {
+             "n": null,
+             "role": ["label"]
+         },
+         "children": [
+             "s"
+         ]
+     },
+     "list": {
+         "attrs": {
+             "type": [
+                 "ordered",
+                 "unordered"
+             ]
+         },
+         "children": [
+             "figure",
+             "item"
+         ]
+     },
+     "item": {
+         "attrs": {
+             "n": null
+         },
+         "children": [
+             "head",
+             "figure",
+             "ref",
+             "hi",
+             "list",
+             "p",
+             "s"
+         ]
+     },
+     "add": {
+         "children": [
+             "s",
+             "ref"
+         ]
+     },
+     "l": {
+         "attrs": {
+             "n": null
+         },
+         "children": [
+             "s",
+             "date"
+         ]
+     },
+     "hi": {
+         "attrs": {
+             "rend": null
+         },
+         "children": [
+             "ref",
+             "incident",
+             "w",
+             "lg",
+             "s",
+             "caption",
+             "q",
+             "sic"
+         ]
+     },
+     "q": {
+         "children": [
+             "figure",
+             "hi",
+             "sic",
+             "ref"
+         ]
+     },
+     "ref": {
+         "attrs": {
+             "target": null,
+             "rend": null
+         },
+         "children": [
+             "add",
+             "hi",
+             "sic",
+             "date"
+         ]
+     }
+ }
+ ;
+
+ function completeAfter(cm, pred) {
+     var cur = cm.getCursor();
+     if (!pred || pred()) setTimeout(function() {
+         if (!cm.state.completionActive)
+             cm.showHint({completeSingle: false});
+     }, 100);
+     return CodeMirror.Pass;
+ }
+
+ function completeIfAfterLt(cm) {
+     return completeAfter(cm, function() {
+         var cur = cm.getCursor();
+         return cm.getRange(CodeMirror.Pos(cur.line, cur.ch - 1), cur) == "<";
+     });
+ }
+
+ function completeIfInTag(cm) {
+     return completeAfter(cm, function() {
+         var tok = cm.getTokenAt(cm.getCursor());
+         if (tok.type == "string" && (!/['"]/.test(tok.string.charAt(tok.string.length - 1)) || tok.string.length == 1)) return false;
+         var inner = CodeMirror.innerMode(cm.getMode(), tok.state).state;
+         return inner.tagName;
+     });
+ }
+
+ var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+     mode: "xml",
+     lineNumbers: true,indentUnit:0,lineWrapping:true,
+     extraKeys: {
+         "'<'": completeAfter,
+         "'/'": completeIfAfterLt,
+         "' '": completeIfInTag,
+         "'='": completeIfInTag,
+         "Ctrl-Space": "autocomplete"
+     },
+     hintOptions: {schemaInfo: tags}
+ });
+
+ let $handle = document.querySelector(".handle");
+ let $container = document.querySelector(".container");
+
+ function height_of($el) {
+     return parseInt(window.getComputedStyle($el).height.replace(/px$/, ""));
+ }
+
+ const MIN_HEIGHT = 200;
+
+ var start_x;
+ var start_y;
+ var start_h;
+
+ function on_drag(e) {
+     editor.setSize(null, Math.max(MIN_HEIGHT, (start_h + e.y - start_y)) + "px");
+ }
+
+ function on_release(e) {
+     document.body.removeEventListener("mousemove", on_drag);
+     window.removeEventListener("mouseup", on_release);
+ }
+
+ $handle.addEventListener("mousedown", function (e) {
+     start_x = e.x;
+     start_y = e.y;
+     start_h = height_of($container);
+
+     document.body.addEventListener("mousemove", on_drag);
+     window.addEventListener("mouseup", on_release);
+ });
+
+
+ function updateTextArea() {
+	   editor.save();
+ }
+ editor.on('change', updateTextArea);
+
+ delete CodeMirror.keyMap.emacsy["Alt-F"]; delete CodeMirror.keyMap.emacsy["Alt-D"];
+
+ val = document.getElementById('code').value.replace(/&(?!amp;)/g,'&amp;');
+ $('#code').val(val);
+ editor.getDoc().setValue(val);
+
+
+
+</script>
+
+

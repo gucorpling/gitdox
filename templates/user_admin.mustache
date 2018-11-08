@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>GitDox - Admin</title>
+        {{> shared_head_content }}
+        <script src="js/admin.js"></script>
+    </head>
+    <body>
+        {{{ navbar_html }}}
+        <div id="wrapper">
+            {{> header }}
+            <div id="content">
+                <h1 >Coptic XML transcription editor</h1>
+                <p style="border-bottom:groove;"><i>edit user info</i> | <a href="index.py">back to document list</a> </p>
+
+                <form action='admin.py' method='post'>
+                    <h2>Change password</h2>
+                    <table class="admin">
+                        <tr>
+                            <td>username</td>
+                            <td>{{user}}</td>
+                        </tr>
+                        <tr>
+                            <td>new password</td>
+                            <td><input type='password' name='new_pass'></td>
+                        </tr>
+                    </table>
+                    <input type='submit' value='change'>
+                </form>
+                <br>
+                <p>Note: after you've changed your password you'll need to log in using your new password.</p>
+
+                {{#admin_eq_one}}
+                <form action='admin.py' method='post'>
+                    <table class="admin">
+                        <tr>
+                            <td>new git username</td>
+                            <td><input type='text' name='new_git_username'></td>
+                        </tr>
+                        <tr>
+                            <td>new git password</td>
+                            <td><input type='password' name='new_git_password'></td>
+                        </tr>
+                        <tr>
+                            <td>use two-factor auth</td>
+                            <td><input type='checkbox' name='new_git_2fa' value='true'></td>
+                        </tr>
+                    </table>
+                    <input type='submit' value='change'>
+                </form>
+                {{/admin_eq_one}}
+            </div>
+        </div>
+    </body>
+</html>

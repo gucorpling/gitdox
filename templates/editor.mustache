@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<head>
+    <title>{{docname}} - GitDox: Edit</title>
+    {{> shared_head_content }}
+    <script src="js/editor.js?version=4"></script>
+    <script src="js/validate.js"></script>
+    <!-- hack to make back button work as expected -->
+    {{^first_load}}
+    <script>
+     history.back();
+    </script>
+    {{/first_load}}
+</head>
+<body>
+    {{{navbar_html}}}
+    <div id="wrapper">
+        {{> header}}
+        <div id="content">
+            <h1>GitDox: Edit</h1>
+            {{{ editor_help_link_html }}}
+            <hr>
+
+            <div>
+                {{#doc_is_selected}}
+                <article>
+                    <form name="hiddenForm" id="editor_form" method="post" action="editor.py" enctype="multipart/form-data">
+                        <input type="hidden" name="id" id="id" value="{{id}}">
+                        <input type="hidden" name="mode" id="mode" value="{{mode}}">
+                        <input type="hidden" name="schema" id="schema" value="{{schema}}">
+                        <input type="hidden" name="nlp_xml" id="nlp_xml">
+                        <input type="hidden" name="nlp_spreadsheet" id="nlp_spreadsheet">
+                        <h2>Editor | <a href="index.py">back to document list</a> </h2>
+
+                        <table id="doc_data" style="background:#eee;padding:5pt;">
+                            <colgroup>
+                                <col style="width:150px">
+                            </colgroup>
+                            <tbody>
+                                <tr>
+                                    <td>Document Name: </td>
+                                    <td>
+                                        <input type="text" id="edit_docname" name="edit_docname"
+                                               defaultValue="{{docname}}" value="{{docname}}"
+                                               {{^can_save}}disabled="disabled" class="disabled"{{/can_save}}
+                                               onblur="validate_docname();">
+                                        {{#can_save}}
+                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim">
+                                            <i class="fa fa-floppy-o"> </i>
+                                        </div>
+                                        {{/can_save}}
+                                    </td>
+                                    <td>
+                                        <div class="button" id="validate_editor" onclick="validate_doc();">Validate</div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Corpus Name: </td>
+                                    <td>
+                                        <input type="text" id="edit_corpusname" name="edit_corpusname"
+                                               defaultValue="{{corpusname}}" value="{{corpusname}}"
+                                               {{^can_save}}disabled="disabled" class="disabled"{{/can_save}}
+                                               onblur="validate_corpusname();">
+                                        {{#can_save}}
+                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim">
+                                            <i class="fa fa-floppy-o"> </i>
+                                        </div>
+                                        {{/can_save}}
+                                    </td>
+                                    <td rowspan="6" class="report_container">
+                                        <div id="validation_report">
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Git Repo: </td>
+                                    <td>
+                                        <input type="text" id="edit_filename" name="edit_filename"
+                                               value="{{repo}}" defaultValue="{{repo}}"
+                                               {{^can_save}}disabled="disabled" class="disabled"{{/can_save}}
+                                               onblur="validate_repo();">
+                                        {{#can_save}}
+                                        <div onclick="document.getElementById('editor_form').submit();" class="button slim">
+                                            <i class="fa fa-floppy-o"> </i>
+                                        </div>
+                                        {{/can_save}}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Assigned to:</td>
+                                    <td>
+                                        <select name="edit_assignee" onchange="do_save()">
+                                        {{#assignee_options}}
+                                        <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                            {{text}}
+                                        </option>
+                                        {{/assignee_options}}
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Status:</td>
+                                    <td>
+                                        <select name="edit_status" onchange="do_save();">
+                                            {{#status_options}}
+                                            <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                                {{text}}
+                                            </option>
+                                            {{/status_options}}
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Mode:</td>
+                                    <td>
+                                        <select name="edit_mode" onchange="do_save();">
+                                            {{#mode_options}}
+                                            <option value="{{text}}" {{#selected}}selected="selected"{{/selected}}>
+                                                {{text}}
+                                            </option>
+                                            {{/mode_options}}
+                                        </select>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        {{#ether_mode}}
+                        {{> ethercalc}}
+                        {{/ether_mode}}
+
+                        {{^ether_mode}}
+                        {{> codemirror}}
+                        {{/ether_mode}}
+
+                        <ul class="tabs" style="margin-top: 18px;">
+                            <li id="metadata-tab" data-tab="metadata-table-container" class="tab-link current">Document Metadata</li>
+                            <li id="corpus-metadata-tab" data-tab="corpus-metadata-table-container" class="tab-link">Corpus Metadata</li>
+                        </ul>
+                        <div id="metadata-table-container" class="tab-content current" style="max-width: 1000px;"></div>
+                        <div id="corpus-metadata-table-container" class="tab-content" style="max-width: 1000px;"></div>
+                    </form>
+
+                    <div style="width:400px;padding-top:24px;">
+                        <form id="form_clone" action="editor.py">
+                            <input type="hidden" name="id" id="id" value="{{id}}"/>
+                            {{#admin_gt_zero}}
+                            <select id="source_doc" name="source_doc" style="width: 240px;">
+                                <option value="">-- Select document to clone --</option>
+                                {{#docs}}
+                                <option value="{{id}}">{{name}} ({{corpus}})</option>
+                                {{/docs}}
+                            </select>
+                            {{/admin_gt_zero}}
+                            {{^admin_gt_zero}}
+                            <select id="source_doc" name="source_doc" style="width: 240px;" disabled="disabled">
+                                <option value="">-- Select document to clone --</option>
+                            </select>
+                            {{/admin_gt_zero}}
+                            <br/>
+                            <button type="button" id="clone_doc"
+                                    onclick="document.getElementById('form_clone').submit();"
+                                    class="button disabled" disabled="disabled" style="width:100%;">
+                                <i class="fa fa-copy"></i>
+                                Copy Document Metadata
+                            </button>
+                        </form>
+                        <script>
+                         // disable clone button if no doc is selected
+                         window.addEventListener("load", function() {
+                             var sourceDoc = document.getElementById("source_doc");
+                             var cloneDoc = document.getElementById("clone_doc");
+                             if (sourceDoc.value === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                         document.getElementById("source_doc").addEventListener("input", function(event) {
+                             var cloneDoc = document.getElementById("clone_doc");
+                             var v = event.target.value;
+                             if (v === "") {
+                                 cloneDoc.setAttribute("disabled", "disabled");
+                                 cloneDoc.className = "button disabled";
+                             }
+                             else {
+                                 cloneDoc.removeAttribute("disabled");
+                                 cloneDoc.className = "button";
+                             }
+                         });
+                        </script>
+                    </div>
+
+                </article>
+                {{/doc_is_selected}}
+                {{^doc_is_selected}}
+                <h2>No document selected | <a href="index.py">back to document list</a> </h2>
+                {{/doc_is_selected}}
+            </div>
+        </div>
+    </div>
+</body>
+

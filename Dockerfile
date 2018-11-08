@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:16.04
 EXPOSE 80
 
 # install deps
@@ -13,8 +13,7 @@ RUN chown -R www-data:www-data /var/www/html
 RUN chmod +x /var/www/html/*.py
 RUN chmod +x /var/www/html/modules/*.py
 
-# keep these in sync with requirements.txt
-RUN pip install lxml requests github3.py==0.9.3 passlib
+RUN pip install -r /var/www/html/requirements.txt
 
 # install ethercalc and run as a service
 RUN npm install -g ethercalc
@@ -47,6 +46,7 @@ RUN echo " \n\
 # service and (2) not to use supervisord to manage the execution of these
 # processes. But (1) is too heavy a solution, and (2) seems unnecessary unless
 # one of our services leaks memory/is unstable
+RUN echo "ln -s /usr/bin/nodejs /usr/bin/node" >> /etc/startup.sh
 RUN echo "/usr/bin/redis-server &" >> /etc/startup.sh
 RUN echo "/usr/local/bin/ethercalc &" >> /etc/startup.sh
 RUN echo "/usr/sbin/apache2ctl -D FOREGROUND" >> /etc/startup.sh

@@ -16,7 +16,8 @@ from requests.auth import HTTPBasicAuth
 import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
-	build_meta_tag, get_ether_stylesheet_select, get_file_list
+	build_meta_tag, get_ether_stylesheets, get_file_list
+from modules.renderer import render
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -29,7 +30,6 @@ scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 userdir = scriptpath + "users" + os.sep
 templatedir = scriptpath + "templates" + os.sep
 config = ConfigObj(userdir + 'config.ini')
-skin = config["skin"]
 project = config["project"]
 editor_help_link = config["editor_help_link"]
 # Captions and API URLs for NLP buttons
@@ -66,11 +66,16 @@ def serialize_file(text_content,file_name):
 	f.write(text_content)#.encode("utf8"))
 	f.close()
 
+def get_user_list():
+	user_list=[]
+	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
+	userdir = scriptpath + "users" + os.sep
+	return get_file_list(userdir,"ini",forbidden=["admin","default","config"],hide_extension=True)
 
 def load_page(user,admin,theform):
-	print("Content-type:text/html\r\n\r\n")
 	global ether_url
 	global code_2fa
+
 	if theform.getvalue("2fa"):
 		code_2fa = theform.getvalue("2fa")
 	else:
@@ -87,13 +92,15 @@ def load_page(user,admin,theform):
 	schema = ""
 	doc_id = ""  # Should only remain so if someone navigated directly to editor.py
 	docname = ""
-	mymsg = ""
 	old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema = ["", "", "", "", "", "", ""]
 
 	if int(admin) > 0:
 		git_username, git_token, git_2fa = get_git_credentials(user, admin, code_2fa)
 	else:
 		git_username, git_token, git_2fa = (None, None, None)
+
+	# dict of variables we'll need to render the html
+	render_data = {}
 
 	if theform.getvalue('id'):
 		doc_id = theform.getvalue('id')
@@ -106,7 +113,7 @@ def load_page(user,admin,theform):
 			corpus = "default_corpus"
 			schema = ""
 			text_content = ""
-			# If one of the four forms is edited, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
+			# If one of the four forms is edited or we're cloning a doc, then we create the doc, otherwise nothing happens (user cannot fill in nothing and create the doc)
 			if theform.getvalue('edit_docname') and user != "demo":
 				if docname != 'new_document':
 					if doc_id > max_id:
@@ -151,14 +158,15 @@ def load_page(user,admin,theform):
 					else:
 						update_assignee(doc_id, assignee)
 
-			if theform.getvalue('edit_schema') and user != "demo":
-				schema = theform.getvalue('edit_schema')
-				if schema != "--none--":
-					if doc_id > max_id:
-						create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
-						max_id = doc_id
-					else:
-						update_schema(doc_id, schema)
+			# cloning metadata from an existing doc into a new doc
+			if theform.getvalue('source_doc'):
+				source_meta = get_doc_meta(theform.getvalue('source_doc'))
+				if doc_id > max_id:
+					create_document(doc_id, docname, corpus, status, assignee, repo_name, text_content)
+					max_id = doc_id
+				for meta in source_meta:
+					m_key, m_val = meta[2:4]
+					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
 
 		else:
 			# Get previous values from DB
@@ -169,14 +177,27 @@ def load_page(user,admin,theform):
 
 			# Handle switch to spreadsheet mode if NLP spreadsheet service is called
 			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet" and mode == "xml" and user != "demo":
-				api_call = spreadsheet_nlp_api
-				nlp_user, nlp_password = get_nlp_credentials()
 				data_to_process = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
-				data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
-				resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
-				sgml=resp.text.encode("utf8")
+				api_call = spreadsheet_nlp_api
+				if api_call != "":
+					nlp_user, nlp_password = get_nlp_credentials()
+					data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
+					resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
+					sgml = resp.text.encode("utf8")
+				else:
+					sgml = data_to_process.encode("utf8")
 				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
 				mode = "ether"
+
+			# handle copying metadata
+			if theform.getvalue('source_doc'):
+				source_meta = get_doc_meta(theform.getvalue('source_doc'))
+				existing_meta_keys = [x[2] for x in get_doc_meta(doc_id)]
+				# don't overwrite existing keys
+				meta_to_write = [x for x in source_meta if x[2] not in existing_meta_keys]
+				for meta in meta_to_write:
+					m_key, m_val = meta[2], meta[3]
+					save_meta(int(doc_id), m_key, m_val)
 
 
 	if theform.getvalue('edit_docname'):
@@ -215,10 +236,6 @@ def load_page(user,admin,theform):
 				mode = theform.getvalue('edit_mode')
 				if mode != old_mode and user != "demo":
 					update_mode(doc_id,mode)
-			if theform.getvalue('edit_schema'):
-				schema = theform.getvalue('edit_schema')
-				if schema != old_schema and user != "demo":
-					update_schema(doc_id, schema)
 			if theform.getvalue('nlp_spreadsheet') == "do_nlp_spreadsheet":  # mode has been changed to spreadsheet via NLP
 				update_mode(doc_id, "ether")
 				mode = "ether"
@@ -228,9 +245,7 @@ def load_page(user,admin,theform):
 					old_socialcalc = get_socialcalc(ether_url, old_sheet_name)
 					out, err = make_spreadsheet(old_socialcalc, ether_url + "_/gd_" + corpus + "_" + docname, "socialcalc")
 					if out == "OK":
-						out, err = delete_spreadsheet(ether_url,old_sheet_name)
-					else:
-						mymsg += "out was: " + out + " err was" + err
+						delete_spreadsheet(ether_url,old_sheet_name)
 
 			text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
 
@@ -239,6 +254,7 @@ def load_page(user,admin,theform):
 	if theform.getvalue('code'):
 		text_content = theform.getvalue('code')
 		text_content = text_content.replace("\r","")
+		text_content = re.sub(r'&(?!amp;)',r'&amp;',text_content)  # Escape unescaped XML &
 		text_content = unicode(text_content.decode("utf8"))
 		if user != "demo":
 			if int(doc_id)>int(max_id):
@@ -295,123 +311,41 @@ def load_page(user,admin,theform):
 			shutil.rmtree(prefix+subdir)
 
 	if theform.getvalue('nlp_xml') == "do_nlp_xml" and mode == "xml":
-		api_call=xml_nlp_api
-		nlp_user, nlp_password = get_nlp_credentials()
-		data = {"data":text_content, "lb":"line", "format":"pipes"}
-		resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
-		text_content=resp.text
+		api_call = xml_nlp_api
+		if api_call != "":
+			nlp_user, nlp_password = get_nlp_credentials()
+			data = {"data":text_content, "lb":"line", "format":"pipes"}
+			resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
+			text_content=resp.text
 
 	# Editing options
 	# Docname
 	# Filename
-	push_git = """<input type="hidden" name="push_git" id="push_git" value="">
-	<input type="text" name="commit_msg" id="commit_msg" placeholder="commit message here" style="width:140px">"""
-	if git_2fa == "true":
-		push_git += """<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">"""
-	push_git += """<div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
-	"""
-
+	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
+	render_data['status_options'] = [{'text': x, 'selected': x == status} for x in status_list]
+	render_data['assignee_options'] = [{'text': x, 'selected': x == assignee} for x in get_user_list()]
+	render_data['mode_options'] = [{'text': x, 'selected': x == mode} for x in ["xml", "ether"]]
+	render_data['nlp_service'] = {'xml_button_html': xml_nlp_button.decode("utf8"),
+                                  'spreadsheet_button_html': spreadsheet_nlp_button.decode("utf8"),
+                                  'disabled': user == "demo" or mode == "ether"}
+	render_data['git_2fa'] = git_2fa == "true"
 	if git_status:
 		# Remove some html keyword symbols in the commit message returned by github3
-		push_msg=git_status.replace('<','')
-		push_msg=push_msg.replace('>','')
-		push_git+="""<p style='color:red;'>""" + push_msg + ' successful' + """</p>"""
+		render_data['git_commit_response'] = git_status.replace('<','').replace('>','')
 
-	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
 
-	options = ""
-	for stat in status_list:
-		options +='<option value="'+stat+'">'+stat+'</option>\n'
-	options = options.replace('">'+status +'<', '" selected="selected">'+status+'<')
-
-	edit_status="""<select name="edit_status" onchange='do_save();'>"""
-
-	edit_status += options+"</select>"
-
-	# Get XML schema list
-	schema_list = ['--none--']
-	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
-	schemadir = scriptpath + "schemas" + os.sep
-
-	schema_list += get_file_list(schemadir,"xsd",hide_extension=True)
-
-	edit_schema = """<select name="edit_schema" onchange="do_save();">"""
-	for schema_file in schema_list:
-		schema_select = ""
-		schema_name = schema_file
-		if schema_name == schema:
-			schema_select = "selected"
-		edit_schema += """<option value='""" + schema_name + "' %s>" + schema_name + """</option>"""
-		edit_schema = edit_schema % schema_select
-	edit_schema += "</select>"
-	# edit_schema = edit_schema.replace(schema+'"', schema+'" selected="selected"')
-
-	# Get user_list from the logintools
-	user_list=[]
-	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
-	userdir = scriptpath + "users" + os.sep
-
-	user_list = get_file_list(userdir,"ini",forbidden=["admin","default","config"],hide_extension=True)
-
-	edit_assignee="""<select name="edit_assignee" onchange="do_save();">"""
-	for list_user in user_list:
-		assignee_select=""
-		user_name=list_user
-		if user_name==assignee:
-			assignee_select="selected"
-		edit_assignee+="""<option value='""" + user_name + "' %s>" + user_name + """</option>"""
-		edit_assignee=edit_assignee%assignee_select
-	edit_assignee+="</select>"
-
-	edit_mode = '''<select name="edit_mode" id="edit_mode" onchange="do_save();">\n<option value="xml">xml</option>\n<option value="ether">spreadsheet</option>\n</select>'''
-	edit_mode = edit_mode.replace(mode+'"', mode+'" selected="selected"')
-
-	# Metadata
-	if theform.getvalue('metakey'):
-		metakey = theform.getvalue('metakey')
-		metavalue = theform.getvalue('metavalue').replace("\t","").replace("\n","").replace("\r","")
-		if user != "demo":
-			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"))
-	if theform.getvalue('metaid'):
-		metaid = theform.getvalue('metaid')
-		if user != "demo":
-			delete_meta(metaid, doc_id)
-	if theform.getvalue('corpus_metakey'):
-		metakey = theform.getvalue('corpus_metakey')
-		metavalue = theform.getvalue('corpus_metavalue').replace("\t","").replace("\n","").replace("\r","")
-		if user != "demo":
-			save_meta(int(doc_id),metakey.decode("utf8"),metavalue.decode("utf8"),corpus=True)
-	if theform.getvalue('corpus_metaid'):
-		metaid = theform.getvalue('corpus_metaid')
-		if user != "demo":
-			delete_meta(metaid, doc_id, corpus=True)
-
-	nlp_service = """<div class="button h128" name="nlp_xml_button" onclick="document.getElementById('nlp_xml').value='do_nlp_xml'; do_save();"> """ + xml_nlp_button + """</div>""" + \
-				  """<div class="button h128" name="nlp_ether_button" onclick="document.getElementById('nlp_spreadsheet').value='do_nlp_spreadsheet'; do_save();">"""+ spreadsheet_nlp_button + """</div>"""
-	nlp_service = nlp_service.decode("utf8")
-
-	disabled_nlp_service = """<div class="button disabled h128" name="nlp_xml_button">"""+xml_nlp_button+"""</div>""" + \
-						   """<div class="button disabled h128" name="nlp_ether_button">""" +spreadsheet_nlp_button + """</div>"""
-	disabled_nlp_service = disabled_nlp_service.decode("utf8")
-
-	# Disable NLP services in demo
-	if user == "demo":
-		nlp_service = disabled_nlp_service
-
-	page= ""#"Content-type:text/html\r\n\r\n"
+	# prepare embedded editor html
 	if mode == "ether":
-		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "ether.html").read()
+		render_data['ether_mode'] = True
 		ether_url += "gd_" + corpus + "_" + docname
-
-		stylesheet_select = get_ether_stylesheet_select()
-		embedded_editor = embedded_editor.replace("**stylesheet_select**",stylesheet_select)
+		render_data['ether_url'] = ether_url
+		render_data['ether_stylesheets'] = get_ether_stylesheets()
 
 		if "file" in theform and user != "demo":
 			fileitem = theform["file"]
 			if len(fileitem.filename) > 0:
 				#  strip leading path from file name to avoid directory traversal attacks
 				fn = os.path.basename(fileitem.filename)
-				msg = 'The file "' + fn + '" was uploaded successfully'
 				if fn.endswith(".xls") or fn.endswith(".xlsx"):
 					make_spreadsheet(fileitem.file.read(),"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname,"excel")
 				else:
@@ -421,58 +355,43 @@ def load_page(user,admin,theform):
 					for (key, value) in iteritems(meta_key_val):
 						key = key.replace("@","_")
 						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
-		else:
-			msg = "no file was uploaded"
-
-		embedded_editor = embedded_editor.replace("**source**",ether_url)
 	else:
-		embedded_editor = urllib.urlopen(prefix + "templates" + os.sep + "codemirror.html").read()
+		render_data['ether_mode'] = False
 
-	page += urllib.urlopen(prefix + "templates" + os.sep + "editor.html").read()
-	page += mymsg
-	page = page.replace("**embedded_editor**",embedded_editor)
-
-	if len(doc_id) == 0:
-		exp = re.compile(r"<article>.*</article>",re.DOTALL)
-		page = exp.sub("""<h2>No document selected | <a href="index.py">back to document list</a> </h2>""",page)
+	# stop here if no doc selected
+	if doc_id:
+		render_data['doc_is_selected'] = len(doc_id) != 0
 	else:
-		metadata = print_meta(doc_id)
-		corpus_metadata = print_meta(doc_id,corpus=True)
-		#corpus_metadata = ""
-		page=page.replace("**content**",text_content)
-		page=page.replace("**docname**",docname)
-		page=page.replace("**corpusname**",corpus)
-		page=page.replace("**edit_status**",edit_status)
-		page=page.replace("**repo**",repo_name)
-		page=page.replace("**edit_schema**",edit_schema)
-		page=page.replace("**edit_assignee**",edit_assignee)
-		page=page.replace("**edit_mode**",edit_mode)
-		page=page.replace("**metadata**",metadata)
-		page=page.replace("**corpus_metadata**",corpus_metadata)
-		page=page.replace("**disabled_NLP**",disabled_nlp_service)
-		page=page.replace("**NLP**",nlp_service)
-		page=page.replace("**id**",doc_id)
-		page=page.replace("**mode**",mode)
-		page=page.replace("**schema**",schema)
-		if int(admin)>0:
-			page=page.replace("**github**",push_git)
-		else:
-			page = page.replace("**github**", '')
+		return render("editor", render_data)
 
-		if int(admin) < 3:
-			page = page.replace('onblur="validate_docname();"','onblur="validate_docname();" disabled="disabled" class="disabled"')
-			page = page.replace('onblur="validate_corpusname();"','onblur="validate_corpusname();" disabled="disabled" class="disabled"')
-			page = page.replace('onblur="validate_repo();"','onblur="validate_repo();" disabled="disabled" class="disabled"')
-			page = page.replace('''<div onclick="do_save();" class="button slim"><i class="fa fa-floppy-o"> </i>''','''<div class="button slim disabled"><i class="fa fa-floppy-o"> </i>''')
+	render_data['id'] = doc_id
+	render_data['mode'] = mode
+	render_data['schema'] = schema
+	render_data['docname'] = docname
+	render_data['corpusname'] = corpus
 
-	header = open(templatedir + "header.html").read()
-	page = page.replace("**navbar**", get_menu())
-	page = page.replace("**header**", header)
-	page = page.replace("**project**", project)
-	page = page.replace("**skin**", skin)
-	page = page.replace("**editor_help_link**",editor_help_link)
+	render_data['text_content'] = text_content
+	render_data['repo'] = repo_name
 
-	return page
+	render_data["admin_gt_zero"] = int(admin) > 0
+	render_data["admin_eq_three"] = admin == "3"
+
+	# handle clone meta button, and allow github pushing
+	if int(admin) > 0:
+		doc_list = generic_query("SELECT id,corpus,name,status,assignee_username,mode FROM docs ORDER BY corpus, name COLLATE NOCASE",())
+		render_data["docs"] = []
+		for doc in doc_list:
+			doc_vars = {}
+			doc_vars["id"] = str(doc[0])
+			doc_vars["corpus"] = doc[1]
+			doc_vars["name"] = doc[2]
+			render_data['docs'].append(doc_vars)
+
+	render_data["can_save"] = not (int(admin) < 3)
+	render_data["editor_help_link_html"] = editor_help_link
+	render_data["first_load"] = len(theform.keys()) == 1
+
+	return render("editor", render_data)
 
 
 def open_main_server():
@@ -485,7 +404,9 @@ def open_main_server():
 	action, userconfig = login(theform, userdir, thisscript, action)
 	user = userconfig["username"]
 	admin = userconfig["admin"]
-	print(load_page(user,admin,theform).encode("utf8"))
+
+	print("Content-type:text/html\n\n")
+	print(load_page(user, admin, theform).encode("utf8"))
 
 
 if __name__ == "__main__":

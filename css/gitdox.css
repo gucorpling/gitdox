@@ -1,5 +1,14 @@
-#doctable{    border: 2px solid black;
-    border-radius: 4px;font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;background-color:hsla(40,53%,100%,0.30)}
+#doctable {    
+	border: 2px solid black;
+	border-radius: 4px;
+	font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;
+	background-color: hsla(40,53%,100%,0.30);
+	width: 100%;
+}
+
+#doctable input[type=text] {
+	width: 95%;
+}
 
 h1, h2{font-family: asul, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif;-webkit-font-smoothing: subpixel-antialiased;}
 
@@ -125,7 +134,7 @@ padding: 10px;
   position:relative;
 }
 
-.tooltip span
+.tooltip span.msg
 {
   display:none;
   -moz-border-radius:6px;
@@ -135,7 +144,7 @@ padding: 10px;
   background:white;
 }
 
-.tooltip:hover span
+.tooltip:hover span.msg
 {
   display:block;
   position:absolute;
@@ -155,17 +164,63 @@ padding: 10px;
 	height: 12.8px;
 }
 
-#ValidationTableContainer{
-width: 100%}
+/* for validation_rules */
+ul.tabs{
+    margin: 0px;
+    padding: 0px;
+    list-style: none;
+}
+
+ul.tabs li{
+    background: none;
+    display: inline-block;
+    padding: 10px 15px;
+    cursor: pointer;
+    min-width: 100px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #222;
+    text-align: center;
+}
+
+ul.tabs li.current{
+    background: #ededed;
+    color: #222;
+}
+
+.tab-content{
+    display: none;
+    background: #ededed;
+    padding: 15px;
+}
+
+.tab-content.current{
+    display: inherit;
+}
+
+/* override jtable styles for consistency with rest of gitdox */
+.jtable-title {
+    font-size: 16px !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #eeeeee !important;
+}
+table.jtable {
+    border: none !important;
+}
+
+.ui-widget-overlay {
+    opacity: 0.5 !important;
+}
+
 
 .jtable td{
     word-break: break-all;
 }
 
 #validation_report{
-	    max-height: 300px;
-    overflow-y: scroll;
-    overflow-x: scroll;
+    height: 200px;
+    overflow-y: auto;
 }
 
 tfoot {
@@ -174,3 +229,13 @@ tfoot {
 
 #filter_id{width:30px}
 #filter_mode{width:60px}
+
+
+table.admin {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+}
+table.admin td, table.admin th {
+    text-align: left;
+    padding: 8px;
+}

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>GitDox - Admin</title>
+        {{> shared_head_content }}
+        <script src="js/validate.js"></script>
+        <script src="js/admin.js?version=2"></script>
+    </head>
+    <body>
+        {{{ navbar_html }}}
+        <div id="wrapper">
+            {{> header }}
+            <div id="content">
+                <h1>GitDox - Administration</h1>
+                <p style="border-bottom:groove;">
+                    <i>administration and user management</i>
+                    |
+                    <a href="index.py">back to document list</a>
+                </p>
+
+                <!-- user deletion form -->
+                <form id="form_del_user" action="admin.py" method='post'>
+                    <h2>User Management</h2>
+                    <p><h3>Select users to delete:</h3></p>
+                    <select id="userlist_select" name='user_delete' class="doclist">
+                        {{#userfiles}}
+                            <option value="{{.}}.ini">{{.}}</option>
+                        {{/userfiles}}
+                    </select>
+                            </br></br>
+                            <input type="hidden" name='deleteuser' value='delete user'/>
+                            <div onclick="document.getElementById('form_del_user').submit();" class="button">
+                                <i class="fa fa-trash-o"></i> delete
+                            </div>
+                </form>
+
+                <!-- user creation form -->
+                <br>
+                <h3>Enter user info to create new user:</h3>
+                <br>
+                <form id="form_new_user" class="admin_form" action='admin.py' method='post'>
+                    <table id="user_data" class="admin">
+                        <colgroup>
+                            <col style="width:150px">
+                        </colgroup>
+                        <tbody>
+                            <tr>
+                                <td>username</td>
+                                <td><input type='text' name='username'> </td>
+                            </tr>
+                            <tr>
+                                <td>password </td>
+                                <td><input type='password' name='password'> </td>
+                            </tr>
+                            <tr>
+                                <td>realname</td>
+                                <td> <input type='text' name='realname'> </td>
+                            </tr>
+                            <tr>
+                                <td>email </td>
+                                <td><input type='text' name='email'> </td>
+                            </tr>
+                            <tr>
+                                <td>admin</td>
+                                <td> <select name="admin">
+                                    <option value="0">User</option>
+                                    <option value="1">Committer</option>
+                                    <option value="3">Administrator</option>
+                                </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>git username </td>
+                                <td><input type='text' name='git_username'></td>
+                            </tr>
+                            <tr>
+                                <td>git password</td>
+                                <td> <input type='password' name='git_password'></td>
+                            </tr>
+                            <tr>
+                                <td>use two-factor auth</td>
+                                <td><input type='checkbox' name='git_2fa' value='true'></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <br><br>
+                    <input type='hidden' name='create_user' value='true'>
+                    <div onclick="document.getElementById('form_new_user').submit();" class="button">
+                        <i class="fa fa-floppy-o"></i> save
+                    </div>
+                </form>
+                {{#user_creation_warning}}
+                <br><b style='color:red;'>{{.}}</b><br>
+                {{/user_creation_warning}}
+
+                <h2>Batch download</h2>
+                <p>Download all documents</p>
+                <ul>
+                    <li>Documents will be downloaded in a zip file</li>
+                    <li>The format of each document will depend on its active mode:
+                        <ul>
+                            <li>Metadata is added to XML files in a wrapping tag &lt;meta key="value"&gt;</li>
+                            <li>Documents in XML mode are downloaded as .xml, as they appear in the editor</li>
+                            <li>Documents in spreadsheet mode are downloaded as .sgml to preserve potential span hierarchy conflicts</li>
+                        </ul>
+                    </li>
+                    <li>You can choose custom configurations for exporting spreadsheet data if .ini files are available in the schemas/ directory</li>
+                </ul>
+                <div>Corpora to export:</div>
+                <select name="corpus_select" id="corpus_select">
+                    <option value="--ALL--">[all corpora]</option>\n'
+                    {{#corpora}}
+                    <option value="{{.}}">{{.}}</option>
+                    {{/corpora}}
+                </select>
+
+                <br/><br/>
+                <div>Filter by status:</div>
+                <select name="status_select" id="status_select">
+                    <option value="--ALL--">[all statuses]</option>
+                    {{#statuses}}
+                    <option value="{{.}}">{{.}}</option>
+                    {{/statuses}}
+                </select>
+                {{{ status_select_html }}}
+                <br/><br/>
+                <div>Extension for spreadsheet files:</div>
+                <select id="extension_select">
+                    <option>sgml</option>
+                    <option>tt</option>
+                    <option>xml</option>
+                </select>
+                <br/><br/>
+                <div>Export configuration for spreadsheets:</div>
+                <select name="ether_stylesheet" id="ether_stylesheet">
+                    <option>[CSV]</option>
+                    {{#ether_stylesheets}}
+                        <option value="{{.}}">{{.}}</option>
+                    {{/ether_stylesheets}}
+                </select>
+                <br/><br/>
+                <div onclick="export_all();" class="button">
+                    <i class="fa fa-cloud-download"></i> download
+                </div>
+
+                <h2>Batch upload</h2>
+                <p>Import multiple spreadsheets data by uploading a zip archive with SGML files</p>
+                <ul>
+                    <li>Document names are generated from file names inside the zip, without their extension (e.g. .sgml, .tt)</li>
+                    <li>Metadata is taken from the &lt;meta&gt; element surrounding the document</li>
+                    <li>Corpus name is taken from a metadatum corpus inside meta, else 'default_corpus'</li>
+                    <li>Select XML mode to import into XML editor, or Spreadsheet to convert SGML spans into a new spreadsheet</li>
+                </ul>
+                <form id="batch_upload" name="batch_upload" method="post"
+                      action="admin.py" enctype="multipart/form-data">
+                    <table class="admin">
+                        <tbody>
+                            <tr>
+                                <td>Mode:
+                                    <select id="mode" name="mode" style="width: 120px;">
+                                        <option value="xml">XML</option>
+                                        <option value="ether">Spreadsheet</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <input id="file" type="file" name="file" style="width: 200px">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <button onclick="upload()">Upload</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </form>
+                {{#file_uploaded}}
+                    <br>
+                    <span style="color:green">The file <strong>{{.}}</strong> was uploaded successfully</span>
+                    <br>
+                {{/file_uploaded}}
+                {{#files_imported}}
+                    <span style="color:green">Imported {{.}} files from archive</span>
+                    <br>
+                {{/files_imported}}
+
+                <h2>Batch update DB</h2>
+                <p>Execute multiple SQL updates, e.g. to assign documents to users from a list</p>
+                <ul>
+                    <li>The uploaded file should be a tab delimited, two column text file</li>
+                    <li>The first rwo contains the headers:
+                        <ul><li>in column 1, the criterion, one of 'corpus' or 'name' (=document name)</li>
+                            <li>in column 2, the docs table column to update, e.g. 'assignee_username'</li></ul></li>
+                    <li>Subsequent rows give pairs of criterion-value, e.g. 'doc001   user1'</li>
+                </ul>
+                <form id="batch_sql" name="batch_sql" method="post" action="admin.py" enctype="multipart/form-data">
+                    <input id="sqltab" type="file" name="sqltab" style="width: 200px">
+                    <br>
+                    <button onclick="upload()">Upload</button>
+                </form>
+                {{#sql_file_uploaded}}
+                    <br>
+                    <span style="color:green">The file <strong>{{.}}</strong> was uploaded successfully</span>
+                    <br>
+                {{/sql_file_uploaded}}
+                {{#sql_statements}}
+                    <span style="color:green">Executed {{.}} DB updates</span>
+                    <br>
+                {{/sql_statements}}
+
+                <br>
+                <br>
+                <!-- init database, setup_db, wipe all documents -->
+                <h2>Database management</h2>
+                <form id="form_initdb" action='admin.py' method='post'>
+                    <b style='color:red'>warning: this will wipe the database!</b>
+                    <br>
+                    <input type='hidden' name='init_db' value='true'>
+                    <div onclick="document.getElementById('form_initdb').submit();" class="button">
+                        <i class="fa fa-database"></i> init DB
+                    </div>
+                </form>
+            </div>
+        </div>
+    </body>
+</html>

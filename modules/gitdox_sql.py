@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 Data access functions to read from and write to the SQLite backend.
@@ -31,7 +31,7 @@ def setup_db():
 
 	#docs table
 	cur.execute('''CREATE TABLE IF NOT EXISTS docs
-				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text)''')
+				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text, cache text)''')
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, corpus_meta text, UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key) ON CONFLICT REPLACE)''')
@@ -49,7 +49,24 @@ def create_document(doc_id, name, corpus, status, assigned_username, filename, c
 		(int(doc_id), name, corpus, status, assigned_username, filename, content, schema))
 
 
-def generic_query(sql, params):
+def get_cache(doc_id):
+	try:
+		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
+	except sqlite3.Error as err: # Old schema without cache column
+		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
+		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
+	return cache
+
+
+def set_cache(doc_id, cache_contents):
+	try:
+		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
+	except sqlite3.Error as err:  # Old schema without cache column
+		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
+		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
+
+
+def generic_query(sql, params, return_new_id=False):
 	# generic_query("DELETE FROM rst_nodes WHERE doc=? and project=?",(doc,project))
 
 	dbpath = os.path.dirname(os.path.realpath(__file__)) + os.sep + ".." + os.sep + "gitdox.db"
@@ -62,8 +79,11 @@ def generic_query(sql, params):
 		else:
 			cur.execute(sql)
 
-		rows = cur.fetchall()
-		return rows
+		if return_new_id:
+			return cur.lastrowid
+		else:
+			rows = cur.fetchall()
+			return rows
 
 
 def invalidate_doc_by_name(doc,corpus):
@@ -116,55 +136,15 @@ def cell(text):
 		text = str(text)
 	return "\n	<td>" + text + "</td>"
 
-def print_meta(doc_id, corpus=False):
-	meta = get_doc_meta(doc_id, corpus=corpus)
-	if meta is None:
-		meta = []
-	# docid,metaid,key,value - four cols
-	metaid_id = "metaid" if not corpus else "corpus_metaid"
-	table_id = "meta_table" if not corpus else "meta_table_corpus"
-	table='''<input type="hidden" id="'''+ metaid_id +'''" name="'''+metaid_id+'''" value="">
-	<table id="'''+table_id+'''"'''
-	if corpus:
-		table += ' class="corpus_metatable"'
-	table +=""">
-	<colgroup>
-    	<col>
-    	<col>
-    	<col style="width: 40px">
-  	</colgroup>
-  		<tbody>
-	"""
-	for item in meta:
-		# Each item appears in one row of the table
-		row = "\n <tr>"
-		metaid = str(item[1])
-		('metaid:'+str(metaid))
-		id = str(doc_id)
-		for i in item[2:-1]:
-			cell_contents = cell(i)
-			cell_contents = re.sub(r'(<td>)(https?://[^ <>]+)',r'\1<a href="\2">\2</a>',cell_contents)
-			row += cell_contents
-
-		# delete meta
-		metaid_code="""<div class="button slim" onclick="document.getElementById('"""+metaid_id+"""').value='"""+metaid+"""'; document.getElementById('editor_form').submit();"><i class="fa fa-trash"></i> </div>"""
-
-		button_delete=""
-		button_delete+=metaid_code
-		row += cell(button_delete)
-		row += "\n </tr>"
-		table += row
-	table += "\n</tbody>\n</table>\n"
-	return table
-
-
 def save_meta(doc_id,key,value,corpus=False):
 	if corpus:
 		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name))
+		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name), return_new_id = True)
 	else:
-		generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None))
+		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None), return_new_id = True)
 		invalidate_doc_by_id(doc_id)
+
+	return new_id
 
 def delete_meta(metaid, doc_id, corpus=False):
 	generic_query("DELETE FROM metadata WHERE metaid=?", (metaid,))
@@ -178,10 +158,14 @@ def get_doc_info(doc_id):
 	else:
 		return res
 
+def get_doc_content(doc_id):
+	res = generic_query("SELECT content FROM docs WHERE id=?", (int(doc_id),))
+	return res[0][0]
+
 def get_all_docs(corpus=None, status=None):
 	if corpus is None:
 		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None) 
 		else:
 			return generic_query("SELECT id, name, corpus, mode, content FROM docs where status=?", (status,))
 	else:
@@ -197,25 +181,42 @@ def get_doc_meta(doc_id, corpus=False):
 			_, corpus_name, _, _, _, _, _ = fields
 			return generic_query("SELECT * FROM metadata WHERE corpus_meta=? ORDER BY key COLLATE NOCASE",(corpus_name,))
 		else:
-			return None
+			return []
 	else:
 		return generic_query("SELECT * FROM metadata WHERE docid=? ORDER BY key COLLATE NOCASE", (int(doc_id),))
 
 def get_corpora():
 	return generic_query("SELECT DISTINCT corpus FROM docs ORDER BY corpus COLLATE NOCASE", None)
 
-def get_validate_rules():
-		return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate", None)
+def get_validate_rules(sort=None, domain=None):
+	query = "SELECT corpus, doc, domain, name, operator, argument, id FROM validate"
+	args = []
+	if domain:
+		query += " WHERE domain=? "
+		args.append(domain)
+	if sort:
+		query += " ORDER BY " + sort
+	return generic_query(query, args)
 
-def get_sorted_rules(sort):
-	return generic_query("SELECT corpus, doc, domain, name, operator, argument, id FROM validate ORDER BY " + sort, None)  # parameterization doesn't work for order by
+def get_xml_rules():
+	return get_validate_rules(domain='xml')
+
+def get_meta_rules():
+	return get_validate_rules(domain='meta')
+
+def get_ether_rules():
+	return get_validate_rules(domain='ether')
+
+def get_export_rules():
+	return get_validate_rules(domain='export')
 
 def create_validate_rule(doc, corpus, domain, name, operator, argument):
-	generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument))
+	new_id = generic_query("INSERT INTO validate(doc,corpus,domain,name,operator,argument) VALUES(?,?,?,?,?,?)", (doc, corpus, domain, name, operator, argument), return_new_id = True)
 	if domain == "meta":
 		invalidate_doc_by_name("%","%")
 	else:
 		invalidate_ether_docs("%","%")
+	return new_id
 
 def delete_validate_rule(id):
 	generic_query("DELETE FROM validate WHERE id=?", (int(id),))

@@ -18,11 +18,12 @@ from os.path import isfile, join
 from configobj import ConfigObj
 from ast import literal_eval
 import json
+from copy import copy
 import cgi
+import requests
 from xml.sax.saxutils import escape
 
 __version__ = "2.0.0"
-
 
 class ExportConfig:
 
@@ -94,6 +95,67 @@ class ExportConfig:
 			self.template = config["template"]
 		else:
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
+
+
+def parse_ether(ether, doc_id=None):
+	"""Take in raw socialcalc data and turn it into a dict of Cells. Used in validation."""
+
+	class Cell:
+		def __init__(self, col, row, content, span):
+			self.col = col
+			self.row = row
+			self.header = ""
+			self.content = content
+			self.span = span
+
+		def __repr__(self):
+			return "<Cell (" + repr((self.col, self.row, self.header, self.content, self.span)) + ")>"
+
+	ether_lines = ether.splitlines()
+
+	# find col letter corresponding to col name
+	parsed = defaultdict(list)
+	colmap = defaultdict(list)
+	rev_colmap = {}
+	all_cells = []
+	for line in ether_lines:
+		if line.startswith("cell:"):  # Cell row
+			# A maximal row looks like this incl. span: cell:F2:t:LIRC2014_chw0oir:f:1:rowspan:289
+			# A minimal row without formatting: cell:C2:t:JJ:f:1
+			parts = line.split(":")
+			if len(parts) > 3:  # Otherwise invalid row
+				cell_id = parts[1]
+				cell_row = cell_id[1:]
+				cell_col = cell_id[0]
+				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
+				# for c in cell_id:
+				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
+				#		cell_row += c
+				#	else:
+				#		cell_col += c
+				cell_content = parts[3].replace("\\c", ":")
+				cell_span = parts[-1] if "rowspan:" in line else "1"
+
+				# record col name
+				if cell_row == "1":
+					colmap[cell_content].append(cell_col)
+					rev_colmap[cell_col] = cell_content
+
+				cell = Cell(cell_col, cell_row, cell_content, cell_span)
+				parsed[cell_col].append(cell)
+				all_cells.append(cell)
+
+	for cell in all_cells:
+		if cell.col in rev_colmap:
+			cell.header = rev_colmap[cell.col]
+		else:
+			if doc_id is None:
+				doc_id = "unknown"
+			raise IOError("Undocumented column: " + cell.col + " in '" + str(cell) + " from doc: " + str(doc_id))
+
+	parsed["__colmap__"] = colmap  # Save colmap for apply_rule
+	return parsed
+
 
 def unescape_xml(text):
 	# Fix various common compounded XML escapes
@@ -181,31 +243,11 @@ def get_file_list(path,extension,hide_extension=False,forbidden=None):
 	return outfiles
 
 
-def get_ether_stylesheet_select():
-
+def get_ether_stylesheets():
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	stylesheet_dir = scriptpath + os.sep + ".." + os.sep + "schemas" + os.sep
-
 	stylesheet_list = get_file_list(stylesheet_dir,"ini",hide_extension=True)
-	select = """<select name="ether_stylesheet" id="ether_stylesheet">\n"""
-	select += "\t<option>[CSV]</option>\n"
-
-	for f in stylesheet_list:
-		select += '\t<option value="' + f + '">' + f + '</option>\n'
-	select += "</select>\n"
-	return select
-
-
-def get_corpus_select():
-
-	corpora = get_corpora()
-	select = """<select name="corpus_select" id="corpus_select">\n"""
-	select += '\t<option value="--ALL--">[all corpora]</option>\n'
-
-	for corpus in corpora:
-		select += '\t<option value="' + corpus[0] + '">' + corpus[0] + '</option>\n'
-	select += "</select>\n"
-	return select
+	return stylesheet_list
 
 
 def flush_open(annos, row_num, colmap):
@@ -218,32 +260,57 @@ def flush_open(annos, row_num, colmap):
 
 def flush_close(closing_element, last_value, last_start, row_num, colmap, aliases):
 	flushed = ""
-	for alias in aliases[closing_element]:
-		if last_start[alias] < row_num - 1:
-			span_string = ":rowspan:" + str(row_num - last_start[alias])
+
+	for alias in aliases[closing_element][-1]:
+		stack_len = len(last_start[alias])
+
+		if stack_len > 0 and last_start[alias][-1] < row_num - 1:
+			span_string = ":rowspan:" + str(row_num - last_start[alias][-1])
 		else:
 			span_string = ""
-		flushed += "cell:" + colmap[alias] + str(last_start[alias]) + ":t:" + last_value[alias]+":f:1:tvf:1"+span_string + "\n"  # Use t for tvf to leave links on
+
+		# Use t for tvf to leave links on
+		flushed += ("cell:"
+			+ colmap[alias][stack_len - 1]
+			+ str(last_start[alias][-1])
+			+ ":t:" + str(last_value[alias][-1])
+			+ ":f:1:tvf:1" + span_string + "\n")
+
+		# pop the stack since we've closed a tag
+		last_value[alias].pop()
+		last_start[alias].pop()
+
+	aliases[closing_element].pop()
 	return flushed
 
 
-def number_to_letter(number):
-	# Currently support up to 26 columns; no support for multiletter column headers beyond letter Z
+def number_to_letters(number):
 	if number < 27:
-		return chr(number + ord('a')-1).upper()
+		return chr(number + ord('a') - 1).upper()
 	else:
-		return None
+		char1 = chr((number // 26) + ord('a')-1).upper()
+		char2 = chr((number % 26) + ord('a')-1).upper()
+		return char1 + char2
 
 
 def sgml_to_ether(sgml, ignore_elements=False):
-	sgml = sgml.replace("\r","")
-	current_row = 2
 	open_annos = defaultdict(list)
+
+	# a mapping from a tag name to a list of values. the list is a stack
+	# where the most recently encountered opening tag's value/start row
+	# is kept on the right side of the list. whenever we see a closing tag
+	# we pop from the stack, and whenever we see an opening tag we push
+	# (append) to the stack
+	last_value = defaultdict(list)
+	last_start = defaultdict(list)
+
+	# maps from tags to a similar stack data structure where the top of the stack
+	# (i.e. the right side of the list) contains all the annotations that were
+	# present on the most recently opened nested element
 	aliases = defaultdict(list)
-	last_value = {}
-	last_start = {}
+
+	# values in this dict are also lists which follow the pattern described above
 	colmap = OrderedDict()
-	maxcol = 1
 
 	preamble = """socialcalc:version:1.0
 MIME-Version: 1.0
@@ -263,45 +330,54 @@ version:1.5
 
 """
 
+	sgml = sgml.replace("\r","")
+
 	output = ""
+	maxcol = 1
+	current_row = 2
 
 	for line in sgml.strip().split("\n"):
 		line = line.strip()
+		# SocialCalc uses colons internally, \\c used to repr colon in data
 		line = line.replace(":","\\c")
+
 		if line.startswith("<?") or line.endswith("/>"):  # Skip unary tags and XML instructions
-			pass
+			continue
 		elif line.startswith("<meta") or line.startswith("</meta"):  # meta tags
-			pass
+			continue
 		elif line.startswith("</"):  # Closing tag
 			my_match = re.match("</([^>]+)>",line)
 			element = my_match.groups(0)[0]
-			output+=flush_close(element, last_value, last_start, current_row, colmap, aliases)
+			output += flush_close(element, last_value, last_start, current_row, colmap, aliases)
 		elif line.startswith("<"): # Opening tag
 			my_match = re.match("<([^ >]+)[ >]",line)
 			element = my_match.groups(0)[0]
-			aliases[element] = []  # Reset element aliases to see which attributes this instance has
+			aliases[element].append([])  # Add new set of aliases to see which attributes this instance has
 			if "=" not in line:
 				line = "<" + element + " " + element + '="' + element + '">'
 
-			my_match = re.findall('([^" =]+)="([^"]+)"',line)
+			attrs = re.findall('([^" =]+)="([^"]+)"',line)
 			anno_name = ""
 			anno_value = ""
-			for match in my_match:
-				if element != match[0] and ignore_elements is False:
-					anno_name = element + "_" + match[0]
+			for attr in attrs:
+				if element != attr[0] and ignore_elements is False:
+					anno_name = element + "_" + attr[0]
 				else:
-					anno_name = match[0]
-				anno_value = match[1]
+					anno_name = attr[0]
+				anno_value = attr[1]
 				open_annos[current_row].append((anno_name,anno_value))
-				last_value[anno_name] = anno_value
-				last_start[anno_name] = current_row
-				if element not in aliases:
-					aliases[element] = [anno_name]
-				elif anno_name not in aliases[element]:
-					aliases[element].append(anno_name)
+				last_value[anno_name].append(anno_value)
+				last_start[anno_name].append(current_row)
+				if anno_name not in aliases[element][-1]:
+					aliases[element][-1].append(anno_name)
+
 				if anno_name not in colmap:
-					maxcol +=1
-					colmap[anno_name] = number_to_letter(maxcol)
+					maxcol += 1
+					colmap[anno_name] = [number_to_letters(maxcol)]
+				elif anno_name in colmap and \
+					 len(last_start[anno_name]) > len(colmap[anno_name]):
+					maxcol += 1
+					colmap[anno_name].append(number_to_letters(maxcol))
 
 		elif len(line) > 0:  # Token
 			token = line.strip()
@@ -313,7 +389,8 @@ version:1.5
 	preamble += "cell:A1:t:tok:f:2\n" # f <> tvf for links
 	output = preamble + output
 	for header in colmap:
-		output += "cell:"+colmap[header]+"1:t:"+header+":f:2\n" # NO f <> tvf for links
+		for entry in colmap[header]:
+			output += "cell:"+entry+"1:t:"+header+":f:2\n" # NO f <> tvf for links
 
 	output += "\nsheet:c:" + str(maxcol) + ":r:" + str(current_row-1) + ":tvf:1\n"
 
@@ -340,17 +417,110 @@ Content-type: text/plain; charset=UTF-8
 
 
 def ether_to_csv(ether_path, name):
-	command = "curl --netrc -X GET " + ether_path + "_/" + name + "/csv/"
-	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-	(stdout, stderr) = proc.communicate()
-	return stdout.decode("utf8")
+	try:
+		r = requests.get(ether_path + "_/" + name + "/csv/")
+	except:
+		return ""
+
+	return r.text
+
+
+def strip_unique_identifier(tag):
+	"""Given an SGML closing or opening tag, replace anything that looks
+	like __\d+__ on the end of the tag name, assuming that we were the
+	ones who added it."""
+
+	try:
+		tag_name = re.match("^</?([^ >]+)", tag).groups(0)[0]
+	except AttributeError:
+		return tag
+
+	orig_tag_name = re.sub("__\d+__$", "", tag_name)
+	tag = tag.replace("<" + tag_name, "<" + orig_tag_name)
+	tag = tag.replace("</" + tag_name, "</" + orig_tag_name)
+	tag = tag.replace(tag_name + "=" + '"' + orig_tag_name + '"',
+					  orig_tag_name + "=" + '"' + orig_tag_name + '"')
+	return tag
+
+def deunique_should_skip_line(line):
+	return (not line.startswith("<")      # tokens
+			or line.startswith("<?")      # xml instrs
+			or line.endswith("/>")        # unary tags
+			or line.startswith("<meta")   # meta
+			or line.startswith("</meta"))
+
+def reverse_adjacent_closing_tags(lines):
+	"""Finds sublists like ['</e>', '</e__2__>'] and replaces them with
+	  ['</e__2__>', '</e>']"""
+	def swap_run(l, start, end):
+		l[start:end] = l[start:end][::-1]
+
+	run_start = None
+	for i, line in enumerate(lines):
+		if line.startswith("</"):
+			if run_start is not None:
+				deuniqued_tag = strip_unique_identifier(line)
+				if deuniqued_tag != lines[run_start]:
+					swap_run(lines, run_start, i)
+					run_start = None
+			else:
+				run_start = i
+		elif run_start is not None:
+			swap_run(lines, run_start, i)
+			run_start = None
+		else:
+			run_start = None
+
+	if run_start is not None:
+		swap_run(lines, run_start, i+1)
+
+	return lines
+
+def deunique_properly_nested_tags(sgml):
+	"""Use a silly n^2 algorithm to detect properly nested tags and strip
+	them of their unique identifiers. Probably an n algorithm to do this."""
+	lines = sgml.split("\n")
+	lines = reverse_adjacent_closing_tags(lines)
+
+	output = copy(lines)
+
+	for i, line in enumerate(lines):
+		if deunique_should_skip_line(line) or line.startswith("</"):
+			continue
+
+		# if we've gotten this far, we have an opening tag--store the tag name
+		open_element = re.match("<([^ >]+)[ >]", line).groups(0)[0]
+		open_counts = defaultdict(int)
+
+		for j, line2 in enumerate(lines[i:]):
+			if deunique_should_skip_line(line2):
+				continue
+
+			if line2.startswith("</"):
+				element = re.match("</([^>]+)>", line2).groups(0)[0]
+				open_counts[element] -= 1
+				if element == open_element:
+					break
+			else:
+				element = re.match("<([^ >]+)[ >]", line2).groups(0)[0]
+				open_counts[element] += 1
+
+		# element is properly nested if no element was opened in the block that
+		# was not also closed in the block or vice versa
+		if sum(open_counts.values()) == 0:
+			output[i] = strip_unique_identifier(output[i])
+			output[i+j] = strip_unique_identifier(output[i+j])
+
+	output = reverse_adjacent_closing_tags(output)
+
+	return "\n".join(output)
 
 
 def ether_to_sgml(ether, doc_id,config=None):
 	"""
-
 	:param ether: String in SocialCalc format
 	:param doc_id: GitDox database internal document ID number as string
+	:param config: Name of an export config (.ini file) under schemas/
 	:return:
 	"""
 
@@ -359,13 +529,15 @@ def ether_to_sgml(ether, doc_id,config=None):
 	else:
 		config = ExportConfig(config=config)
 
+	# mapping from col header (meaningful string) to the col letter
 	colmap = {}
+	# list of 3-tuples of parsed cells: (col, row, contents)
 	cells = []
 
 	if isinstance(ether,unicode):
 		ether = ether.encode("utf8")
 
-
+	# parse cell contents into cells
 	for line in ether.splitlines():
 		parsed_cell = re.match(r'cell:([A-Z]+)(\d+):(.*)$', line)
 		if parsed_cell is not None:
@@ -390,22 +562,37 @@ def ether_to_sgml(ether, doc_id,config=None):
 	sec_element_checklist = []
 	row = 1
 
+	# added to support duplicate columns
+	namecount = defaultdict(int)
+
 	close_tags = defaultdict(list)
 	for cell in cells:
-		if cell[1] == 1:  # Header row
+		# Header row
+		if cell[1] == 1:
 			colname = cell[2]['t'].replace("\\c",":")
 			if colname in config.aliases:
-				colmap[cell[0]] = config.aliases[colname]
+				colname = config.aliases[colname]
+
+			# if we've already seen a tag of this name, prepare to make it unique
+			namecount[colname] += 1
+			if namecount[colname] > 1:
+				dupe_suffix = "__" + str(namecount[colname]) + "__"
 			else:
-				colmap[cell[0]] = colname
+				dupe_suffix = ""
+
+			if "@" in colname:
+				unique_colname = colname.replace("@", dupe_suffix + "@")
+			else:
+				unique_colname = colname + dupe_suffix
+
+			colmap[cell[0]] = unique_colname
+
 			# Make sure that everything that should be exported has some priority
-			if colname not in config.priorities and config.export_all:
-				if not colname.lower().startswith("ignore:"):  # Never export columns prefixed with "ignore:"
-					if "@" in colname:
-						elem = colname.split("@",1)[0]
-					else:
-						elem = colname
+			if unique_colname.split("@",1)[0] not in config.priorities and config.export_all:
+				if not unique_colname.lower().startswith("ignore:"):
+					elem = unique_colname.split("@",1)[0]
 					config.priorities.append(elem)
+		# All other rows
 		else:
 			col = cell[0]
 			row = cell[1]
@@ -413,56 +600,70 @@ def ether_to_sgml(ether, doc_id,config=None):
 				col_name = colmap[col]
 			else:
 				raise IOError("Column " + col + " not found in doc_id " + str(doc_id))
+
+			# If the column specifies an attribute name, use it, otherwise use the element's name again
 			if "@" in col_name:
 				element, attrib = col_name.split("@",1)
 			else:
 				element = col_name
 				attrib = element
 
+			# Check whether attrib contains a constant value instruction
+			const_val = ""
+			if "=" in attrib:
+				attrib, const_val = attrib.split("=",1)
+
+			# Check to see if the cell has been merged with other cells
 			if 'rowspan' in cell[2]:
 				rowspan = int(cell[2]['rowspan'])
 			else:
 				rowspan = 1
 
-			if "|" in element:  # Check for flexible element, e.g. m|w@x means 'prefer to attach x to m, else to w'
+			# Check for flexible element, e.g. m|w@x means 'prefer to attach x to m, else to w'
+			if "|" in element:
 				element, sec_element = element.split("|",1)
 			else:
 				sec_element = ""
 
+			# Move on to next cell if this is not a desired column
 			if element not in config.priorities or (element.startswith("ignore:") and config.no_ignore):  # Guaranteed to be in priorities if it should be included
-				continue  # Move on to next cell if this is not a desired column
-			if row != last_row:  # New row starting, sort previous lists for opening and closing orders
-				#close_tags[row].sort(key=lambda x: (-last_open_index[x],x))
-				close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
+				continue
+
+			# New row starting from this cell, sort previous lists for opening and closing orders
+			if row != last_row:
 				for element in open_tags[last_row]:
 					open_tag_order[last_row].append(element)
-				#open_tag_order[last_row].sort(key=lambda x: (open_tag_length[x],x), reverse=True)
+
 				open_tag_order[last_row].sort(key=lambda x: (-open_tag_length[x],config.priorities.index(x)))
 
 				for sec_tuple in sec_element_checklist:
 					prim_found = False
-					e_prim, e_sec, attr, val, span = sec_tuple
-					if e_prim in open_tags[last_row] and e_prim in open_tag_length:
-						if span == open_tag_length[e_prim]:
-							open_tags[last_row][e_prim].append((attr, val))
-							if e_prim not in close_tags[last_row + span]:
-								close_tags[last_row+span-1].append(e_prim)
+					prim_elt, sec_elt, attr, val, span = sec_tuple
+					if prim_elt in open_tags[last_row] and prim_elt in open_tag_length:
+						if span == open_tag_length[prim_elt]:
+							open_tags[last_row][prim_elt].append((attr, val))
+							close_tags[last_row + span].append(prim_elt)
 							prim_found = True
 					if not prim_found:
-						if e_sec in open_tags[last_row] and e_sec in open_tag_length:
-							if span == open_tag_length[e_sec]:
-								open_tags[last_row][e_sec].append((attr, val))
-								if e_sec not in close_tags[last_row + span]:
-									close_tags[last_row + span - 1].append(e_sec)
+						if sec_elt in open_tags[last_row] and sec_elt in open_tag_length:
+							if span == open_tag_length[sec_elt]:
+								open_tags[last_row][sec_elt].append((attr, val))
+								close_tags[last_row + span].append(sec_elt)
 				sec_element_checklist = []  # Purge sec_elements
 
+				close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
+
 				last_row = row
-			if 't' in cell[2]:  # cell contains text
-				content = cell[2]['t']
-			elif 'v' in cell[2]: # cell contains numerical value
-				content = cell[2]['v']
-			elif col_name != 'tok':
-				continue  # cell does not contain a value and this is not a token entry
+
+			if const_val != "":
+				content = const_val
+			else:
+				if 't' in cell[2]:  # cell contains text
+					content = cell[2]['t']
+				elif 'v' in cell[2]: # cell contains numerical value
+					content = cell[2]['v']
+				elif col_name != 'tok':
+					continue  # cell does not contain a value and this is not a token entry
 
 			if col_name == 'tok':
 				if "<" in content or "&" in content or ">" in content:
@@ -484,6 +685,10 @@ def ether_to_sgml(ether, doc_id,config=None):
 					# Priorities have been supplied, but this column is not in them
 					continue
 
+				# content may not contain straight double quotes in span annotations in SGML export
+				# Note that " is allowed in tokens and in tab-delimited token annotations!
+				content = content.replace('"', "&quot;")
+
 				if sec_element != "":
 					#open_tags[row][sec_element].append((attrib, content))
 					sec_element_checklist.append((element,sec_element,attrib,content,rowspan))
@@ -496,9 +701,12 @@ def ether_to_sgml(ether, doc_id,config=None):
 					close_row = row + rowspan
 				else:
 					close_row = row + 1
-				if element not in close_tags[close_row]:
-					close_tags[close_row].append(element)
+
+				# this introduces too many close tags for elts that have more than one attr.
+				# We take care of this later with close_tag_debt
+				close_tags[close_row].append(element)
 				open_tag_length[element] = int(close_row) - int(last_open_index[element])
+
 
 	# Sort last row tags
 	#close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
@@ -511,22 +719,25 @@ def ether_to_sgml(ether, doc_id,config=None):
 	#output = build_meta_tag(doc_id)
 	template = fill_meta_template(doc_id,config.template)
 	output = ""
+	close_tag_debt = defaultdict(int)
 
-	for r in xrange(2,len(toks)+3):
-		if r == 1970:
-			a=4
+	for r in xrange(2,len(toks)+5):
 		for element in close_tags[r]:
-			if element not in config.milestones:
-				output += '</' + element + '>\n'
-
-		if r == len(toks)+2:
-			break
+			if element != "" and element not in config.milestones:
+				if close_tag_debt[element] > 0:
+					close_tag_debt[element] -= 1
+				else:
+					output += '</' + element + '>\n'
 
 		for element in open_tag_order[r]:
 			tag = '<' + element
+			attr_count = 0
 			for attrib, value in open_tags[r][element]:
 				if attrib != "":
 					tag += ' ' + attrib + '="' + value + '"'
+					attr_count += 1
+			close_tag_debt[element] = len(open_tags[r][element]) - 1
+
 			if element in config.milestones:
 				tag += '/>\n'
 			else:
@@ -543,6 +754,9 @@ def ether_to_sgml(ether, doc_id,config=None):
 		output = template.replace("%%body%%",output.strip())
 
 	output = re.sub("%%[^%]+%%", "none", output)
+
+	# fix tags that look like elt__2__ if it still gives correct sgml
+	output = deunique_properly_nested_tags(output)
 
 	return output
 
@@ -605,34 +819,46 @@ def delete_spreadsheet(ether_url, name):
 	:param name: name of the spreadsheet (last part of URL)
 	:return: void
 	"""
-
-	ether_command = "curl --netrc -X DELETE " + ether_url + "_/" + name
-	del_proc = subprocess.Popen(ether_command,shell=True)
-
-	(stdout, stderr) = del_proc.communicate()
-
-	return stdout, stderr
+	try:
+		r = requests.delete(ether_url + "_/" + name)
+	except:
+		pass
 
 
 def sheet_exists(ether_path, name):
 	return len(get_socialcalc(ether_path,name)) > 0
 
 
-def get_socialcalc(ether_path, name):
+def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
+	"""
+	Get SocialCalc format serialization for an EtherCalc spreadsheet, or a cached serialization from the sqlite
+	DB is available for a specified doc_id
+
+	:param ether_path: The EtherCalc server base URL, e.g. http://server.com/ethercalc/
+	:param name: spreadsheet name, e.g. gd_corpname_docname
+	:param doc_id: optional doc_id in docs table to fetch/set SocialCalc from cache
+	:return: SocialCalc string
+	"""
+
+	if doc_id is not None and not dirty:
+		cache = get_cache(doc_id)[0][0]
+		if cache is not None:
+			return cache
 	command = "curl --netrc -X GET " + ether_path + "_/" + name
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
-	return stdout.decode("utf8")
+	socialcalc = stdout.decode("utf8")
+	if doc_id is not None:
+		set_cache(doc_id, socialcalc)
+	return socialcalc
 
 
 def get_timestamps(ether_path):
-	command = "curl --netrc -X GET " + ether_path + "_roomtimes"
-	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-	(stdout, stderr) = proc.communicate()
-	times = json.loads(stdout)
+	r = requests.get(ether_path + "_roomtimes")
+	times = r.json()
 	output = {}
 	for room in times:
-		output[room.replace("timestamp-","")] = times[room]
+		output[room.replace("timestamp-", "")] = times[room]
 	return output
 
 
