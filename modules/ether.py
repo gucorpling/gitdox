@@ -96,8 +96,10 @@ class ExportConfig:
 		else:
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
 
-def parse_ether(ether):
+
+def parse_ether(ether, doc_id=None):
 	"""Take in raw socialcalc data and turn it into a dict of Cells. Used in validation."""
+
 	class Cell:
 		def __init__(self, col, row, content, span):
 			self.col = col
@@ -105,6 +107,7 @@ def parse_ether(ether):
 			self.header = ""
 			self.content = content
 			self.span = span
+
 		def __repr__(self):
 			return "<Cell (" + repr((self.col, self.row, self.header, self.content, self.span)) + ")>"
 
@@ -125,12 +128,12 @@ def parse_ether(ether):
 				cell_row = cell_id[1:]
 				cell_col = cell_id[0]
 				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
-				#for c in cell_id:
+				# for c in cell_id:
 				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
 				#		cell_row += c
 				#	else:
 				#		cell_col += c
-				cell_content = parts[3].replace("\\c",":")
+				cell_content = parts[3].replace("\\c", ":")
 				cell_span = parts[-1] if "rowspan:" in line else "1"
 
 				# record col name
@@ -143,10 +146,16 @@ def parse_ether(ether):
 				all_cells.append(cell)
 
 	for cell in all_cells:
-		cell.header = rev_colmap[cell.col]
+		if cell.col in rev_colmap:
+			cell.header = rev_colmap[cell.col]
+		else:
+			if doc_id is None:
+				doc_id = "unknown"
+			raise IOError("Undocumented column: " + cell.col + " in '" + str(cell) + " from doc: " + str(doc_id))
 
 	parsed["__colmap__"] = colmap  # Save colmap for apply_rule
 	return parsed
+
 
 def unescape_xml(text):
 	# Fix various common compounded XML escapes
@@ -675,6 +684,10 @@ def ether_to_sgml(ether, doc_id,config=None):
 				if element not in config.priorities and len(config.priorities) > 0:
 					# Priorities have been supplied, but this column is not in them
 					continue
+
+				# content may not contain straight double quotes in span annotations in SGML export
+				# Note that " is allowed in tokens and in tab-delimited token annotations!
+				content = content.replace('"', "&quot;")
 
 				if sec_element != "":
 					#open_tags[row][sec_element].append((attrib, content))

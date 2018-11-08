@@ -132,7 +132,7 @@ def validate_doc_ether(doc_id, editor=False, dirty=True):
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
 	socialcalc = get_socialcalc(ether_url, ether_doc_name, doc_id=doc_id, dirty=dirty)
-	parsed_ether = parse_ether(socialcalc)
+	parsed_ether = parse_ether(socialcalc,doc_id=doc_id)
 
 	report = ''
 	cells = []
