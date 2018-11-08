@@ -197,7 +197,7 @@ def load_page(user,admin,theform):
 				meta_to_write = [x for x in source_meta if x[2] not in existing_meta_keys]
 				for meta in meta_to_write:
 					m_key, m_val = meta[2], meta[3]
-					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
+					save_meta(int(doc_id), m_key, m_val)
 
 
 	if theform.getvalue('edit_docname'):
