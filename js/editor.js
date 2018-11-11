@@ -64,6 +64,7 @@ $(document).ready(function () {
                 });
             },
             createAction: 'editor_metadata_service.py?action=create',
+            updateAction: 'editor_metadata_service.py?action=update',
             deleteAction: 'editor_metadata_service.py?action=delete&docid=' + docid
         },
         fields: {
