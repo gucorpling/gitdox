@@ -77,6 +77,21 @@ def create_metadata():
         resp['Message'] = 'Could not create metadata'
         print json.dumps(resp)
 
+def update_metadata():
+    resp = {}
+    try:
+        save_meta(int(docid), key.decode("utf8"), value.decode("utf8"), corpus=corpus)
+        resp['Result'] = 'OK'
+        resp['Record'] = {'id': id,
+                          'docid': docid,
+                          'key': key,
+                          'value': value}
+        print json.dumps(resp)
+    except:
+        resp['Result'] = 'Error'
+        resp['Message'] = 'Could not update metadata'
+        print json.dumps(resp)
+
 def delete_metadata():
     resp = {}
     try:
@@ -109,6 +124,8 @@ def open_main_server():
         print json.dumps({'Result': 'Error', 'Message': 'Demo user may not make changes.'})
     elif action == "create":
         create_metadata()
+    elif action == "update":
+        update_metadata()
     elif action == "delete":
         delete_metadata()
     else:
