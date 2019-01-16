@@ -249,6 +249,19 @@ def load_page(user,admin,theform):
 
 			text_content = generic_query("SELECT content FROM docs WHERE id=?",(doc_id,))[0][0]
 
+	# In the case of reloading after hitting 'save', either create new doc into db, or update db
+	# CodeMirror sends the form with its code content in it before 'save' so we just display it again
+	if theform.getvalue('code'):
+		text_content = theform.getvalue('code')
+		text_content = text_content.replace("\r","")
+		text_content = re.sub(r'&(?!amp;)',r'&amp;',text_content)  # Escape unescaped XML &
+		text_content = unicode(text_content.decode("utf8"))
+		if user != "demo":
+			if int(doc_id)>int(max_id):
+				create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
+			else:
+				save_changes(doc_id,text_content)
+
 	git_status=False
 
 	commit_message = ""
@@ -304,19 +317,6 @@ def load_page(user,admin,theform):
 			data = {"data":text_content, "lb":"line", "format":"pipes"}
 			resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 			text_content=resp.text
-
-	# In the case of reloading after hitting 'save', either create new doc into db, or update db
-	# CodeMirror sends the form with its code content in it before 'save' so we just display it again
-	if theform.getvalue('code'):
-		text_content = theform.getvalue('code')
-		text_content = text_content.replace("\r","")
-		text_content = re.sub(r'&(?!amp;)',r'&amp;',text_content)  # Escape unescaped XML &
-		text_content = unicode(text_content.decode("utf8"))
-		if user != "demo":
-			if int(doc_id)>int(max_id):
-				create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
-			else:
-				save_changes(doc_id,text_content)
 
 	# Editing options
 	# Docname
