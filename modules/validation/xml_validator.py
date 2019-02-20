@@ -20,7 +20,7 @@ class XmlValidator(Validator):
 
         schema = self.schema
         command = "xmllint --schema schemas/" + schema + " tempfilename"
-        out, err = exec_via_temp(doc, command)
+        out, err = exec_via_temp(doc.encode("utf-8"), command)
         err = err.strip()
         err = err.replace("<br>","").replace("\n","").replace('<h1 align="center">xmllint output</h1>',"")
         err = re.sub(r'/tmp/[A-Za-z0-9_]+:','XML schema: <br>',err)
@@ -29,6 +29,6 @@ class XmlValidator(Validator):
         if err == "XML schema  validates":
             report = ""
         else:
-            report = "Problems validating with " + self.schema + ":<br>" + err + "<br>"
+            report = "Problems validating with " + self.schema + ":<br>" + err.decode("utf-8") + "<br>"
 
         return report, True
