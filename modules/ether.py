@@ -765,7 +765,7 @@ def exec_via_temp(input_text, command_params, workdir=""):
 	temp = tempfile.NamedTemporaryFile(delete=False,mode='wb')
 	exec_out = ""
 	try:
-		temp.write(input_text)
+		temp.write(input_text.encode('utf-8'))
 		temp.close()
 
 		#command_params = [x if 'tempfilename' not in x else x.replace("tempfilename",temp.name) for x in command_params]
