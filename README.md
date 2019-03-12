@@ -158,8 +158,15 @@ sudo pip install -r /var/www/html/requirements.txt
    serve it over a subdomain, change it to something like
    `your.subdomain.yourdomain.com`.
 
-5. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
+# Logging in
+The default user is `admin`. You will need to set the password using a script:
 
+```bash
+python init_admin_password.py
+```
+
+Now, navigate to `http://localhost`. Enter the username `admin`, and the
+password you just entered.
 
 # Credits
 
