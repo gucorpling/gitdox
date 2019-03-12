@@ -30,7 +30,7 @@ def push_update_to_git(username, token, path, account, repo, message):
 		if contents_object: #this file already exists on remote repo
 			#update
 			push_status = contents_object.update(message,contents)
-			return str(push_status)
+			return str(push_status['commit'])
 		else:#file doesn't exist on remote repo
 			#push
 			push_status = repository.create_file(path=file_info, message=message.format(file_info),content=contents,)
