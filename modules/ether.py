@@ -361,7 +361,10 @@ version:1.5
 			anno_value = ""
 			for attr in attrs:
 				if element != attr[0] and ignore_elements is False:
-					anno_name = element + "_" + attr[0]
+					if attr[0] == "xml\\clang":
+						anno_name = "lang"  # TODO: de-hardwire fix for xml:lang
+					else:
+						anno_name = element + "_" + attr[0]
 				else:
 					anno_name = attr[0]
 				anno_value = attr[1]
