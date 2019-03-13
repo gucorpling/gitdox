@@ -178,6 +178,14 @@ def validate_doc_ether(doc_id, editor=False, dirty=True):
 		full_report = report + meta_validation["report"] + export_report
 		if len(full_report) == 0:
 			full_report = "Document is valid!"
+
+		# Cache json report
+		json_report = {}
+		json_report['ether'] = report
+		json_report['meta'] = meta_validation["report"]
+		json_report['export'] = export_report
+		update_validation(doc_id, json.dumps(json_report))
+
 		return full_report
 	else:
 		json_report = {}
@@ -221,6 +229,12 @@ def validate_doc_xml(doc_id, schema, editor=False):
 			full_report = xml_report + meta_report
 		except Exception as e:
 			full_report = "[Encoding error: " + str(e) + "]"
+
+		# Cache json report
+		json_report = {}
+		json_report['xml'] = xml_report
+		json_report['meta'] = meta_report
+		update_validation(doc_id, json.dumps(json_report))
 
 		return full_report
 	else:
@@ -271,6 +285,10 @@ def validate_all_docs():
 				update_validation(doc_id,validation_report)
 			else:
 				reports[doc_id] = json.loads(validation)
+
+		#meta_validation = validate_doc_meta(doc_id, editor)
+		#meta_report = meta_validation["report"]
+		#reports[doc_id]["meta"] = meta_report
 
 	return json.dumps(reports)
 
