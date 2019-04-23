@@ -540,6 +540,12 @@ def ether_to_sgml(ether, doc_id,config=None):
 	if isinstance(ether,unicode):
 		ether = ether.encode("utf8")
 
+	# Destroy empty span cells without content, typically nested underneath longer, filled spans
+	ether = re.sub(r'cell:[A-Z]+[0-9]+:f:1:rowspan:[0-9]+','',ether)
+
+	# Ensure that cell A1 is treated as 'tok' if the header was deleted
+	ether = re.sub(r'cell:A1:f:([0-9]+)',r"cell:A1:t:tok:f:\1",ether)
+
 	# parse cell contents into cells
 	for line in ether.splitlines():
 		parsed_cell = re.match(r'cell:([A-Z]+)(\d+):(.*)$', line)
@@ -789,8 +795,13 @@ def exec_via_temp(input_text, command_params, workdir=""):
 
 
 def fix_colnames(socialcalc):
+	# Hard-wired fixes for Scriptorium layer names that should be collapsed if they appear
+	# TODO: make this configurable somewhere
 	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_group_((orig_group):)',r'\1\2',socialcalc)
 	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)morph_((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)morph_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
 	return socialcalc
 
 
@@ -851,6 +862,9 @@ def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
 	socialcalc = stdout.decode("utf8")
+	# Destroy empty span cells without content, typically nested underneath longer, filled spans
+	socialcalc = re.sub(r'cell:[A-Z]+[0-9]+:f:1:rowspan:[0-9]+\n','',socialcalc)
+
 	if doc_id is not None:
 		set_cache(doc_id, socialcalc)
 	return socialcalc
