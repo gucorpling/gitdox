@@ -4,6 +4,7 @@
 # Import modules for CGI handling
 import cgi, cgitb
 import os
+import sys, traceback
 from os import listdir
 from modules.logintools import login
 from modules.configobj import ConfigObj
@@ -108,7 +109,15 @@ def open_main_server():
 	admin = userconfig["admin"]
 
 	print("Content-type:text/html\n\n")
-	print(load_landing(user, admin, theform))
+	try:
+		print(load_landing(user, admin, theform))
+	except Exception as e:
+		print("""<html><body><h1>Loading Error</h1>
+		<p>For some reason, this page failed to load.</p>
+		<p>Please send this to your system administrator:</p>
+		<pre>""")
+		traceback.print_exc(e, file=sys.stdout)
+		print("""</pre></body></html>""")
 
 
 if __name__ == '__main__':

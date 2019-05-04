@@ -6,6 +6,7 @@
 from six import iteritems
 import cgi, cgitb
 import os, shutil
+import sys, traceback
 from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
@@ -330,7 +331,6 @@ def load_page(user,admin,theform):
                                   'disabled': user == "demo" or mode == "ether"}
 	render_data['git_2fa'] = git_2fa == "true"
 	if git_status:
-		# Remove some html keyword symbols in the commit message returned by github3
 		render_data['git_commit_response'] = git_status.replace('<','').replace('>','')
 
 
@@ -406,8 +406,15 @@ def open_main_server():
 	admin = userconfig["admin"]
 
 	print("Content-type:text/html\n\n")
-	print(load_page(user, admin, theform).encode("utf8"))
-
+	try:
+		print(load_page(user, admin, theform).encode("utf8"))
+	except Exception as e:
+		print("""<html><body><h1>Loading Error</h1>
+		<p>For some reason, this page failed to load.</p>
+		<p>Please send this to your system administrator:</p>
+		<pre>""")
+		traceback.print_exc(e, file=sys.stdout)
+		print("""</pre></body></html>""")
 
 if __name__ == "__main__":
 	open_main_server()
