@@ -3,6 +3,7 @@
 
 from collections import defaultdict
 import re, sys
+import traceback
 import cgi, cgitb
 import json
 
@@ -319,7 +320,15 @@ if __name__ == "__main__":
 		print validate_all_docs().encode("utf8")
 	else:
 		print "Content-type:text/html\n\n"
-		if mode == "ether":
-			print validate_doc_ether(doc_id, editor=True).encode("utf8")
-		elif mode == "xml":
-			print validate_doc_xml(doc_id, schema, editor=True).encode("utf8")
+		try:
+			if mode == "ether":
+				print validate_doc_ether(doc_id, editor=True).encode("utf8")
+			elif mode == "xml":
+				print validate_doc_xml(doc_id, schema, editor=True).encode("utf8")
+		except Exception as e:
+			print("""<html><body><h1>Loading Error</h1>
+			<p>For some reason, this page failed to load.</p>
+			<p>Please send this to your system administrator:</p>
+			<pre>""")
+			traceback.print_exc(e, file=sys.stdout)
+			print("""</pre></body></html>""")
