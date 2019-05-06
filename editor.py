@@ -315,7 +315,7 @@ def load_page(user,admin,theform):
 		api_call = xml_nlp_api
 		if api_call != "":
 			nlp_user, nlp_password = get_nlp_credentials()
-			data = {"data":text_content, "lb":"line", "format":"pipes"}
+			data = {"data":text_content, "format":"pipes"}
 			resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 			text_content=resp.text
 
