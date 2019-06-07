@@ -83,19 +83,48 @@ def highlight_cells(cells, ether_url, ether_doc_name, doc_id=None, dirty=True):
 	make_spreadsheet(new_ether, ether_url + "_/" + ether_doc_name, "socialcalc")
 
 
-def validate_doc_meta(doc_id, editor):
+def validate_doc_xml(doc_id, rules):
+	doc_info = get_doc_info(doc_id)
+	doc_name = doc_info[0]
+	doc_corpus = doc_info[1]
+	doc_content = get_doc_content(doc_id)
+
+	report = ""
+	xml_rule_fired = False
+	for rule in rules:
+		if not rule.applies(doc_name, doc_corpus):
+			continue
+
+		xml_rule_fired = True
+		res = rule.validate(doc_content)
+		report += res
+
+	if not xml_rule_fired:
+		report = "<strong>No applicable XML schemas<br></strong>"
+	elif report:
+		report = "<strong>XML problems:</strong><br>" + report
+	else:
+		report = "<strong>XML is valid</strong><br>"
+
+	return report
+
+
+def validate_doc_meta(doc_id, rules, editor):
 	# metadata validation
 	report = {"report":"","tooltip":""}
-	rules = [MetaValidator(x) for x in get_meta_rules()]
 
 	meta = get_doc_meta(doc_id)
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
+
 	meta_rule_fired = False
 	for rule in rules:
-		res, fired = rule.validate(meta, doc_name, doc_corpus)
-		meta_rule_fired = meta_rule_fired or fired
+		if not rule.applies(doc_name, doc_corpus):
+			continue
+
+		meta_rule_fired = True
+		res = rule.validate(meta)
 		if editor and len(res['tooltip']) > 0:
 			report["tooltip"] += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
@@ -115,7 +144,7 @@ def validate_doc_meta(doc_id, editor):
 	return report
 
 #@profile
-def validate_doc_ether(doc_id, editor=False, dirty=True):
+def validate_doc_ether(doc_id, rules, editor=False, dirty=True):
 	"""
 	Validate a document in spreadsheet mode
 
@@ -124,8 +153,6 @@ def validate_doc_ether(doc_id, editor=False, dirty=True):
 	:param dirty: boolean - if spreadsheet already cached, has its SocialCalc changed since last recorded timestamp?
 	:return: dictionary with validation report
 	"""
-	ether_rules = [EtherValidator(x) for x in get_ether_rules()]
-	export_rules = [ExportValidator(x) for x in get_export_rules()]
 
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
@@ -138,13 +165,13 @@ def validate_doc_ether(doc_id, editor=False, dirty=True):
 	report = ''
 	cells = []
 
-	# check metadata
-	meta_validation = validate_doc_meta(doc_id, editor)
-
 	ether_rule_fired = False
-	for rule in ether_rules:
-		res, fired = rule.validate(parsed_ether, doc_name, doc_corpus)
-		ether_rule_fired = ether_rule_fired or fired
+	for rule in rules:
+		if not rule.applies(doc_name, doc_corpus):
+			continue
+
+		ether_rule_fired = True
+		res = rule.validate(parsed_ether)
 		if editor and len(res['tooltip']) > 0:
 			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
@@ -154,6 +181,7 @@ def validate_doc_ether(doc_id, editor=False, dirty=True):
 		else:
 			report += res['report']
 		cells += res['cells']
+
 	if not ether_rule_fired:
 		report = "<strong>No applicable spreadsheet validation rules<br></strong>"
 	elif report:
@@ -161,140 +189,63 @@ def validate_doc_ether(doc_id, editor=False, dirty=True):
 	else:
 		report = "<strong>Spreadsheet is valid</strong><br>"
 
-	export_report = ""
-	export_rule_fired = False
-	for rule in export_rules:
-		res, fired = rule.validate(socialcalc, doc_id, doc_name, doc_corpus)
-		export_rule_fired = export_rule_fired or fired
-		export_report += res
-	if not export_rule_fired:
-		export_report = "<strong>No applicable export validation rules<br></strong>"
-	elif export_report:
-		export_report = "<strong>Export Problems:</strong><br>" + export_report
-	else:
-		export_report = "<strong>Export is valid</strong><br>"
-
 	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name, doc_id=doc_id, dirty=dirty)
-		full_report = report + meta_validation["report"] + export_report
-		if len(full_report) == 0:
-			full_report = "Document is valid!"
-
-		# Cache json report
-		json_report = {}
-		json_report['ether'] = report
-		json_report['meta'] = meta_validation["report"]
-		json_report['export'] = export_report
-		update_validation(doc_id, json.dumps(json_report))
-
-		return full_report
+		if len(report) == 0:
+			report = "Document is valid!"
+		return report
 	else:
-		json_report = {}
-		json_report['ether'] = report
-		json_report['meta'] = meta_validation["report"]
-		json_report['export'] = export_report
-		return json_report
+		return report
 
-#@profile
-def validate_doc_xml(doc_id, schema, editor=False):
-	rules = [XmlValidator(x) for x in get_xml_rules()]
-
-	doc_info = get_doc_info(doc_id)
-	doc_name = doc_info[0]
-	doc_corpus = doc_info[1]
-	doc_content = get_doc_content(doc_id)
-
-	# Schemas used to be assigned per document--do not support this anymore
-	#xml_report = LegacyXmlValidator(schema).validate(doc_content)
-
-	xml_report = ""
-	xml_rule_fired = False
-	for rule in rules:
-		res, fired = rule.validate(doc_content, doc_name, doc_corpus)
-		xml_report += res
-		xml_rule_fired = xml_rule_fired or fired
-	if not xml_rule_fired:
-		xml_report = "<strong>No applicable XML schemas<br></strong>"
-	elif xml_report:
-		xml_report = "<strong>XML problems:</strong><br>" + xml_report
-	else:
-		xml_report = "<strong>XML is valid</strong><br>"
-
-	meta_validation = validate_doc_meta(doc_id, editor)
-	meta_report = meta_validation["report"]
-
-	# report
-	if editor is True:
-		try:
-			#full_report = xml_report.decode("utf8") + meta_report.decode("utf8")
-			full_report = xml_report + meta_report
-		except Exception as e:
-			full_report = "[Encoding error: " + str(e) + "]"
-
-		# Cache json report
-		json_report = {}
-		json_report['xml'] = xml_report
-		json_report['meta'] = meta_report
-		update_validation(doc_id, json.dumps(json_report))
-
-		return full_report
-	else:
-		json_report = {}
-
-		json_report['xml'] = xml_report
-		json_report['meta'] = meta_report
-		return json_report
-
-#@profile
-def validate_all_docs():
-	docs = generic_query("SELECT id, name, corpus, mode, schema, validation, timestamp FROM docs", None)
-	doc_timestamps = get_timestamps(ether_url)
+def validate_all_meta(docs):
 	reports = {}
+	rules = [MetaValidator(x) for x in get_meta_rules()]
 
 	for doc in docs:
 		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
-		if doc_mode == "ether":
-			ether_name = "_".join(["gd", corpus, doc_name])
-			if ether_name in doc_timestamps and validation is not None and len(validation) > 0:
-				if timestamp == doc_timestamps[ether_name]:
-					reports[doc_id] = json.loads(validation)
-				else:
-					reports[doc_id] = validate_doc_ether(doc_id, dirty=True)
-					update_validation(doc_id, json.dumps(reports[doc_id]))
-					update_timestamp(doc_id, doc_timestamps[ether_name])
-			else:
-				if ether_name in doc_timestamps:
-					new_time = doc_timestamps[ether_name]
-				else:
-					new_time = None
-				if new_time == timestamp:
-					reports[doc_id] = validate_doc_ether(doc_id, dirty=False)
-				else:
-					reports[doc_id] = validate_doc_ether(doc_id, dirty=True)
-				#reports[doc_id] = {"ether":"sample_ether","meta":"sample_meta"}
-				update_validation(doc_id, json.dumps(reports[doc_id]))
-				if ether_name in doc_timestamps:
-					update_timestamp(doc_id, doc_timestamps[ether_name])
-		elif doc_mode == "xml":
-			if validation is None:
-				reports[doc_id] = validate_doc_xml(doc_id, doc_schema)
-				try:
-					validation_report = json.dumps(reports[doc_id])
-				except UnicodeDecodeError:
-					reports[doc_id]["xml"] = "UnicodeDecodeError; unable to print XML validation report for " + doc_name
-					validation_report = json.dumps(reports[doc_id])
-				update_validation(doc_id,validation_report)
-			else:
-				reports[doc_id] = json.loads(validation)
-
-		#meta_validation = validate_doc_meta(doc_id, editor)
-		#meta_report = meta_validation["report"]
-		#reports[doc_id]["meta"] = meta_report
+		reports[doc_id] = validate_doc_meta(doc_id, rules, False)
 
 	return json.dumps(reports)
 
-if __name__ == "__main__":
+def validate_all_xml(docs):
+	reports = {}
+	rules = [XmlValidator(x) for x in get_xml_rules()]
 
+	for doc in docs:
+		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
+		if doc_mode != "xml":
+			continue
+
+		reports[doc_id] = validate_doc_xml(doc_id, rules)
+
+	return json.dumps(reports)
+
+def validate_all_ether(docs):
+	reports = {}
+	rules = [EtherValidator(x) for x in get_ether_rules()]
+
+	for doc in docs:
+		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
+		if doc_mode != "ether":
+			continue
+
+		reports[doc_id] = validate_doc_ether(doc_id, rules, False, dirty=True)
+
+	return json.dumps(reports)
+
+#@profile
+def validate_all_docs(validation_type):
+	docs = generic_query("SELECT id, name, corpus, mode, schema, validation, timestamp FROM docs", None)
+	if validation_type == "meta":
+		return validate_all_meta(docs)
+	elif validation_type == "xml":
+		return validate_all_xml(docs)
+	elif validation_type == "ether":
+		return validate_all_ether(docs)
+	else:
+		raise Exception("Unknown validation type: " + validation_type)
+
+if __name__ == "__main__":
 	mode = ""
 	schema = ""
 	if len(sys.argv) > 1:
@@ -315,10 +266,7 @@ if __name__ == "__main__":
 		mode = parameter.getvalue("mode")
 		schema = parameter.getvalue("schema")
 
-	if doc_id == "all":
-		print "Content-type:application/json\n\n"
-		print validate_all_docs().encode("utf8")
-	else:
+	if doc_id != "all":
 		print "Content-type:text/html\n\n"
 		try:
 			if mode == "ether":
@@ -332,3 +280,9 @@ if __name__ == "__main__":
 			<pre>""")
 			traceback.print_exc(e, file=sys.stdout)
 			print("""</pre></body></html>""")
+   	else:
+		print "Content-type:application/json\n\n"
+		form = cgi.FieldStorage()
+		validation_type = form['validation_type'].value
+		print validate_all_docs(validation_type).encode('utf8')
+		#print validate_all_docs().encode("utf8")
