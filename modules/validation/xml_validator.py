@@ -8,15 +8,15 @@ class XmlValidator(Validator):
         self.doc = rule[1]
         self.schema = rule[3]
 
-    def validate(self, doc, doc_name, doc_corpus):
-        report = ""
+    def applies(self, doc_name, doc_corpus):
+        if self.corpus is not None and re.search(self.corpus, doc_corpus) is None:
+            return False
+        if self.doc is not None and re.search(self.doc, doc_name) is None:
+            return False
+        return True
 
-        if self.corpus is not None:
-            if re.search(self.corpus, doc_corpus) is None:
-                return report, False
-        if self.doc is not None:
-            if re.search(self.doc, doc_name) is None:
-                return report, False
+    def validate(self, doc):
+        report = ""
 
         schema = self.schema
         command = "xmllint --schema schemas/" + schema + " tempfilename"
@@ -31,4 +31,4 @@ class XmlValidator(Validator):
         else:
             report = "Problems validating with " + self.schema + ":<br>" + err.decode("utf-8") + "<br>"
 
-        return report, True
+        return report
