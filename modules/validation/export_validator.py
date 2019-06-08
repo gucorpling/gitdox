@@ -19,7 +19,7 @@ class ExportValidator(Validator):
                 return False
         return True
 
-    def validate(self, socialcalc, doc_id, ):
+    def validate(self, socialcalc, doc_id):
         report = ""
         export_data = ether_to_sgml(socialcalc, doc_id, config=self.config)
 

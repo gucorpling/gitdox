@@ -10,11 +10,11 @@ import json
 from paths import ether_url
 from modules.gitdox_sql import *
 from modules.ether import get_socialcalc, make_spreadsheet, exec_via_temp, get_timestamps, parse_ether
-from modules.validation.legacy_xml_validator import LegacyXmlValidator
 from modules.validation.xml_validator import XmlValidator
 from modules.validation.meta_validator import MetaValidator
 from modules.validation.ether_validator import EtherValidator
 from modules.validation.export_validator import ExportValidator
+from modules.validation.bulk_export_validator import BulkExportValidator
 
 
 def highlight_cells(cells, ether_url, ether_doc_name, doc_id=None, dirty=True):
@@ -100,7 +100,7 @@ def validate_doc_xml(doc_id, rules):
 		report += res
 
 	if not xml_rule_fired:
-		report = "<strong>No applicable XML schemas<br></strong>"
+		report = "<strong>No applicable XML schemas</strong><br>"
 	elif report:
 		report = "<strong>XML problems:</strong><br>" + report
 	else:
@@ -111,7 +111,7 @@ def validate_doc_xml(doc_id, rules):
 
 def validate_doc_meta(doc_id, rules, editor):
 	# metadata validation
-	report = {"report":"","tooltip":""}
+	report = ""
 
 	meta = get_doc_meta(doc_id)
 	doc_info = get_doc_info(doc_id)
@@ -126,20 +126,20 @@ def validate_doc_meta(doc_id, rules, editor):
 		meta_rule_fired = True
 		res = rule.validate(meta)
 		if editor and len(res['tooltip']) > 0:
-			report["tooltip"] += ("""<div class="tooltip">"""
+			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
 					+ """ <i class="fa fa-ellipsis-h"></i>"""
-					+ "<span>" + res['tooltip'] + "</span>"
+					+ "<span class=\"msg\">" + res['tooltip'] + "</span>"
 					+ "</div>")
 		else:
-			report["report"] += res['report']
+			report += res['report']
 
 	if not meta_rule_fired:
-		report["report"] = "<strong>No applicable metadata rules<br></strong>"
-	elif len(report["report"]) == 0:
-		report["report"] = "<strong>Metadata is valid<br></strong>"
+		report = "<strong>No applicable metadata rules</strong><br>"
+	elif len(report) == 0:
+		report = "<strong>Metadata is valid<br></strong>"
 	else:
-		report["report"] = "<strong>Metadata Problems:</strong><br>" + report["report"]
+		report = "<strong>Metadata Problems:</strong><br>" + report
 
 	return report
 
@@ -176,14 +176,14 @@ def validate_doc_ether(doc_id, rules, editor=False, dirty=True):
 			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
 					+ """ <i class="fa fa-ellipsis-h"></i>"""
-					+ "<span>" + res['tooltip'] + "</span>"
+					+ "<span class=\"msg\">" + res['tooltip'] + "</span>"
 					+ "</div>")
 		else:
 			report += res['report']
 		cells += res['cells']
 
 	if not ether_rule_fired:
-		report = "<strong>No applicable spreadsheet validation rules<br></strong>"
+		report = "<strong>No applicable spreadsheet validation rules</strong><br>"
 	elif report:
 		report = "<strong>Spreadsheet Problems:</strong><br>" + report
 	else:
@@ -196,6 +196,56 @@ def validate_doc_ether(doc_id, rules, editor=False, dirty=True):
 		return report
 	else:
 		return report
+
+
+def validate_doc_export(doc_id, rules):
+	doc_info = get_doc_info(doc_id)
+	doc_name = doc_info[0]
+	doc_corpus = doc_info[1]
+	doc_content = get_doc_content(doc_id)
+
+	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
+	socialcalc = get_socialcalc(ether_url, ether_doc_name, doc_id=doc_id, dirty=True)
+
+	report = ""
+	export_rule_fired = False
+	for rule in rules:
+		if not rule.applies(doc_name, doc_corpus):
+			continue
+
+		export_rule_fired = True
+		res = rule.validate(socialcalc, doc_id)
+		report += res
+
+	if not export_rule_fired:
+		report = "<strong>No applicable export schemas</strong><br>"
+	elif report:
+		report = "<strong>Export problems:</strong><br>" + report
+	else:
+		report = "<strong>Export is valid</strong><br>"
+
+	return report
+
+
+def validate_doc(doc_id):
+	_, _, _, _, _, doc_mode, _ = get_doc_info(doc_id)
+	report = ""
+
+	# metadata
+	meta_rules = [MetaValidator(x) for x in get_meta_rules()]
+	report += validate_doc_meta(doc_id, meta_rules, True)
+
+	# data
+	if doc_mode == "xml":
+		xml_rules = [XmlValidator(x) for x in get_xml_rules()]
+		report += validate_doc_xml(doc_id, xml_rules)
+	else:
+		ether_rules = [EtherValidator(x) for x in get_ether_rules()]
+		report += validate_doc_ether(doc_id, ether_rules, editor=True, dirty=True)
+		export_rules = [ExportValidator(x) for x in get_export_rules()]
+		report += validate_doc_export(doc_id, export_rules)
+
+	return report
 
 def validate_all_meta(docs):
 	reports = {}
@@ -233,6 +283,33 @@ def validate_all_ether(docs):
 
 	return json.dumps(reports)
 
+
+def validate_all_export(docs):
+	reports = []
+	rules = [BulkExportValidator(x) for x in get_export_rules()]
+
+	doc_ids = []
+	for doc in docs:
+		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
+		if doc_mode != "ether":
+			continue
+		doc_ids.append(doc_id)
+
+	for rule in rules:
+		report, fired = rule.validate(doc_ids)
+		if fired:
+			reports.append(report)
+
+	def merge_dicts(dictlist):
+		keys = apply(set().union, dictlist)
+		return {k: "".join(d.get(k, '') for d in dictlist) for k in keys}
+	reports = merge_dicts(reports)
+	for doc_id in doc_ids:
+		if doc_id not in reports:
+			reports[doc_id] = "No applicable export schemas"
+	return json.dumps(reports)
+
+
 #@profile
 def validate_all_docs(validation_type):
 	docs = generic_query("SELECT id, name, corpus, mode, schema, validation, timestamp FROM docs", None)
@@ -242,6 +319,8 @@ def validate_all_docs(validation_type):
 		return validate_all_xml(docs)
 	elif validation_type == "ether":
 		return validate_all_ether(docs)
+	elif validation_type == "export":
+		return validate_all_export(docs)
 	else:
 		raise Exception("Unknown validation type: " + validation_type)
 
@@ -266,13 +345,11 @@ if __name__ == "__main__":
 		mode = parameter.getvalue("mode")
 		schema = parameter.getvalue("schema")
 
+	# Either we validate specific docs...
 	if doc_id != "all":
-		print "Content-type:text/html\n\n"
+		print("Content-type:text/html\n\n")
 		try:
-			if mode == "ether":
-				print validate_doc_ether(doc_id, editor=True).encode("utf8")
-			elif mode == "xml":
-				print validate_doc_xml(doc_id, schema, editor=True).encode("utf8")
+			print(validate_doc(doc_id).encode("utf8"))
 		except Exception as e:
 			print("""<html><body><h1>Loading Error</h1>
 			<p>For some reason, this page failed to load.</p>
@@ -280,8 +357,9 @@ if __name__ == "__main__":
 			<pre>""")
 			traceback.print_exc(e, file=sys.stdout)
 			print("""</pre></body></html>""")
-   	else:
-		print "Content-type:application/json\n\n"
+	# or we validate all docs, but only for one kind of validation
+	else:
+		print("Content-type:application/json\n\n")
 		form = cgi.FieldStorage()
 		validation_type = form['validation_type'].value
 		print validate_all_docs(validation_type).encode('utf8')
