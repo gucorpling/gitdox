@@ -331,6 +331,7 @@ if __name__ == "__main__":
 		from argparse import ArgumentParser
 		p = ArgumentParser()
 		p.add_argument("-d","--doc",help="doc ID in gitdox.db or 'all'", default="all")
+		p.add_argument("-t","--type",help="if --doc is all, the kind of validation (meta, xml, ether, or export)", default="export")
 		p.add_argument("-i","--invalidate",action="store_true",help="invalidate all documents before running validation")
 
 		opts = p.parse_args()
@@ -361,6 +362,6 @@ if __name__ == "__main__":
 	else:
 		print("Content-type:application/json\n\n")
 		form = cgi.FieldStorage()
-		validation_type = form['validation_type'].value
+		validation_type = opts.type if len(sys.argv) > 1 else form['validation_type'].value
 		print validate_all_docs(validation_type).encode('utf8')
 		#print validate_all_docs().encode("utf8")

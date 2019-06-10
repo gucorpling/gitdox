@@ -32,47 +32,48 @@ class BulkExportValidator(Validator):
             ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
             socialcalc = get_socialcalc(ether_url, ether_doc_name, doc_id=doc_id, dirty=True)
 
-            export_files.append(ether_to_sgml(socialcalc, doc_id, config=self.config))
+            export_files.append((doc_id, ether_to_sgml(socialcalc, doc_id, config=self.config)))
 
         command = "xmllint --schema schemas/" + self.schema + " tempfilename"
 
-        tempnames = prepare_temp_files(export_files)
-        _, err = exec_via_temp_list(tempnames, command)
+        tempname_to_id = prepare_temp_files(export_files)
+        _, err = exec_via_temp_list(tempname_to_id.keys(), command)
 
         err = err.strip()
         err = err.replace("<","&lt;").replace(">","&gt;")
 
-        doc_index = 0
         accum = ""
         for line in err.split("\n"):
-            if line == (tempnames[doc_index] + " validates"):
-                report[doc_ids[doc_index]] = "Export is valid"
+            if line.endswith(" validates"):
+                filename = line[:line.index(" validates")]
+                doc_id = tempname_to_id[filename]
+                report[doc_id] = "Export is valid"
                 accum = ""
-                doc_index += 1
-            elif line == (tempnames[doc_index] + " fails to validate"):
-                report[doc_ids[doc_index]] = ("Problems with exporting with "
-                                              + self.config + " and validating with "
-                                              + self.schema + ":<br>"
-                                              + accum.decode('utf8'))
-                doc_index += 1
+            elif line.endswith(" fails to validate"):
+                filename = line[:line.index(" fails to validate")]
+                doc_id = tempname_to_id[filename]
+                accum = accum.replace(filename + ":","")
+                accum = accum.replace("  ", "&nbsp;&nbsp;")
+                accum = accum.replace("\n", "<br>")
+
+                report[doc_id] = ("Problems with exporting with "
+                                  + self.config + " and validating with "
+                                  + self.schema + ":<br>"
+                                  + accum.decode('utf8'))
                 accum = ""
             else:
-                line = line.replace(tempnames[doc_index] + ":", "")
                 accum += line + "<br>"
 
         return report, True
 
 def prepare_temp_files(input_texts):
-    tempnames = []
-    for input_text in input_texts:
-        temp = tempfile.NamedTemporaryFile(delete=False,mode='wb')
-        tempnames.append(temp.name)
-        try:
-            temp.write(input_text)
-            temp.close()
-        except Exception as e:
-            return str(e)
-    return tempnames
+    tempname_to_id = {}
+    for doc_id, input_text in input_texts:
+        temp = tempfile.NamedTemporaryFile(delete=False, mode='wb')
+        tempname_to_id[temp.name] = doc_id
+        temp.write(input_text)
+        temp.close()
+    return tempname_to_id
 
 def exec_via_temp_list(tempnames, command_params):
     command_params = command_params.replace("tempfilename", " ".join(tempnames))

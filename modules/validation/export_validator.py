@@ -25,14 +25,14 @@ class ExportValidator(Validator):
 
         schema = self.schema
         command = "xmllint --schema schemas/" + schema + " tempfilename"
-        out, err = exec_via_temp(export_data, command)
+
+        _, err = exec_via_temp(export_data, command)
         err = err.strip()
-        err = err.replace("<br>","").replace("\n","").replace('<h1 align="center">xmllint output</h1>',"")
         err = err.replace("<","&lt;").replace(">","&gt;")
-        err = re.sub(r'/tmp/[A-Za-z0-9_]+:','XML schema: <br>',err)
-        err = re.sub(r'/tmp/[A-Za-z0-9_]+','XML schema ',err)
-        err = re.sub(r'\n','<br/>',err)
-        if err.strip() == "XML schema  validates":
+        err = re.sub(r'/tmp/[A-Za-z0-9_]+:', '', err)
+        err = re.sub(r'\n','<br>', err)
+        err = re.sub(r' ','&nbsp;', err)
+        if err.strip() == "Export schema validates":
             report = ""
         else:
             report = "Problems with exporting with " + self.config \
