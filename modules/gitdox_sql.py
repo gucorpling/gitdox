@@ -49,23 +49,6 @@ def create_document(doc_id, name, corpus, status, assigned_username, filename, c
 		(int(doc_id), name, corpus, status, assigned_username, filename, content, schema))
 
 
-def get_cache(doc_id):
-	try:
-		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
-	except sqlite3.Error as err: # Old schema without cache column
-		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
-		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
-	return cache
-
-
-def set_cache(doc_id, cache_contents):
-	try:
-		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
-	except sqlite3.Error as err:  # Old schema without cache column
-		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
-		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
-
-
 def generic_query(sql, params, return_new_id=False):
 	# generic_query("DELETE FROM rst_nodes WHERE doc=? and project=?",(doc,project))
 
