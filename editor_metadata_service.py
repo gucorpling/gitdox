@@ -93,9 +93,6 @@ def update_metadata():
     except:
         resp['Result'] = 'Error'
         resp['Message'] = 'Could not update metadata'
-        import traceback
-        with open('tmp','w') as f:
-            f.write(traceback.format_exc())
         print json.dumps(resp)
 
 def delete_metadata():
