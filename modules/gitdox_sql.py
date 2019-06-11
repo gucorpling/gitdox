@@ -162,10 +162,14 @@ def get_doc_content(doc_id):
 	res = generic_query("SELECT content FROM docs WHERE id=?", (int(doc_id),))
 	return res[0][0]
 
+def get_all_doc_ids_for_corpus(corpus):
+	return map(lambda x: x[0],
+               generic_query("SELECT id FROM docs WHERE corpus=?", (corpus,)))
+
 def get_all_docs(corpus=None, status=None):
 	if corpus is None:
 		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None) 
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
 		else:
 			return generic_query("SELECT id, name, corpus, mode, content FROM docs where status=?", (status,))
 	else:
