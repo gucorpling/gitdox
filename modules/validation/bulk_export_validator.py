@@ -30,7 +30,7 @@ class BulkExportValidator(Validator):
                 continue
 
             ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
-            socialcalc = get_socialcalc(ether_url, ether_doc_name, doc_id=doc_id, dirty=True)
+            socialcalc = get_socialcalc(ether_url, ether_doc_name)
 
             export_files.append((doc_id, ether_to_sgml(socialcalc, doc_id, config=self.config)))
 

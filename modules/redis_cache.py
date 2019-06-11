@@ -12,13 +12,26 @@ def make_key(doc_id, validation_type):
 
     return SEP.join([GITDOX_PREFIX, str(doc_id), validation_type])
 
-# Functions for xml and meta ----------------------------------------------------
+# common ------------------------------------------------------------------------
 def get_validation_result(doc_id, validation_type):
     key = make_key(doc_id, validation_type)
     if key + SEP + REPORT in r:
         return r.get(key + SEP + REPORT)
     return False
 
+def get_cache_timestamp(doc_id, validation_type):
+    key = make_key(doc_id, validation_type)
+    if key + SEP + TIMESTAMP in r:
+        return r.get(key + SEP + TIMESTAMP)
+    return False
+
+def invalidate_validation_result(doc_id, validation_type):
+    key = make_key(doc_id, validation_type)
+    r.delete(key + SEP + REPORT)
+    if key + SEP + TIMESTAMP in r:
+        r.delete(key + SEP + TIMESTAMP)
+
+# Functions for xml and meta ----------------------------------------------------
 def cache_validation_result(doc_id, validation_type, report):
     """Caching for non-ethercalc-based validation types, currently ether and export."""
     if validation_type not in ["xml", "meta"]:
@@ -37,10 +50,3 @@ def cache_timestamped_validation_result(doc_id, validation_type, report, timesta
     key = make_key(doc_id, validation_type)
     r.set(key + SEP + REPORT, report)
     r.set(key + SEP + TIMESTAMP, timestamp)
-
-# common ------------------------------------------------------------------------
-def invalidate_validation_result(doc_id, validation_type):
-    key = make_key(doc_id, validation_type)
-    r.delete(key + SEP + REPORT)
-    if key + SEP + TIMESTAMP in r:
-        r.delete(key + SEP + TIMESTAMP)
