@@ -82,7 +82,7 @@ def create_metadata():
 def update_metadata():
     resp = {}
     try:
-        save_meta(int(docid), key.decode("utf8"), value.decode("utf8"), corpus=corpus)
+        update_meta(int(id), int(docid), key.decode("utf8"), value.decode("utf8"), corpus=corpus)
         resp['Result'] = 'OK'
         resp['Record'] = {'id': id,
                           'docid': docid,

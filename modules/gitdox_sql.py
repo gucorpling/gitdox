@@ -119,10 +119,19 @@ def cell(text):
 		text = str(text)
 	return "\n	<td>" + text + "</td>"
 
+def update_meta(meta_id,doc_id,key,value,corpus=False):
+	if corpus:
+		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
+		generic_query("REPLACE INTO metadata(metaid,docid,key,value,corpus_meta) VALUES(?,?,?,?,?)", (meta_id, None, key, value,corpus_name))
+	else:
+		generic_query("REPLACE INTO metadata(metaid,docid,key,value,corpus_meta) VALUES(?,?,?,?,?)",(meta_id,doc_id,key,value,None))
+		invalidate_doc_by_id(doc_id)
+
+
 def save_meta(doc_id,key,value,corpus=False):
 	if corpus:
 		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
-		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name), return_new_id = True)
+		new_id = generic_query("REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None, key, value,corpus_name), return_new_id = True)
 	else:
 		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None), return_new_id = True)
 		invalidate_doc_by_id(doc_id)
