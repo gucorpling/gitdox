@@ -90,7 +90,7 @@ def validate_doc_xml(doc_id, rules):
 	doc_corpus = doc_info[1]
 	doc_content = get_doc_content(doc_id)
 
-	cache_hit = cache.get_validation_result(doc_id, "xml")
+	cache_hit = cache.get_report(doc_id, "xml")
 	if cache_hit:
 		return cache_hit
 
@@ -115,7 +115,7 @@ def validate_doc_xml(doc_id, rules):
 	return report
 
 
-def validate_doc_meta(doc_id, rules, editor=False):
+def validate_doc_meta(doc_id, rules):
 	# metadata validation
 	report = ""
 
@@ -124,7 +124,7 @@ def validate_doc_meta(doc_id, rules, editor=False):
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
 
-	cache_hit = cache.get_validation_result(doc_id, "meta")
+	cache_hit = cache.get_report(doc_id, "meta")
 	if cache_hit:
 		return cache_hit
 
@@ -135,7 +135,7 @@ def validate_doc_meta(doc_id, rules, editor=False):
 
 		meta_rule_fired = True
 		res = rule.validate(meta)
-		if editor and len(res['tooltip']) > 0:
+		if len(res['tooltip']) > 0:
 			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
 					+ """ <i class="fa fa-ellipsis-h"></i>"""
@@ -163,8 +163,8 @@ def validate_doc_ether(doc_id, rules, timestamps=None, editor=False):
 	if not timestamps:
 		timestamps = get_timestamps(ether_url)
 	last_edit = int(timestamps[ether_doc_name])
-	if last_edit <= int(cache.get_cache_timestamp(doc_id, "ether")):
-		return cache.get_validation_result(doc_id, "ether")
+	if last_edit <= int(cache.get_timestamp(doc_id, "ether")):
+		return cache.get_report(doc_id, "ether")
 
 	socialcalc = get_socialcalc(ether_url, ether_doc_name)
 	parsed_ether = parse_ether(socialcalc,doc_id=doc_id)
@@ -179,7 +179,7 @@ def validate_doc_ether(doc_id, rules, timestamps=None, editor=False):
 
 		ether_rule_fired = True
 		res = rule.validate(parsed_ether)
-		if editor and len(res['tooltip']) > 0:
+		if len(res['tooltip']) > 0:
 			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
 					+ """ <i class="fa fa-ellipsis-h"></i>"""
@@ -200,11 +200,7 @@ def validate_doc_ether(doc_id, rules, timestamps=None, editor=False):
 
 	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name)
-		if len(report) == 0:
-			report = "Document is valid!"
-		return report
-	else:
-		return report
+	return report
 
 
 def validate_doc_export(doc_id, rules):
@@ -216,8 +212,8 @@ def validate_doc_export(doc_id, rules):
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
 	timestamps = get_timestamps(ether_url)
 	last_edit = int(timestamps[ether_doc_name])
-	if last_edit <= int(cache.get_cache_timestamp(doc_id, "export")):
-		return cache.get_validation_result(doc_id, "export")
+	if last_edit <= int(cache.get_timestamp(doc_id, "export")):
+		return cache.get_report(doc_id, "export")
 
 	socialcalc = get_socialcalc(ether_url, ether_doc_name)
 
@@ -249,7 +245,7 @@ def validate_doc(doc_id):
 
 	# metadata
 	meta_rules = [MetaValidator(x) for x in get_meta_rules()]
-	report += validate_doc_meta(doc_id, meta_rules, editor=True)
+	report += validate_doc_meta(doc_id, meta_rules)
 
 	# data
 	if doc_mode == "xml":
@@ -315,8 +311,8 @@ def validate_all_export(docs):
 
 		ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
 		last_edit = int(timestamps[ether_doc_name])
-		if last_edit <= int(cache.get_cache_timestamp(doc_id, "export")):
-			cached_reports[doc_id] = cache.get_validation_result(doc_id, "export")
+		if last_edit <= int(cache.get_timestamp(doc_id, "export")):
+			cached_reports[doc_id] = cache.get_report(doc_id, "export")
 			continue
 
 		doc_ids.append(doc_id)

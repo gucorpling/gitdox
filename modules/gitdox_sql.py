@@ -202,6 +202,9 @@ def get_validate_rules(sort=None, domain=None):
 		query += " ORDER BY " + sort
 	return generic_query(query, args)
 
+def get_rule_domain(id):
+	return generic_query("SELECT domain FROM validate WHERE id=?", (id,))[0][0]
+
 def get_xml_rules():
 	return get_validate_rules(domain='xml')
 

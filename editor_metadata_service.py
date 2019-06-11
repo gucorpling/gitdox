@@ -72,7 +72,7 @@ def create_metadata():
                           'docid': docid,
                           'key': key,
                           'value': value}
-        cache.invalidate_validation_result(docid, "meta")
+        cache.invalidate_by_doc(docid, "meta")
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
@@ -88,7 +88,7 @@ def update_metadata():
                           'docid': docid,
                           'key': key,
                           'value': value}
-        cache.invalidate_validation_result(docid, "meta")
+        cache.invalidate_by_doc(docid, "meta")
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
@@ -103,7 +103,7 @@ def delete_metadata():
     try:
         delete_meta(int(id), int(docid), corpus=corpus)
         resp['Result'] = 'OK'
-        cache.invalidate_validation_result(docid, "meta")
+        cache.invalidate_by_doc(docid, "meta")
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'

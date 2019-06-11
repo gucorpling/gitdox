@@ -6,38 +6,57 @@ SEP = "|"
 REPORT = "report"
 TIMESTAMP = "timestamp"
 
-def make_key(doc_id, validation_type):
+def make_key_base(doc_id, validation_type):
+    """Keys for this cache have the form, e.g., __gitdox|123|ether|report
+    This function formats the first three pieces of this string."""
     if validation_type not in ["xml", "ether", "meta", "export"]:
         raise Exception("Unknown validation type: " + validation_type)
 
     return SEP.join([GITDOX_PREFIX, str(doc_id), validation_type])
 
 # common ------------------------------------------------------------------------
-def get_validation_result(doc_id, validation_type):
-    key = make_key(doc_id, validation_type)
-    if key + SEP + REPORT in r:
-        return r.get(key + SEP + REPORT)
+def get_report(doc_id, validation_type):
+    """Returns the report for the given validation type if present in the cache,
+    False otherwise"""
+    key_base = make_key_base(doc_id, validation_type)
+    if key_base + SEP + REPORT in r:
+        return r.get(key_base + SEP + REPORT)
     return False
 
-def get_cache_timestamp(doc_id, validation_type):
-    key = make_key(doc_id, validation_type)
-    if key + SEP + TIMESTAMP in r:
-        return r.get(key + SEP + TIMESTAMP)
+def get_timestamp(doc_id, validation_type):
+    """For ether and export validation types, returns the associated timestamp
+    obtained from roomtimes at the time of validation."""
+    key_base = make_key_base(doc_id, validation_type)
+    if key_base + SEP + TIMESTAMP in r:
+        return r.get(key_base + SEP + TIMESTAMP)
     return False
 
-def invalidate_validation_result(doc_id, validation_type):
-    key = make_key(doc_id, validation_type)
-    r.delete(key + SEP + REPORT)
-    if key + SEP + TIMESTAMP in r:
-        r.delete(key + SEP + TIMESTAMP)
+def invalidate_by_doc(doc_id, validation_type):
+    """Invalidates the report for a given validation type for a given doc."""
+    key_base = make_key_base(doc_id, validation_type)
+    r.delete(key_base + SEP + REPORT)
+    if key_base + SEP + TIMESTAMP in r:
+        r.delete(key_base + SEP + TIMESTAMP)
+
+def invalidate_by_type(validation_type):
+    """Invalidates the reports for a given validation type for all docs."""
+    pattern = GITDOX_PREFIX + "*" + SEP + validation_type + SEP + "*"
+    for key in r.keys(pattern=pattern):
+        r.delete(key)
+
+def reset_cache():
+    """Invalidates all reports."""
+    pattern = GITDOX_PREFIX + "*"
+    for key in r.keys(pattern=pattern):
+        r.delete(key)
 
 # Functions for xml and meta ----------------------------------------------------
 def cache_validation_result(doc_id, validation_type, report):
-    """Caching for non-ethercalc-based validation types, currently ether and export."""
+    """Caching for non-ethercalc-based validation types, currently xml and meta."""
     if validation_type not in ["xml", "meta"]:
         raise Exception("Mode must be one of 'xml', 'meta'.")
-    key = make_key(doc_id, validation_type)
-    r.set(key + SEP + REPORT, report)
+    key_base = make_key_base(doc_id, validation_type)
+    r.set(key_base + SEP + REPORT, report)
 
 # Functions for ether and export ------------------------------------------------
 def cache_timestamped_validation_result(doc_id, validation_type, report, timestamp):
@@ -47,6 +66,6 @@ def cache_timestamped_validation_result(doc_id, validation_type, report, timesta
     changes, so we must compare timestamps."""
     if validation_type not in ["ether", "export"]:
         raise Exception("Mode must be one of 'ether', 'export'.")
-    key = make_key(doc_id, validation_type)
-    r.set(key + SEP + REPORT, report)
-    r.set(key + SEP + TIMESTAMP, timestamp)
+    key_base = make_key_base(doc_id, validation_type)
+    r.set(key_base + SEP + REPORT, report)
+    r.set(key_base + SEP + TIMESTAMP, timestamp)
