@@ -154,12 +154,18 @@ def validate_doc_meta(doc_id, rules, editor=False):
 	cache.cache_validation_result(doc_id, "meta", report)
 	return report
 
-def validate_doc_ether(doc_id, rules, editor=False):
+def validate_doc_ether(doc_id, rules, timestamps=None, editor=False):
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
+	if not timestamps:
+		timestamps = get_timestamps(ether_url)
+	last_edit = int(timestamps[ether_doc_name])
+	if last_edit <= int(cache.get_cache_timestamp(doc_id, "ether")):
+		return cache.get_validation_result(doc_id, "ether")
+
 	socialcalc = get_socialcalc(ether_url, ether_doc_name)
 	parsed_ether = parse_ether(socialcalc,doc_id=doc_id)
 
@@ -190,6 +196,8 @@ def validate_doc_ether(doc_id, rules, editor=False):
 	else:
 		report = "<strong>Spreadsheet is valid</strong><br>"
 
+	cache.cache_timestamped_validation_result(doc_id, "ether", report, last_edit)
+
 	if editor:
 		highlight_cells(cells, ether_url, ether_doc_name)
 		if len(report) == 0:
@@ -206,6 +214,11 @@ def validate_doc_export(doc_id, rules):
 	doc_content = get_doc_content(doc_id)
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
+	timestamps = get_timestamps(ether_url)
+	last_edit = int(timestamps[ether_doc_name])
+	if last_edit <= int(cache.get_cache_timestamp(doc_id, "export")):
+		return cache.get_validation_result(doc_id, "export")
+
 	socialcalc = get_socialcalc(ether_url, ether_doc_name)
 
 	report = ""
@@ -224,6 +237,8 @@ def validate_doc_export(doc_id, rules):
 		report = "<strong>Export problems:</strong><br>" + report
 	else:
 		report = "<strong>Export is valid</strong><br>"
+
+	cache.cache_timestamped_validation_result(doc_id, "export", report, last_edit)
 
 	return report
 
@@ -274,26 +289,36 @@ def validate_all_xml(docs):
 def validate_all_ether(docs):
 	reports = {}
 	rules = [EtherValidator(x) for x in get_ether_rules()]
+	timestamps = get_timestamps(ether_url)
 
 	for doc in docs:
 		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
 		if doc_mode != "ether":
 			continue
 
-		reports[doc_id] = validate_doc_ether(doc_id, rules)
+		reports[doc_id] = validate_doc_ether(doc_id, rules, timestamps=timestamps)
 
 	return json.dumps(reports)
 
 
 def validate_all_export(docs):
+	cached_reports = {}
 	reports = []
 	rules = [BulkExportValidator(x) for x in get_export_rules()]
+	timestamps = get_timestamps(ether_url)
 
 	doc_ids = []
 	for doc in docs:
-		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
+		doc_id, doc_name, doc_corpus, doc_mode, doc_schema, validation, timestamp = doc
 		if doc_mode != "ether":
 			continue
+
+		ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
+		last_edit = int(timestamps[ether_doc_name])
+		if last_edit <= int(cache.get_cache_timestamp(doc_id, "export")):
+			cached_reports[doc_id] = cache.get_validation_result(doc_id, "export")
+			continue
+
 		doc_ids.append(doc_id)
 
 	for rule in rules:
@@ -304,10 +329,18 @@ def validate_all_export(docs):
 	def merge_dicts(dictlist):
 		keys = apply(set().union, dictlist)
 		return {k: "".join(d.get(k, '') for d in dictlist) for k in keys}
-	reports = merge_dicts(reports)
+	reports = merge_dicts([cached_reports] + reports)
 	for doc_id in doc_ids:
 		if doc_id not in reports:
 			reports[doc_id] = "No applicable export schemas"
+
+	for doc_id, report in reports.items():
+		if doc_id in cached_reports:
+			continue
+		doc_name, doc_corpus, _, _, _, _, _ = get_doc_info(doc_id)
+		ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
+		last_edit = int(timestamps[ether_doc_name])
+		cache.cache_timestamped_validation_result(doc_id, "export", report, last_edit)
 	return json.dumps(reports)
 
 
