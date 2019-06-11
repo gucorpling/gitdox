@@ -843,21 +843,15 @@ def sheet_exists(ether_path, name):
 	return len(get_socialcalc(ether_path,name)) > 0
 
 
-def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
+def get_socialcalc(ether_path, name):
 	"""
-	Get SocialCalc format serialization for an EtherCalc spreadsheet, or a cached serialization from the sqlite
+	Get SocialCalc format serialization for an EtherCalc spreadsheet
 	DB is available for a specified doc_id
 
 	:param ether_path: The EtherCalc server base URL, e.g. http://server.com/ethercalc/
 	:param name: spreadsheet name, e.g. gd_corpname_docname
-	:param doc_id: optional doc_id in docs table to fetch/set SocialCalc from cache
 	:return: SocialCalc string
 	"""
-
-	if doc_id is not None and not dirty:
-		cache = get_cache(doc_id)[0][0]
-		if cache is not None:
-			return cache
 	command = "curl --netrc -X GET " + ether_path + "_/" + name
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
@@ -865,8 +859,6 @@ def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
 	# Destroy empty span cells without content, typically nested underneath longer, filled spans
 	socialcalc = re.sub(r'cell:[A-Z]+[0-9]+:f:1:rowspan:[0-9]+\n','',socialcalc)
 
-	if doc_id is not None:
-		set_cache(doc_id, socialcalc)
 	return socialcalc
 
 
