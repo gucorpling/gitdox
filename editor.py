@@ -19,6 +19,7 @@ from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
 	build_meta_tag, get_ether_stylesheets, get_file_list
 from modules.renderer import render
+import modules.redis_cache as cache
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -168,6 +169,7 @@ def load_page(user,admin,theform):
 				for meta in source_meta:
 					m_key, m_val = meta[2:4]
 					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
+					cache.invalidate_validation_result(doc_id, "meta")
 
 		else:
 			# Get previous values from DB
@@ -199,6 +201,7 @@ def load_page(user,admin,theform):
 				for meta in meta_to_write:
 					m_key, m_val = meta[2], meta[3]
 					save_meta(int(doc_id), m_key, m_val)
+					cache.invalidate_validation_result(doc_id, "meta")
 
 
 	if theform.getvalue('edit_docname'):
@@ -262,6 +265,7 @@ def load_page(user,admin,theform):
 				create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
 			else:
 				save_changes(doc_id,text_content)
+				cache.invalidate_validation_result(doc_id, "xml")
 
 	git_status=False
 
@@ -355,6 +359,7 @@ def load_page(user,admin,theform):
 					for (key, value) in iteritems(meta_key_val):
 						key = key.replace("@","_")
 						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
+						cache.invalidate_validation_result(doc_id, "meta")
 	else:
 		render_data['ether_mode'] = False
 
