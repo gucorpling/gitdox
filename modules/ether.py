@@ -718,7 +718,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 
 	# Sort last row tags
-	#close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
+	close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	if row + 1 in close_tags:
 		close_tags[row+1].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	for element in open_tags[last_row]:
