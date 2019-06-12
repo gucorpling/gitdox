@@ -28,13 +28,13 @@ class ExportValidator(Validator):
 
         _, err = exec_via_temp(export_data, command)
         err = err.strip()
-        err = err.replace("<","&lt;").replace(">","&gt;")
         err = re.sub(r'/tmp/[A-Za-z0-9_]+:', '', err)
-        err = re.sub(r'\n','<br>', err)
-        err = re.sub(r' ','&nbsp;', err)
-        if err.strip() == "Export schema validates":
+        if err.strip().endswith("validates"):
             report = ""
         else:
+            err = re.sub(r'\n','<br>', err)
+            err = re.sub(r' ','&nbsp;', err)
+            err = err.replace("<","&lt;").replace(">","&gt;")
             report = "Problems with exporting with " + self.config \
                      + " and validating with " + self.schema + ":<br>" + err.decode("utf8") + "<br>"
 
