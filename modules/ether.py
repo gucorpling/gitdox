@@ -729,7 +729,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 	output = ""
 	close_tag_debt = defaultdict(int)
 
-	for r in xrange(2, row + 2):
+	for r in xrange(2, sorted(close_tags.keys())[-1] + 1):
 		for element in close_tags[r]:
 			if element != "" and element not in config.milestones:
 				if close_tag_debt[element] > 0:
