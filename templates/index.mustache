@@ -174,15 +174,23 @@
                             <!-- validation icons -->
                             <td style="text-align:center;">
                                 <div id="validate_{{id}}">
+									<!-- ether or xml validation icon -->
                                     {{#xml}}
-                                    <i class="fa fa-code" title="xml">&nbsp;</i>
+                                    <i id="xml_{{id}}" class="fa fa-code" title="xml">&nbsp;</i>
                                     {{/xml}}
                                     {{#ether}}
-                                    <i class="fa fa-table" title="spreadsheet">&nbsp;</i>
+                                    <i id="ether_{{id}}" class="fa fa-table" title="spreadsheet">&nbsp;</i>
                                     {{/ether}}
-                                    <i class="fa fa-tags" title="metadata" style="display:inline-block">&nbsp;</i>
+									<!-- meta validation icon (always) -->
+                                    <i id="meta_{{id}}" class="fa fa-tags" title="metadata" style="display:inline-block">&nbsp;</i>
+									<!-- export validation icon if ether, else invisible icon (for proper spacing) -->
                                     {{#ether}}
-                                    <i class="fa fa-file" title="export">&nbsp;</i>
+                                    <i id="export_{{id}}" class="fa fa-file" title="export">&nbsp;</i>
+                                    {{/ether}}
+                                    {{^ether}}
+                                    <div style="display:inline-block">
+                                        <i class="fa fa-file" style="visibility:hidden;">&nbsp;</i><span class="msg"> </span>
+                                    </div>
                                     {{/ether}}
                                 </div>
                             </td>

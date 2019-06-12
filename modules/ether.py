@@ -718,7 +718,6 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 
 	# Sort last row tags
-	#close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	if row + 1 in close_tags:
 		close_tags[row+1].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	for element in open_tags[last_row]:
@@ -730,7 +729,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 	output = ""
 	close_tag_debt = defaultdict(int)
 
-	for r in xrange(2,len(toks)+5):
+	for r in xrange(2, sorted(close_tags.keys())[-1] + 1):
 		for element in close_tags[r]:
 			if element != "" and element not in config.milestones:
 				if close_tag_debt[element] > 0:
@@ -843,21 +842,15 @@ def sheet_exists(ether_path, name):
 	return len(get_socialcalc(ether_path,name)) > 0
 
 
-def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
+def get_socialcalc(ether_path, name):
 	"""
-	Get SocialCalc format serialization for an EtherCalc spreadsheet, or a cached serialization from the sqlite
+	Get SocialCalc format serialization for an EtherCalc spreadsheet
 	DB is available for a specified doc_id
 
 	:param ether_path: The EtherCalc server base URL, e.g. http://server.com/ethercalc/
 	:param name: spreadsheet name, e.g. gd_corpname_docname
-	:param doc_id: optional doc_id in docs table to fetch/set SocialCalc from cache
 	:return: SocialCalc string
 	"""
-
-	if doc_id is not None and not dirty:
-		cache = get_cache(doc_id)[0][0]
-		if cache is not None:
-			return cache
 	command = "curl --netrc -X GET " + ether_path + "_/" + name
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
@@ -865,8 +858,6 @@ def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
 	# Destroy empty span cells without content, typically nested underneath longer, filled spans
 	socialcalc = re.sub(r'cell:[A-Z]+[0-9]+:f:1:rowspan:[0-9]+\n','',socialcalc)
 
-	if doc_id is not None:
-		set_cache(doc_id, socialcalc)
 	return socialcalc
 
 

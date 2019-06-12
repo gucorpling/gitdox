@@ -7,6 +7,8 @@ import os
 import platform
 from modules.gitdox_sql import *
 from modules.logintools import login
+import modules.redis_cache as cache
+import traceback
 
 parameter = cgi.FieldStorage()
 action = parameter.getvalue("action")
@@ -63,6 +65,7 @@ def create_rule():
                           'operator': operator,
                           'argument': argument,
                           'id': id}
+        cache.invalidate_by_type(domain)
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
@@ -74,17 +77,21 @@ def update_rule():
     try:
         update_validate_rule(doc, corpus, domain, name, operator, argument, id)
         resp['Result'] = 'OK'
+        cache.invalidate_by_type(domain)
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
         resp['Message'] = 'Something went wrong while attempting to update a rule.'
+        resp['Message'] += '\n' + traceback.format_exc()
         print json.dumps(resp)
 
 def delete_rule():
     resp = {}
     try:
+        domain = get_rule_domain(id)
         delete_validate_rule(id)
         resp['Result'] = 'OK'
+        cache.invalidate_by_type(domain)
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
