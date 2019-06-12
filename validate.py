@@ -203,7 +203,7 @@ def validate_doc_ether(doc_id, rules, timestamps=None, editor=False):
 	return report
 
 
-def validate_doc_export(doc_id, rules):
+def validate_doc_export(doc_id, rules, timestamps=None):
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
@@ -296,8 +296,21 @@ def validate_all_ether(docs):
 
 	return json.dumps(reports)
 
-
 def validate_all_export(docs):
+	reports = {}
+	rules = [ExportValidator(x) for x in get_export_rules()]
+	timestamps = get_timestamps(ether_url)
+
+	for doc in docs:
+		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
+		if doc_mode != "ether":
+			continue
+
+		reports[doc_id] = validate_doc_export(doc_id, rules, timestamps=timestamps)
+
+	return json.dumps(reports)
+
+def validate_all_export_bulk(docs):
 	cached_reports = {}
 	reports = []
 	rules = [BulkExportValidator(x) for x in get_export_rules()]
@@ -350,6 +363,10 @@ def validate_all_docs(validation_type):
 	elif validation_type == "ether":
 		return validate_all_ether(docs)
 	elif validation_type == "export":
+		# Faster, but not correct at the moment because of xmllint output oddities
+		# E.g.: when only one doc is supplied, output does not appear to contain the
+		# "<docname> fails to validate" text
+		#return validate_all_export_bulk(docs)
 		return validate_all_export(docs)
 	else:
 		raise Exception("Unknown validation type: " + validation_type)
