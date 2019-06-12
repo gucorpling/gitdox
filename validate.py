@@ -337,7 +337,13 @@ def validate_all_export_bulk(docs):
 
 	def merge_dicts(dictlist):
 		keys = apply(set().union, dictlist)
-		return {k: "".join(d.get(k, '') for d in dictlist) for k in keys}
+		ret_dict = {}
+		for k in keys:
+			for d in dictlist:
+				ret_dict[k] = "".join(d.get(k,''))
+		#return {k: "".join(d.get(k, '') for d in dictlist) for k in keys}
+		return ret_dict
+
 	reports = merge_dicts([cached_reports] + reports)
 	for doc_id in doc_ids:
 		if doc_id not in reports:
