@@ -210,7 +210,8 @@ def validate_doc_export(doc_id, rules, timestamps=None):
 	doc_content = get_doc_content(doc_id)
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
-	timestamps = get_timestamps(ether_url)
+	if not timestamps:
+		timestamps = get_timestamps(ether_url)
 	last_edit = int(timestamps[ether_doc_name])
 	if last_edit <= int(cache.get_timestamp(doc_id, "export")):
 		return cache.get_report(doc_id, "export")
