@@ -32,9 +32,9 @@ class ExportValidator(Validator):
         if err.strip().endswith("validates"):
             report = ""
         else:
+            err = err.replace("<","&lt;").replace(">","&gt;")
             err = re.sub(r'\n','<br>', err)
             err = re.sub(r' ','&nbsp;', err)
-            err = err.replace("<","&lt;").replace(">","&gt;")
             report = "Problems with exporting with " + self.config \
                      + " and validating with " + self.schema + ":<br>" + err.decode("utf8") + "<br>"
 
