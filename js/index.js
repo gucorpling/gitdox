@@ -23,7 +23,9 @@ function validate_all() {
 				else {
 					color = 'red';
 				}
-				$("#meta_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-tags" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				if ( $( "#meta_" + docid ).length ) {
+					$("#meta_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-tags" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				}
 			});
 			if (--pendingResults === 0) {
 				$("#validate_landing").removeClass("disabledbutton");
@@ -50,7 +52,9 @@ function validate_all() {
 				else {
 				    color = 'red';
 				}
-				$("#xml_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-code" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				if ( $("#xml_" + docid).length ) {
+					$("#xml_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-code" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				}
 			});
 			if (--pendingResults === 0) {
 				$("#validate_landing").removeClass("disabledbutton");
@@ -77,7 +81,9 @@ function validate_all() {
 				else {
 					color = 'red';
 				}
-				$("#ether_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-table" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				if ( $( "#ether_" + docid ).length ) {
+					$("#ether_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-table" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				}
 			});
 			if (--pendingResults === 0) {
 				$("#validate_landing").removeClass("disabledbutton");
@@ -103,7 +109,9 @@ function validate_all() {
 				else {
 					color = 'red';
 				}
-				$("#export_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-file" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				if ( $( "#export_" + docid ).length ) {
+					$("#export_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-file" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				}
 			});
 			if (--pendingResults === 0) {
 				$("#validate_landing").removeClass("disabledbutton");
