@@ -804,6 +804,35 @@ def fix_colnames(socialcalc):
 	return socialcalc
 
 
+def postprocess_sgml(sgml,instructions=None):
+	"""Function to clean up NLP output"""
+	if instructions is None:
+		return sgml
+	else:
+		remove = set([])
+		rename = {}
+		for instruction in instructions:
+			parts = instruction.split("/")
+			if len(parts) ==3:
+				subj, pred, obj = parts
+			elif len(parts) ==2:
+				subj, pred = parts
+			else:
+				subj, pred, obj = None, None, None
+			if pred == "remove":
+				remove.add(subj)
+			elif pred == "rename":
+				rename[subj] = obj
+		removes = "|".join(list(remove))
+		sgml = re.sub(r'</?'+removes+'(>| [^<>\n]*>)\n','',sgml,re.DOTALL|re.MULTILINE)
+		for f in rename:
+			r = rename[f]
+			# Run twice to catch both element and attribute name
+			sgml = re.sub(r'(<[^<>\n]*)'+f+r'([^<>\n]*>)',r'\1'+r+r'\2',sgml)
+			sgml = re.sub(r'(<[^<>\n]*)'+f+r'([^<>\n]*>)',r'\1'+r+r'\2',sgml)
+		return sgml
+
+
 def make_spreadsheet(data, ether_path, format="sgml", ignore_elements=False):
 	if format=="sgml":
 		socialcalc_data = sgml_to_ether(data, ignore_elements)

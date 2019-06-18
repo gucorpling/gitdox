@@ -17,7 +17,7 @@ from requests.auth import HTTPBasicAuth
 import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
-	build_meta_tag, get_ether_stylesheets, get_file_list
+	build_meta_tag, get_ether_stylesheets, get_file_list, postprocess_sgml
 from modules.renderer import render
 import modules.redis_cache as cache
 
@@ -187,6 +187,8 @@ def load_page(user,admin,theform):
 					data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
 					resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 					sgml = resp.text.encode("utf8")
+					postproc = config["nlp_postprocessing"] if "nlp_postprocessing" in config else None
+					sgml = postprocess_sgml(sgml,postproc)
 				else:
 					sgml = data_to_process.encode("utf8")
 				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
