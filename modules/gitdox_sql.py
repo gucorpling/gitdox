@@ -49,23 +49,6 @@ def create_document(doc_id, name, corpus, status, assigned_username, filename, c
 		(int(doc_id), name, corpus, status, assigned_username, filename, content, schema))
 
 
-def get_cache(doc_id):
-	try:
-		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
-	except sqlite3.Error as err: # Old schema without cache column
-		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
-		cache = generic_query("SELECT cache FROM docs WHERE id = ?;",(doc_id,))
-	return cache
-
-
-def set_cache(doc_id, cache_contents):
-	try:
-		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
-	except sqlite3.Error as err:  # Old schema without cache column
-		generic_query("ALTER TABLE docs ADD COLUMN cache TEXT default null;",None)
-		generic_query("UPDATE docs SET cache = ? WHERE id = ?",(cache_contents,doc_id))
-
-
 def generic_query(sql, params, return_new_id=False):
 	# generic_query("DELETE FROM rst_nodes WHERE doc=? and project=?",(doc,project))
 
@@ -136,10 +119,19 @@ def cell(text):
 		text = str(text)
 	return "\n	<td>" + text + "</td>"
 
+def update_meta(meta_id,doc_id,key,value,corpus=False):
+	if corpus:
+		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
+		generic_query("REPLACE INTO metadata(metaid,docid,key,value,corpus_meta) VALUES(?,?,?,?,?)", (meta_id, None, key, value,corpus_name))
+	else:
+		generic_query("REPLACE INTO metadata(metaid,docid,key,value,corpus_meta) VALUES(?,?,?,?,?)",(meta_id,doc_id,key,value,None))
+		invalidate_doc_by_id(doc_id)
+
+
 def save_meta(doc_id,key,value,corpus=False):
 	if corpus:
 		_, corpus_name, _, _, _, _, _ = get_doc_info(doc_id)
-		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None,key, value,corpus_name), return_new_id = True)
+		new_id = generic_query("REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)", (None, key, value,corpus_name), return_new_id = True)
 	else:
 		new_id = generic_query("INSERT OR REPLACE INTO metadata(docid,key,value,corpus_meta) VALUES(?,?,?,?)",(doc_id,key,value,None), return_new_id = True)
 		invalidate_doc_by_id(doc_id)
@@ -162,10 +154,14 @@ def get_doc_content(doc_id):
 	res = generic_query("SELECT content FROM docs WHERE id=?", (int(doc_id),))
 	return res[0][0]
 
+def get_all_doc_ids_for_corpus(corpus):
+	return map(lambda x: x[0],
+               generic_query("SELECT id FROM docs WHERE corpus=?", (corpus,)))
+
 def get_all_docs(corpus=None, status=None):
 	if corpus is None:
 		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None) 
+			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
 		else:
 			return generic_query("SELECT id, name, corpus, mode, content FROM docs where status=?", (status,))
 	else:
@@ -197,6 +193,9 @@ def get_validate_rules(sort=None, domain=None):
 	if sort:
 		query += " ORDER BY " + sort
 	return generic_query(query, args)
+
+def get_rule_domain(id):
+	return generic_query("SELECT domain FROM validate WHERE id=?", (id,))[0][0]
 
 def get_xml_rules():
 	return get_validate_rules(domain='xml')

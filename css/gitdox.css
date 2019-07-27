@@ -149,7 +149,7 @@ padding: 10px;
   display:block;
   position:absolute;
   top:-80;
-  left:0;
+  right:0;
   z-index:1000;
   width:320px;
   max-width:320px;

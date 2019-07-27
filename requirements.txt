@@ -1,6 +1,7 @@
 six
 lxml
 requests
-github3.py==0.9.3
+github3.py
 passlib
 pystache
+redis

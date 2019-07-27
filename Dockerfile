@@ -30,7 +30,7 @@ RUN echo "                       \n \
 " >> /etc/apache2/apache2.conf
 
 RUN a2enmod proxy_html proxy_http proxy_wstunnel
-# set up a proxy for ethercalc
+# set up a proxy for ethercalc, add workaround for cgitb: https://bugs.python.org/issue8704
 RUN echo " \n\
 <VirtualHost *:80> \n\
 	ServerName localhost \n\
@@ -40,6 +40,7 @@ RUN echo " \n\
 	ProxyPassReverse /ethercalc/ http://127.0.0.1:8000/ \n\
   ProxyPreserveHost On \n\
 </VirtualHost> \n\
+HttpProtocolOptions Unsafe \n\
 " >> /etc/apache2/apache2.conf
 
 # against best practices both to (1) not use a different container for each

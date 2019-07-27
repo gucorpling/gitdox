@@ -1,9 +1,27 @@
 # GitDox
-GitDox is an online editor for version controlled XML editing.
+GitDox is an online editor for version controlled collaborative XML and spreadsheet editing used for linguistic corpus annotation.
 
 The editor interface is based on [CodeMirror](https://codemirror.net). GitHub is used as a remote backend, and SQLite is used for local storage. 
 
-GitDox is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts. 
+GitDox is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts, and by the
+[GUM corpus](https://corpling.uis.georgetown.edu/gum/) to build a multilayer corpus of English Web genres.
+
+Some scenarios when GitDox is helpful:
+
+  * Many annotators, limited training
+    * You want to just give annotators a login (browser based)
+    * You use complex **XML** validation schemas and update them for all users
+    * You use **spreadsheets** to annotate and have annotators already familiar with tools like Excel
+  * You need version control and like GitHub
+    * Use commit history from GitDox directly on GitHub
+    * Link annotator accounts to GitHub accounts
+    * Make conflicts impossible for inexperienced Git users (each committed version overwrites previous doc, but remains diffable)
+  * Using a dashboard to coordinate annotation
+    * You can use validation rules and assignments to check document status
+    * Built in metadata and export functions to manage data releases
+    * Combined with version control, you can track annotator progress towards data release
+ 
+For more information see http://corpling.uis.georgetown.edu/gitdox/
 
 # Installation
 You have three choices:
@@ -158,11 +176,18 @@ sudo pip install -r /var/www/html/requirements.txt
    serve it over a subdomain, change it to something like
    `your.subdomain.yourdomain.com`.
 
-5. Navigate to `http://localhost`. The default login is `admin`, `pass1`.
+# Logging in
+The default user is `admin`. You will need to set the password using a script:
 
+```bash
+python init_admin_password.py
+```
+
+Now, navigate to `http://localhost`. Enter the username `admin`, and the
+password you just entered.
 
 # Credits
 
-(c) 2016-2018 Shuo Zhang (@zangsir), Amir Zeldes (@amir-zeldes), and Luke Gessler (@lukegessler)
+(c) 2016-2019 Shuo Zhang (@zangsir), Amir Zeldes (@amir-zeldes), and Luke Gessler (@lukegessler)
 
-This work was supported by the [KELLIA](http://kellia.uni-goettingen.de/) project, [NEH](https://www.neh.gov/) grant #HG-229371, co-sponsored by the German [DFG](http://www.dfg.de/).
+This work was supported by the [KELLIA](http://kellia.uni-goettingen.de/) project, [NEH](https://www.neh.gov/) grant #HG-229371, co-sponsored by the German [DFG](http://www.dfg.de/) and NEH grant #HAA-261271-18.

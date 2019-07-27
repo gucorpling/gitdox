@@ -131,7 +131,7 @@ $(document).ready(function () {
                 });
             },
             createAction: 'editor_metadata_service.py?corpus=true&action=create',
-            updateAction: 'editor_metadata_service.py?corpus=true&action=update',
+            updateAction: 'editor_metadata_service.py?corpus=true&action=update&docid=' + docid,
             deleteAction: 'editor_metadata_service.py?corpus=true&action=delete&docid=' + docid
         },
         fields: {

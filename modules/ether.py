@@ -361,7 +361,10 @@ version:1.5
 			anno_value = ""
 			for attr in attrs:
 				if element != attr[0] and ignore_elements is False:
-					anno_name = element + "_" + attr[0]
+					if attr[0] == "xml\\clang":
+						anno_name = "lang"  # TODO: de-hardwire fix for xml:lang
+					else:
+						anno_name = element + "_" + attr[0]
 				else:
 					anno_name = attr[0]
 				anno_value = attr[1]
@@ -537,6 +540,12 @@ def ether_to_sgml(ether, doc_id,config=None):
 	if isinstance(ether,unicode):
 		ether = ether.encode("utf8")
 
+	# Destroy empty span cells without content, typically nested underneath longer, filled spans
+	ether = re.sub(r'cell:[A-Z]+[0-9]+:f:1:rowspan:[0-9]+','',ether)
+
+	# Ensure that cell A1 is treated as 'tok' if the header was deleted
+	ether = re.sub(r'cell:A1:f:([0-9]+)',r"cell:A1:t:tok:f:\1",ether)
+
 	# parse cell contents into cells
 	for line in ether.splitlines():
 		parsed_cell = re.match(r'cell:([A-Z]+)(\d+):(.*)$', line)
@@ -709,7 +718,6 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 
 	# Sort last row tags
-	#close_tags[row].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	if row + 1 in close_tags:
 		close_tags[row+1].sort(key=lambda x: (last_open_index[x],config.priorities.index(x)), reverse=True)
 	for element in open_tags[last_row]:
@@ -721,7 +729,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 	output = ""
 	close_tag_debt = defaultdict(int)
 
-	for r in xrange(2,len(toks)+5):
+	for r in xrange(2, sorted(close_tags.keys())[-1] + 1):
 		for element in close_tags[r]:
 			if element != "" and element not in config.milestones:
 				if close_tag_debt[element] > 0:
@@ -786,9 +794,43 @@ def exec_via_temp(input_text, command_params, workdir=""):
 
 
 def fix_colnames(socialcalc):
+	# Hard-wired fixes for Scriptorium layer names that should be collapsed if they appear
+	# TODO: make this configurable somewhere
 	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_group_((orig_group):)',r'\1\2',socialcalc)
 	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)morph_((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)morph_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
 	return socialcalc
+
+
+def postprocess_sgml(sgml,instructions=None):
+	"""Function to clean up NLP output"""
+	if instructions is None:
+		return sgml
+	else:
+		remove = set([])
+		rename = {}
+		for instruction in instructions:
+			parts = instruction.split("/")
+			if len(parts) ==3:
+				subj, pred, obj = parts
+			elif len(parts) ==2:
+				subj, pred = parts
+			else:
+				subj, pred, obj = None, None, None
+			if pred == "remove":
+				remove.add(subj)
+			elif pred == "rename":
+				rename[subj] = obj
+		removes = "|".join(list(remove))
+		sgml = re.sub(r'</?'+removes+'(>| [^<>\n]*>)\n','',sgml,re.DOTALL|re.MULTILINE)
+		for f in rename:
+			r = rename[f]
+			# Run twice to catch both element and attribute name
+			sgml = re.sub(r'(<[^<>\n]*)'+f+r'([^<>\n]*>)',r'\1'+r+r'\2',sgml)
+			sgml = re.sub(r'(<[^<>\n]*)'+f+r'([^<>\n]*>)',r'\1'+r+r'\2',sgml)
+		return sgml
 
 
 def make_spreadsheet(data, ether_path, format="sgml", ignore_elements=False):
@@ -829,27 +871,22 @@ def sheet_exists(ether_path, name):
 	return len(get_socialcalc(ether_path,name)) > 0
 
 
-def get_socialcalc(ether_path, name, doc_id=None, dirty=True):
+def get_socialcalc(ether_path, name):
 	"""
-	Get SocialCalc format serialization for an EtherCalc spreadsheet, or a cached serialization from the sqlite
+	Get SocialCalc format serialization for an EtherCalc spreadsheet
 	DB is available for a specified doc_id
 
 	:param ether_path: The EtherCalc server base URL, e.g. http://server.com/ethercalc/
 	:param name: spreadsheet name, e.g. gd_corpname_docname
-	:param doc_id: optional doc_id in docs table to fetch/set SocialCalc from cache
 	:return: SocialCalc string
 	"""
-
-	if doc_id is not None and not dirty:
-		cache = get_cache(doc_id)[0][0]
-		if cache is not None:
-			return cache
 	command = "curl --netrc -X GET " + ether_path + "_/" + name
 	proc = subprocess.Popen(command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 	(stdout, stderr) = proc.communicate()
 	socialcalc = stdout.decode("utf8")
-	if doc_id is not None:
-		set_cache(doc_id, socialcalc)
+	# Destroy empty span cells without content, typically nested underneath longer, filled spans
+	socialcalc = re.sub(r'cell:[A-Z]+[0-9]+:f:1:rowspan:[0-9]+\n','',socialcalc)
+
 	return socialcalc
 
 

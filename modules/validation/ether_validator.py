@@ -310,22 +310,15 @@ class EtherValidator(Validator):
         else:
             raise Exception("Unknown EtherCalc validation operator: '" + str(self.operator) + "'")
 
+    def applies(self, doc_name, doc_corpus):
+        if self.corpus is not None and re.search(self.corpus, doc_corpus) is None:
+            return False
+        if self.doc is not None and re.search(self.doc, doc_name) is None:
+            return False
+        return True
 
-    def validate(self, parsed_ether, doc_name, doc_corpus):
-        res = {"report": "",
-               "tooltip": "",
-               "cells": []}
-
-        if self.corpus is not None:
-            if re.search(self.corpus, doc_corpus) is None:
-                return res, False
-        if self.doc is not None:
-            if re.search(self.doc, doc_name) is None:
-                return res, False
-
+    def validate(self, parsed_ether):
         report, tooltip, cells = self._apply_rule(parsed_ether)
-
-        res['report'] += report
-        res['tooltip'] += tooltip
-        res['cells'] += cells
-        return res, True
+        return {"report": report,
+                "tooltip": tooltip,
+                "cells": cells}

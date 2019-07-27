@@ -6,6 +6,7 @@
 from six import iteritems
 import cgi, cgitb
 import os, shutil
+import sys, traceback
 from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
@@ -16,8 +17,9 @@ from requests.auth import HTTPBasicAuth
 import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
-	build_meta_tag, get_ether_stylesheets, get_file_list
+	build_meta_tag, get_ether_stylesheets, get_file_list, postprocess_sgml
 from modules.renderer import render
+import modules.redis_cache as cache
 
 # Support IIS site prefix on Windows
 if platform.system() == "Windows":
@@ -167,6 +169,7 @@ def load_page(user,admin,theform):
 				for meta in source_meta:
 					m_key, m_val = meta[2:4]
 					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
+					cache.invalidate_by_doc(doc_id, "meta")
 
 		else:
 			# Get previous values from DB
@@ -184,6 +187,8 @@ def load_page(user,admin,theform):
 					data = {"data":data_to_process, "lb":"line", "format":"sgml_no_parse"}
 					resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 					sgml = resp.text.encode("utf8")
+					postproc = config["nlp_postprocessing"] if "nlp_postprocessing" in config else None
+					sgml = postprocess_sgml(sgml,postproc)
 				else:
 					sgml = data_to_process.encode("utf8")
 				out, err = make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
@@ -198,6 +203,7 @@ def load_page(user,admin,theform):
 				for meta in meta_to_write:
 					m_key, m_val = meta[2], meta[3]
 					save_meta(int(doc_id), m_key, m_val)
+					cache.invalidate_by_doc(doc_id, "meta")
 
 
 	if theform.getvalue('edit_docname'):
@@ -261,6 +267,7 @@ def load_page(user,admin,theform):
 				create_document(doc_id, docname,corpus,status,assignee,repo_name,text_content)
 			else:
 				save_changes(doc_id,text_content)
+				cache.invalidate_by_doc(doc_id, "xml")
 
 	git_status=False
 
@@ -314,7 +321,7 @@ def load_page(user,admin,theform):
 		api_call = xml_nlp_api
 		if api_call != "":
 			nlp_user, nlp_password = get_nlp_credentials()
-			data = {"data":text_content, "lb":"line", "format":"pipes"}
+			data = {"data":text_content, "format":"pipes"}
 			resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 			text_content=resp.text
 
@@ -330,7 +337,6 @@ def load_page(user,admin,theform):
                                   'disabled': user == "demo" or mode == "ether"}
 	render_data['git_2fa'] = git_2fa == "true"
 	if git_status:
-		# Remove some html keyword symbols in the commit message returned by github3
 		render_data['git_commit_response'] = git_status.replace('<','').replace('>','')
 
 
@@ -355,6 +361,7 @@ def load_page(user,admin,theform):
 					for (key, value) in iteritems(meta_key_val):
 						key = key.replace("@","_")
 						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
+						cache.invalidate_by_doc(doc_id, "meta")
 	else:
 		render_data['ether_mode'] = False
 
@@ -406,8 +413,15 @@ def open_main_server():
 	admin = userconfig["admin"]
 
 	print("Content-type:text/html\n\n")
-	print(load_page(user, admin, theform).encode("utf8"))
-
+	try:
+		print(load_page(user, admin, theform).encode("utf8"))
+	except Exception as e:
+		print("""<html><body><h1>Loading Error</h1>
+		<p>For some reason, this page failed to load.</p>
+		<p>Please send this to your system administrator:</p>
+		<pre>""")
+		traceback.print_exc(e, file=sys.stdout)
+		print("""</pre></body></html>""")
 
 if __name__ == "__main__":
 	open_main_server()

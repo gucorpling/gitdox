@@ -7,6 +7,7 @@ import os
 import platform
 from modules.gitdox_sql import *
 from modules.logintools import login
+import modules.redis_cache as cache
 
 parameter = cgi.FieldStorage()
 action = parameter.getvalue("action")
@@ -71,6 +72,7 @@ def create_metadata():
                           'docid': docid,
                           'key': key,
                           'value': value}
+        cache.invalidate_by_doc(docid, "meta")
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
@@ -80,12 +82,13 @@ def create_metadata():
 def update_metadata():
     resp = {}
     try:
-        save_meta(int(docid), key.decode("utf8"), value.decode("utf8"), corpus=corpus)
+        update_meta(int(id), int(docid), key.decode("utf8"), value.decode("utf8"), corpus=corpus)
         resp['Result'] = 'OK'
         resp['Record'] = {'id': id,
                           'docid': docid,
                           'key': key,
                           'value': value}
+        cache.invalidate_by_doc(docid, "meta")
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
@@ -97,12 +100,12 @@ def delete_metadata():
     try:
         delete_meta(int(id), int(docid), corpus=corpus)
         resp['Result'] = 'OK'
+        cache.invalidate_by_doc(docid, "meta")
         print json.dumps(resp)
     except:
         resp['Result'] = 'Error'
         resp['Message'] = 'Could not delete metadata'
         print json.dumps(resp)
-
 
 
 def open_main_server():
