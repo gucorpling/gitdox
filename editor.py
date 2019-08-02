@@ -168,7 +168,7 @@ def load_page(user,admin,theform):
 					max_id = doc_id
 				for meta in source_meta:
 					m_key, m_val = meta[2:4]
-					save_meta(int(doc_id), m_key.decode("utf8"), m_val.decode("utf8"))
+					save_meta(int(doc_id), m_key, m_val)
 					cache.invalidate_by_doc(doc_id, "meta")
 
 		else:
