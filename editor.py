@@ -291,10 +291,10 @@ def load_page(user,admin,theform):
 		if not os.path.isdir(prefix + subdir) and subdir != "":
 			dirs = subdir.split(os.sep)[:-1]
 			path_so_far = ""
-			for dir in dirs:
-				if not os.path.isdir(prefix + path_so_far + dir + os.sep):
-					os.mkdir(prefix + path_so_far + dir + os.sep, 0755)
-				path_so_far += dir + os.sep
+			for dirname in dirs:
+				if not os.path.isdir(prefix + path_so_far + dirname + os.sep):
+					os.mkdir(prefix + path_so_far + dirname + os.sep, 0o755)
+				path_so_far += dirname + os.sep
 
 		if mode == "xml":
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
@@ -353,11 +353,11 @@ def load_page(user,admin,theform):
 				#  strip leading path from file name to avoid directory traversal attacks
 				fn = os.path.basename(fileitem.filename)
 				if fn.endswith(".xls") or fn.endswith(".xlsx"):
-					make_spreadsheet(fileitem.file.read(),"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname,"excel")
+					make_spreadsheet(fileitem.file.read(),ether_url + "_/gd_" + corpus + "_" + docname,"excel")
 				else:
 					sgml = fileitem.file.read()
 					meta_key_val = harvest_meta(sgml)
-					make_spreadsheet(sgml,"https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname)
+					make_spreadsheet(sgml,ether_url + "_/gd_" + corpus + "_" + docname)
 					for (key, value) in iteritems(meta_key_val):
 						key = key.replace("@","_")
 						save_meta(int(doc_id),key.decode("utf8"),value.decode("utf8"))
