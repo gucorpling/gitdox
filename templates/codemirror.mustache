@@ -41,6 +41,11 @@
 <input type="text" name="commit_msg" id="commit_msg" placeholder="commit message" style="width:140px">
 {{#git_2fa}}<input type="text" id="code_2fa" name="2fa" placeholder = "2-factor code" style="width:80px" autocomplete="off">{{/git_2fa}}
 <div name="push_git" class="button h128" onclick="do_push();"> <i class="fa fa-github"></i> Commit </div>
+
+{{#git_last_commit}}
+<p><i class="fa fa-github"></i> {{{.}}}</p>
+{{/git_last_commit}}
+
 {{#git_commit_response}}
 <p style="color:red;">{{.}} successful</p>
 {{/git_commit_response}}

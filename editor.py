@@ -269,21 +269,30 @@ def load_page(user,admin,theform):
 				save_changes(doc_id,text_content)
 				cache.invalidate_by_doc(doc_id, "xml")
 
+	# Get GitHub repo info
 	git_status=False
+	git_last_commit = False
+	repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))[0][0]
+	file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
+	repo_info = repo_name.split('/')
+	git_account, git_repo = repo_info[0], repo_info[1]
+
+	# Get path for this document's serialized file in the repo
+	if len(repo_info) > 2:
+		subdir = '/'.join(repo_info[2:]) + "/"
+	else:
+		subdir = ""
+	if mode == "xml":
+		file_name = file_name.replace(" ","_") + ".xml"
+	else:
+		file_name = file_name.replace(" ","_") + "_ether.sgml"
+	saved_file = subdir + file_name
 
 	commit_message = ""
 	if theform.getvalue('commit_msg'):
 		commit_message = theform.getvalue('commit_msg')
 
 	if theform.getvalue('push_git') == "push_git":
-		repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))[0][0]
-		file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
-		repo_info = repo_name.split('/')
-		git_account, git_repo = repo_info[0], repo_info[1]
-		if len(repo_info) > 2:
-			subdir = '/'.join(repo_info[2:]) + "/"
-		else:
-			subdir = ""
 
 		# The user will indicate the subdir in the repo_name stored in the db.
 		# Therefore, a file may be associated with the target repo subdir zangsir/coptic-xml-tool/uploaded_commits,
@@ -300,12 +309,9 @@ def load_page(user,admin,theform):
 			text_content = generic_query("SELECT content FROM docs WHERE id=?", (doc_id,))[0][0]
 			serializable_content = build_meta_tag(doc_id) + text_content.strip() + "\n</meta>\n"
 			serializable_content = serializable_content.encode('utf8')
-			file_name = file_name.replace(" ","_") + ".xml"
 		else: # (mode == "ether")
 			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
 			serializable_content = text_content
-			file_name = file_name.replace(" ","_") + "_ether.sgml"
-		saved_file = subdir + file_name
 		serialize_file(serializable_content, saved_file)
 		git_status = push_update_to_git(git_username, git_token, saved_file, git_account, git_repo, commit_message)
 
@@ -325,6 +331,10 @@ def load_page(user,admin,theform):
 			resp = requests.post(api_call, data, auth=HTTPBasicAuth(nlp_user,nlp_password))
 			text_content=resp.text
 
+	# Get last commit info
+	if not (git_account=="account" and git_repo == "repo_name"):  # Check this is not the fake default repo name
+		git_last_commit = get_last_commit(git_username, int(admin), git_account, git_repo, saved_file)
+
 	# Editing options
 	# Docname
 	# Filename
@@ -338,7 +348,8 @@ def load_page(user,admin,theform):
 	render_data['git_2fa'] = git_2fa == "true"
 	if git_status:
 		render_data['git_commit_response'] = git_status.replace('<','').replace('>','')
-
+	if git_last_commit:
+		render_data['git_last_commit'] = git_last_commit
 
 	# prepare embedded editor html
 	if mode == "ether":

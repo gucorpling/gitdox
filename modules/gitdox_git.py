@@ -55,3 +55,34 @@ def get_git_credentials(user, admin, code):
 	git_use2fa = user_dict['git_2fa'] if "git_2fa" in user_dict else "false"
 	return git_username, git_token, git_use2fa
 
+
+def get_last_commit(user, admin, account, repo, path):
+	if admin==0:
+		return ""
+
+	git_username, git_token, _ = get_git_credentials(user,admin,None)
+	gh = github3.login(username=git_username, token=git_token, two_factor_callback=False)
+	repository = gh.repository(account, repo)
+	msg = False
+	url = ""
+	try:
+		for i, cmt in enumerate(repository.iter_commits(path=path)):
+			author = str(cmt.author)
+			msg = cmt.commit.message
+			#sha = cmt.commit.sha
+			date = cmt.commit._json_data["committer"]["date"]
+			url = cmt.html_url
+			if "T" in date:
+				day, time = date.split("T")
+				if ":" in time:
+					time_parts = time.split(":")
+					time = time_parts[0]+":"+time_parts[1]
+				date = day + ", " + time
+			break
+		msg = 'Latest commit ['+ date + ']: <a href="'+url+'">' + msg + "</a> (" + author + ")"
+	except:
+		pass
+	return msg
+
+
+
