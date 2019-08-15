@@ -26,7 +26,10 @@ def push_update_to_git(username, token, path, account, repo, message):
 	for file_info in files_to_upload:
 		with open(prefix+file_info, 'rb') as fd:
 			contents = fd.read()
-		contents_object = repository.file_contents(file_info)
+		try:
+			contents_object = repository.file_contents(file_info)
+		except AttributeError:
+			contents_object = False
 		if contents_object: #this file already exists on remote repo
 			#update
 			push_status = contents_object.update(message,contents)
