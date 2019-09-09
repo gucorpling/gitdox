@@ -272,10 +272,21 @@ def load_page(user,admin,theform):
 	# Get GitHub repo info
 	git_status=False
 	git_last_commit = False
-	repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))[0][0]
-	file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))[0][0]
-	repo_info = repo_name.split('/')
-	git_account, git_repo = repo_info[0], repo_info[1]
+	repo_name = generic_query("SELECT filename FROM docs WHERE id=?", (doc_id,))
+	if len(repo_name) > 0:
+		repo_name = repo_name[0][0]
+	else:
+		repo_name = ""
+	file_name = generic_query("SELECT name FROM docs WHERE id=?", (doc_id,))
+	if len(file_name) > 0:
+		file_name = file_name[0][0]
+	else:
+		file_name = ""
+	if "/" in repo_name:
+		repo_info = repo_name.split('/')
+		git_account, git_repo = repo_info[0], repo_info[1]
+	else:
+		repo_info = git_repo = git_account = repo_name
 
 	# Get path for this document's serialized file in the repo
 	if len(repo_info) > 2:
