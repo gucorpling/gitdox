@@ -247,6 +247,9 @@ def get_ether_stylesheets():
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	stylesheet_dir = scriptpath + os.sep + ".." + os.sep + "schemas" + os.sep
 	stylesheet_list = get_file_list(stylesheet_dir,"ini",hide_extension=True)
+	if "tt_sgml" in stylesheet_list:
+		stylesheet_list.remove("tt_sgml")
+		stylesheet_list = ["tt_sgml"] + stylesheet_list # tt_sgml is always first
 	return stylesheet_list
 
 
