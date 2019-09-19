@@ -260,7 +260,7 @@ def load_page(user,admin,theform):
 	if theform.getvalue('code'):
 		text_content = theform.getvalue('code')
 		text_content = text_content.replace("\r","")
-		text_content = re.sub(r'&(?!amp;)',r'&amp;',text_content)  # Escape unescaped XML &
+		text_content = re.sub(r'&(?!(#[xX][0-9a-fA-F]+|#\d+|[lg]t|amp|apos|quot);)',r'&amp;',text_content)  # Escape unescaped XML &
 		text_content = unicode(text_content.decode("utf8"))
 		if user != "demo":
 			if int(doc_id)>int(max_id):
