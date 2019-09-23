@@ -20,8 +20,8 @@ PROJECT_NAME = "_" + (config['project'].lower().replace(" ", "_") if 'project' i
 
 
 def make_key_base(doc_id, validation_type):
-    """Keys for this cache have the form, e.g., __gitdox|123|ether|report
-    This function formats the first three pieces of this string."""
+    """Keys for this cache have the form, e.g., __gitdox|_gum|123|ether|report
+    This function formats the first four pieces of this string."""
     if validation_type not in ["xml", "ether", "meta", "export"]:
         raise Exception("Unknown validation type: " + validation_type)
 
