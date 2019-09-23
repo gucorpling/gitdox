@@ -359,7 +359,7 @@ version:1.5
 			if "=" not in line:
 				line = "<" + element + " " + element + '="' + element + '">'
 
-			attrs = re.findall('([^" =]+)="([^"]+)"',line)
+			attrs = re.findall('([^" =]+)\s*=\s*"([^"]+)"',line)
 			anno_name = ""
 			anno_value = ""
 			for attr in attrs:
