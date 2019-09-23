@@ -1,4 +1,7 @@
+import os
+import platform
 import redis
+from modules.configobj import ConfigObj
 
 r = redis.Redis()
 GITDOX_PREFIX = "__gitdox"
@@ -6,13 +9,23 @@ SEP = "|"
 REPORT = "report"
 TIMESTAMP = "timestamp"
 
+if platform.system() == "Windows":
+        prefix = "transc\\"
+else:
+        prefix = ""
+rootpath = os.path.dirname(os.path.dirname(os.path.realpath(__file__))) + os.sep
+userdir = rootpath + "users" + os.sep
+config = ConfigObj(userdir + 'config.ini')
+PROJECT_NAME = "_" + (config['project'].lower().replace(" ", "_") if 'project' in config else 'default_project')
+
+
 def make_key_base(doc_id, validation_type):
     """Keys for this cache have the form, e.g., __gitdox|123|ether|report
     This function formats the first three pieces of this string."""
     if validation_type not in ["xml", "ether", "meta", "export"]:
         raise Exception("Unknown validation type: " + validation_type)
 
-    return SEP.join([GITDOX_PREFIX, str(doc_id), validation_type])
+    return SEP.join([GITDOX_PREFIX, PROJECT_NAME str(doc_id), validation_type])
 
 # common ------------------------------------------------------------------------
 def get_report(doc_id, validation_type):
