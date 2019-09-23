@@ -25,7 +25,7 @@ def make_key_base(doc_id, validation_type):
     if validation_type not in ["xml", "ether", "meta", "export"]:
         raise Exception("Unknown validation type: " + validation_type)
 
-    return SEP.join([GITDOX_PREFIX, PROJECT_NAME str(doc_id), validation_type])
+    return SEP.join([GITDOX_PREFIX, PROJECT_NAME, str(doc_id), validation_type])
 
 # common ------------------------------------------------------------------------
 def get_report(doc_id, validation_type):
