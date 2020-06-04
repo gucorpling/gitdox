@@ -144,6 +144,12 @@ def validate_doc_meta(doc_id, rules):
 		else:
 			report += res['report']
 
+	if meta is not None:
+		for d in meta:
+			if " " in d[2] or "\t" in d[2] or "\n" in d[2]:
+				report += "Metadata key contains whitespace: " + d[2] + "<br/>"
+				meta_rule_fired = True
+
 	if not meta_rule_fired:
 		report = "<strong>No applicable metadata rules</strong><br>"
 	elif len(report) == 0:
