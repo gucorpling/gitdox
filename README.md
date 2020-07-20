@@ -40,12 +40,12 @@ install it using your platform's package manager.
 (**Note: if your machine has Apache running, you should stop it first by running `sudo service apache2 stop`.**)
 
 ```bash
-sudo git clone https://github.com/gucorpling/gitdox /opt/gitdox
-sudo chown -R www-data:www-data /opt/gitdox
-docker run -dit --restart unless-stopped --name gitdox -v /opt/gitdox:/var/www/html -p 80:80 gucorpling/gitdox gitdox
+sudo git clone https://github.com/gucorpling/gitdox /var/www/gitdox
+sudo chown -R www-data:www-data /var/www/gitdox
+docker run -dit --restart unless-stopped --name gitdox -v /var/www/gitdox:/var/www/html -p 80:80 gucorpling/gitdox gitdox
 ```
 
-These commands install GitDox under `/opt` in your host machine and allows you to modify them just as you would modify any other file on your machine. But in the Docker command, with the `-v` flag we tell it to mount this folder as `/var/www/html` in the container's filesystem. The files are shared bidirectionally: changes made in the container will flow to the host, and vice versa.
+These commands install GitDox under `/var/www` in your host machine and allows you to modify them just as you would modify any other file on your machine. But in the Docker command, with the `-v` flag we tell it to mount this folder as `/var/www/html` in the container's filesystem. The files are shared bidirectionally: changes made in the container will flow to the host, and vice versa.
 
 # Build and run a Docker image
 First, [install Docker](https://docs.docker.com/install/). You may be able to

@@ -210,7 +210,7 @@
                                     <input type="hidden" name="id" value="{{id}}">
                                     {{#admin_gt_zero}}
                                     <input type="hidden" name='deletedoc' value='DELETE DOCUMENT'/>
-                                    <div onclick="document.getElementById('form_del_{{id}}').submit();" class="button">
+                                    <div onclick="confirm('Really delete document {{id}}?') ? document.getElementById('form_del_{{id}}').submit() : null" class="button">
                                         <i class="fa fa-trash-o"></i> delete
                                     </div>
                                     <input type="hidden" name="sel_corpus" value="{{sel_corpus}}">
