@@ -155,20 +155,38 @@ def get_doc_content(doc_id):
 	return res[0][0]
 
 def get_all_doc_ids_for_corpus(corpus):
-	return map(lambda x: x[0],
-               generic_query("SELECT id FROM docs WHERE corpus=?", (corpus,)))
+	return map(lambda x: x[0], generic_query("SELECT id FROM docs WHERE corpus=?", (corpus,)))
 
-def get_all_docs(corpus=None, status=None):
-	if corpus is None:
-		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
-		else:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs where status=?", (status,))
-	else:
-		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs where corpus=?", (corpus,))
-		else:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs where corpus=? and status=?", (corpus, status))
+def get_all_docs(corpus=None, status=None, docs=None):
+	def make_param(multiparam, colname, params):
+		if multiparam is not None:
+			if "," in multiparam:  # Multiple values
+				multiparam = multiparam.split(",")
+				params += multiparam
+				return colname + " in (" + ('?,' * len(multiparam))[:-1] + ")", params
+			else:
+				params.append(multiparam)
+				return colname + " =?", params
+		return "", params
+
+	params = []
+	status_string, params = make_param(status, "status", params)
+	docs_string, params = make_param(docs, "name", params)
+	corpus_string, params = make_param(corpus, "corpus", params)
+	params = tuple(params)
+
+	sql = "SELECT id, name, corpus, mode, content FROM docs "
+	where_list = [x for x in [status_string,docs_string,corpus_string] if x != ""]
+	where_string = ""
+	if len(where_list) > 0:
+		where_string = "WHERE "+ "AND ".join(where_list)
+	if any([x is not None for x in [status, docs, corpus]]):
+		sql += where_string
+	if len(params) == 0:
+		params = None
+
+	return generic_query(sql,params)
+
 
 def get_doc_meta(doc_id, corpus=False):
 	if corpus:
