@@ -171,8 +171,8 @@ def load_admin(user, admin, theform):
 					corpus = meta_key_val["corpus"]
 				else:
 					corpus = "default_corpus"
-					docname = filename.replace(" ","_")  # No spaces in document names
-					docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)  # Strip extension
+				docname = filename.replace(" ","_")  # No spaces in document names
+				docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)  # Strip extension
 				if not doc_exists(docname, corpus):
 					max_id = generic_query("SELECT MAX(id) AS max_id FROM docs", "")[0][0]
 					if not max_id:  # This is for the initial case after init db
