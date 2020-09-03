@@ -239,3 +239,19 @@ table.admin td, table.admin th {
     text-align: left;
     padding: 8px;
 }
+
+.entity_breakdown{
+	border: 1px solid black;
+	padding-left: 5px;
+	margin-bottom: 5px;
+}
+
+.entity_breakdown > ul > li{font-weight: bold}
+.entity_breakdown > ul > li > ul{font-weight: normal}
+
+.entity_table{width:95%; margin-top:5px; margin-bottom:5px;table-layout: fixed;}
+.entity_table td.words{font-weight: normal !important; width: 65%}
+.entity_table td.refcell{font-weight: normal !important; width: 30%}
+.entity_table td.refcell input{width: 95%}
+.entity_table td.vercell{font-weight: normal !important; width: 5%}
+.verify{min-width: 10px !important; padding: 4px;display:none}
