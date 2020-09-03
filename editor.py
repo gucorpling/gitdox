@@ -5,19 +5,20 @@
 
 from six import iteritems
 import cgi, cgitb
-import os, shutil
+import os, shutil, io
 import sys, traceback
 from modules.logintools import login
 import urllib
 from modules.gitdox_sql import *
 from modules.gitdox_git import *
+from modules.reorder_sgml import reorder
 from modules.configobj import ConfigObj
 import requests
 from requests.auth import HTTPBasicAuth
 import platform, re
 from paths import ether_url, get_menu, get_nlp_credentials
 from modules.ether import make_spreadsheet, delete_spreadsheet, sheet_exists, get_socialcalc, ether_to_sgml, \
-	build_meta_tag, get_ether_stylesheets, get_file_list, postprocess_sgml
+	build_meta_tag, get_ether_stylesheets, get_file_list, postprocess_sgml, merge_entities, get_pos_list
 from modules.renderer import render
 import modules.redis_cache as cache
 
@@ -37,6 +38,7 @@ editor_help_link = config["editor_help_link"]
 # Captions and API URLs for NLP buttons
 xml_nlp_button = config["xml_nlp_button"]
 spreadsheet_nlp_button = config["spreadsheet_nlp_button"]
+ner_nlp_button = config["ner_nlp_button"]
 xml_nlp_api = config["xml_nlp_api"]
 spreadsheet_nlp_api = config["spreadsheet_nlp_api"]
 
@@ -94,6 +96,7 @@ def load_page(user,admin,theform):
 	schema = ""
 	doc_id = ""  # Should only remain so if someone navigated directly to editor.py
 	docname = ""
+	enable_entities = False if "enable_entities" not in config else config["enable_entities"]
 	old_docname, old_corpus, old_repo, old_status, old_assignee, old_mode, old_schema = ["", "", "", "", "", "", ""]
 
 	if int(admin) > 0:
@@ -269,6 +272,32 @@ def load_page(user,admin,theform):
 				save_changes(doc_id,text_content)
 				cache.invalidate_by_doc(doc_id, "xml")
 
+	render_data["sent_mode"] = "text"
+	if theform.getvalue("sent_mode"):
+		render_data["sent_mode"] = theform.getvalue('sent_mode')
+
+	if theform.getvalue('entity_sgml') and enable_entities:  # Save entity editor output
+		entity_sgml = theform.getvalue('entity_sgml')
+		ether_sgml  = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
+		if len(entity_sgml.strip()) > 0:
+			word_anno = config["DEFAULT_SGML_TOK_ATTR"] if config["DEFAULT_SGML_TOK_ATTR"].lower() != "none" else None
+			merged_sgml = merge_entities(ether_sgml, entity_sgml, merge_anno="entity", word_anno=word_anno)
+			if not merged_sgml:  # merged_sgml = False means token counts don't match, can't merge
+				render_data["entity_save_message"] = "Failed to save entities: token counts do not match with spreadsheet!"
+				render_data["entity_save_color"] = "red"
+				render_data["entity_save_icon"] = "ban"
+			else:
+				out, err = make_spreadsheet(merged_sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
+				render_data["entity_save_message"] = "Saved merged entity annotations to spreadsheet"
+				render_data["entity_save_color"] = "green"
+				render_data["entity_save_icon"] = "floppy-o"
+
+
+	if mode == "xml":
+		render_data["xml_mode"] = True
+	else:
+		render_data["xml_mode"] = False
+		
 	# Get GitHub repo info
 	git_status=False
 	git_last_commit = False
@@ -321,7 +350,7 @@ def load_page(user,admin,theform):
 			serializable_content = build_meta_tag(doc_id) + text_content.strip() + "\n</meta>\n"
 			serializable_content = serializable_content.encode('utf8')
 		else: # (mode == "ether")
-			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
+			text_content = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id, config="tt_sgml")
 			serializable_content = text_content
 		serialize_file(serializable_content, saved_file)
 		git_status = push_update_to_git(git_username, git_token, saved_file, git_account, git_repo, commit_message)
@@ -344,7 +373,10 @@ def load_page(user,admin,theform):
 
 	# Get last commit info
 	if not (git_account=="account" and git_repo == "repo_name"):  # Check this is not the fake default repo name
-		git_last_commit = get_last_commit(git_username, int(admin), git_account, git_repo, saved_file)
+		try:
+			git_last_commit = get_last_commit(git_username, int(admin), git_account, git_repo, saved_file)
+		except:
+			git_last_commit = ""
 
 	# Editing options
 	# Docname
@@ -352,10 +384,14 @@ def load_page(user,admin,theform):
 	status_list = open(prefix+"status.tab").read().replace("\r","").split("\n")
 	render_data['status_options'] = [{'text': x, 'selected': x == status} for x in status_list]
 	render_data['assignee_options'] = [{'text': x, 'selected': x == assignee} for x in get_user_list()]
-	render_data['mode_options'] = [{'text': x, 'selected': x == mode} for x in ["xml", "ether"]]
+	available_modes = ["xml", "ether"]
+	if enable_entities:
+		available_modes.append("entities")
+	render_data['mode_options'] = [{'text': x, 'selected': x == mode} for x in available_modes]
 	render_data['nlp_service'] = {'xml_button_html': xml_nlp_button.decode("utf8"),
                                   'spreadsheet_button_html': spreadsheet_nlp_button.decode("utf8"),
-                                  'disabled': user == "demo" or mode == "ether"}
+                                  'disabled': user == "demo" or mode == "ether",
+								  "ner_button_html": ner_nlp_button.decode("utf8")}
 	render_data['git_2fa'] = git_2fa == "true"
 	if git_status:
 		render_data['git_commit_response'] = git_status.replace('<','').replace('>','')
@@ -363,10 +399,12 @@ def load_page(user,admin,theform):
 		render_data['git_last_commit'] = git_last_commit
 
 	# prepare embedded editor html
+	if str(enable_entities).lower() == "true":
+		render_data['entity_mode'] = True
 	if mode == "ether":
 		render_data['ether_mode'] = True
 		ether_url += "gd_" + corpus + "_" + docname
-		render_data['ether_url'] = ether_url
+		render_data['ether_url'] = ether_url # .replace("http","https")  # fix AZ
 		render_data['ether_stylesheets'] = get_ether_stylesheets()
 
 		if "file" in theform and user != "demo":
@@ -386,6 +424,42 @@ def load_page(user,admin,theform):
 						cache.invalidate_by_doc(doc_id, "meta")
 	else:
 		render_data['ether_mode'] = False
+		if mode == "entities" and enable_entities:
+			render_data['entity_mode'] = True
+			ether_name = "_".join(["gd", corpus, docname])
+			#ether_url = ether_url.replace("https","http")  # fix AZ
+			soc = get_socialcalc(ether_url, ether_name)
+			tt_string = ether_to_sgml(soc, doc_id, config="tt_sgml")
+			tt_string = reorder(tt_string,priorities=["entity",str(config["DEFAULT_SGML_TOK_ATTR"])])
+			base_template = io.open("templates" + os.sep + "spannotator_template.html",encoding="utf8").read().replace('"','&quot;')
+			base_template = base_template.replace("%%DEFAULT_SGML_SENT_TAG%%",config["DEFAULT_SGML_SENT_TAG"]).replace("%%DEFAULT_SGML_TOK_ATTR%%",config["DEFAULT_SGML_TOK_ATTR"])
+			import_disabled = "" if int(admin) > 1 else ' disabled=&quot;disabled&quot; style=&quot;background-color: #6f6f6f&quot;'
+			base_template = base_template.replace("%%DISABLE_IMPORT%%",import_disabled)
+			if "NER_POS_COL" in config and "NER_POS_FILTER" in config:
+				pos_list = get_pos_list(tt_string,config["NER_POS_COL"])
+				render_data["NER_POS_FILTER"] = config["NER_POS_FILTER"]
+				render_data["NER_POS_LIST"] = pos_list
+				render_data["show_ner"] = True
+			else:
+				render_data["show_ner"] = False
+			tt_escaped = tt_string.decode("utf8").replace('"',"%%quot%%").replace('\n','\\n').replace("<","%%lt%%").replace(">","%%gt%%")
+			base_template = base_template.replace("%%DOC_TT_STRING%%",tt_escaped)
+			entity_links = get_doc_entities(doc_id)
+			entity_list = []
+			if entity_links is not None:
+				for row in entity_links:
+					words, etype, eref = row
+					entity_list.append(words + "+" + etype + "+" + eref)
+			base_template = base_template.replace("%%DOC_ENTITY_LIST%%","|".join(entity_list))
+			all_entity_links = get_entity_options()
+			all_entity_list = []
+			if all_entity_links is not None:
+				for row in all_entity_links:
+					etype, eref = row
+					all_entity_list.append(etype + "+" + eref)
+			base_template = base_template.replace("%%ALL_ENTITY_LIST%%","|".join(all_entity_list))
+
+			render_data['spannotator_template'] = base_template
 
 	# stop here if no doc selected
 	if doc_id:
