@@ -89,7 +89,10 @@ function validate_all() {
 				$("#validate_landing").removeClass("disabledbutton");
 				$("#validate_landing").html('<i class="fa fa-check"></i> re-validate');
 			}
-        }
+        },
+		error: function(response){
+			console.log(response);
+		}
 	});
 
     $.ajax({
@@ -98,6 +101,7 @@ function validate_all() {
         data: {doc_id: 'all'},
         dataType: "json",
         success: function(response) {
+			console.log(response);
 			$.each(response, function(docid, v) {
 				var color;
 				if (v.indexOf("Export is valid") > -1) {
@@ -117,9 +121,38 @@ function validate_all() {
 				$("#validate_landing").removeClass("disabledbutton");
 				$("#validate_landing").html('<i class="fa fa-check"></i> re-validate');
 			}
+		},
+		error: function(response){
+			console.log(response);
 		}
 	});
-}
+    $.ajax({
+        url: 'validate.py?validation_type=entities',
+        type: 'post',
+        data: {doc_id: 'all'},
+        dataType: "json",
+        success: function(response) {
+			$.each(response, function(docid, v) {
+				var color;
+				if (v.indexOf("Entity annotation is valid") > -1) {
+					color = 'green';
+				}
+				else if (v.indexOf("No entity") > -1) {
+					color = 'gray';
+				}
+				else {
+					color = 'red';
+				}
+				if ( $( "#entity_" + docid ).length ) {
+					$("#entity_" + docid)[0].outerHTML = '<div class="tooltip" style="display:inline-block"><i class="fa fa-male" style="color:' + color + '">&nbsp;</i><span class="msg">' + v + '</span></div>';
+				}
+			});
+			if (--pendingResults === 0) {
+				$("#validate_landing").removeClass("disabledbutton");
+				$("#validate_landing").html('<i class="fa fa-check"></i> re-validate');
+			}
+		}
+	});}
 
 function filter() {
     var input_id = $("#filter_id").val();

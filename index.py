@@ -74,7 +74,8 @@ def load_landing(user, admin, theform):
 		doc_vars = {}
 		doc_vars["xml"] = "xml" in doc
 		doc_vars["ether"] = "ether" in doc
-		doc_vars["other_mode"] = not (doc_vars["xml"] or doc_vars["ether"])
+		doc_vars["entities"] = "entities" in doc
+		doc_vars["other_mode"] = not (doc_vars["xml"] or doc_vars["ether"] or doc_vars["entities"])
 
 		id = str(doc[0])
 		doc_vars["id"] = id
@@ -93,6 +94,7 @@ def load_landing(user, admin, theform):
 	userdir = scriptpath + "users" + os.sep
 	config = ConfigObj(userdir + 'config.ini')
 	render_data["project"] = config["project"]
+	render_data["enable_entities"] = False if "enable_entities" not in config else config["enable_entities"]
 
 	return render("index", render_data)
 

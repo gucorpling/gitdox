@@ -145,7 +145,7 @@
                             <td><input type="text" id="filter_document" onkeyup="filter()"></td>
                             <td><input type="text" id="filter_status" onkeyup="filter()"></td>
                             <td><input type="text" id="filter_assigned" onkeyup="filter()"></td>
-                            <td><input type="text" id="filter_mode" onkeyup="filter()" placeholder="xml/spreadsheet"></td>
+                            <td><input type="text" id="filter_mode" onkeyup="filter()" placeholder="xml/spreadsheet/entities"></td>
                             <td></td>
                             <td colspan="2"></td></tr>
                     </tfoot>
@@ -166,6 +166,9 @@
                                 {{#ether}}
                                 <i class="fa fa-table" title="spreadsheet">&nbsp;</i>
                                 {{/ether}}
+                                {{#entities}}
+                                <i class="fa fa-male" title="entities">&nbsp;</i>
+                                {{/entities}}
                                 {{#other_mode}}
                                 &#8209;
                                 {{/other_mode}}
@@ -178,20 +181,26 @@
                                     {{#xml}}
                                     <i id="xml_{{id}}" class="fa fa-code" title="xml">&nbsp;</i>
                                     {{/xml}}
-                                    {{#ether}}
+                                    {{^xml}}
                                     <i id="ether_{{id}}" class="fa fa-table" title="spreadsheet">&nbsp;</i>
-                                    {{/ether}}
+                                    {{/xml}}
 									<!-- meta validation icon (always) -->
                                     <i id="meta_{{id}}" class="fa fa-tags" title="metadata" style="display:inline-block">&nbsp;</i>
 									<!-- export validation icon if ether, else invisible icon (for proper spacing) -->
-                                    {{#ether}}
+                                    {{^xml}}
                                     <i id="export_{{id}}" class="fa fa-file" title="export">&nbsp;</i>
-                                    {{/ether}}
-                                    {{^ether}}
+                                    {{/xml}}
+                                    {{#xml}}
                                     <div style="display:inline-block">
                                         <i class="fa fa-file" style="visibility:hidden;">&nbsp;</i><span class="msg"> </span>
                                     </div>
-                                    {{/ether}}
+                                    {{/xml}}
+                                {{#enable_entities}}
+                                    <!-- entities validation icon if not xml, else invisible icon (for proper spacing) -->
+                                    {{^xml}}
+                                    <i id="entity_{{id}}" class="fa fa-male" title="entities">&nbsp;</i>
+                                    {{/xml}}
+                                {{/enable_entities}}
                                 </div>
                             </td>
 
