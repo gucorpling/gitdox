@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spannotator</title>
+  <link rel="stylesheet" href="js/spannotator/jquery-ui.css">
+  <!--<link rel="stylesheet" href="spannotator/fontawesome-free-5.13.0-web/css/all.min.css">-->
+  <link rel="stylesheet" href="js/spannotator/font-awesome-4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="js/spannotator/spannotator.css">  
+</head>
+<body>
+  <script src="js/spannotator/jquery-1.12.4.js"></script>
+  <script src="js/spannotator/jquery-ui.js"></script>
+  <script src="js/spannotator/spannotator.js"></script>
+<input type="hidden" name="active_entity" id="active_entity" value="">
+
+<input type="hidden" name="DEFAULT_SGML_SENT_TAG" id="DEFAULT_SGML_SENT_TAG" value="%%DEFAULT_SGML_SENT_TAG%%">
+<input type="hidden" name="DEFAULT_SGML_TOK_ATTR" id="DEFAULT_SGML_TOK_ATTR" value="%%DEFAULT_SGML_TOK_ATTR%%">
+<input type="hidden" name="DOC_TT_STRING" id="DOC_TT_STRING" value="%%DOC_TT_STRING%%">
+<input type="hidden" name="DOC_ENTITY_LIST" id="DOC_ENTITY_LIST" value="%%DOC_ENTITY_LIST%%">
+<input type="hidden" name="ALL_ENTITY_LIST" id="ALL_ENTITY_LIST" value="%%ALL_ENTITY_LIST%%">
+
+<ul  id="anno-context" class='custom-menu'>
+</ul>
+
+<div id="spannotator">
+<div id="loading_screen" class="loading"><i class="fa fa-spinner fa-spin"></i><br/>Loading...</div>
+	<div id="toolbar">
+	<div class="col-md-12">
+		<button type="button" class="btn" onclick="add_entity(null);" title="Add span (Enter)"><i class="fa fa-plus"></i></button>
+		<button type="button" class="btn" onclick="group_selected(null);" title="Group spans (Enter)" id="btn_group"><i class="fa fa-object-group"></i></button>
+		<button type="button" class="btn" onclick="ungroup_selected(null);" title="Ungroup spans (Del)" id="btn_ungroup"><i class="fa fa-object-ungroup"></i></button>
+		<button type="button" class="btn" onclick="toggle_sents();" title="Toggle sentence view"><i class="fa fa-paragraph"></i></button>
+		<button type="button" class="btn" onclick="return show_import()" title="Paste data (admin only)"><span class="fa-stack fa-1x">
+			<i class="fa fa-file-o fa-stack-1x"></i>
+			<i class="fa fa-arrow-right fa-stack-1x" style="text-indent: -7px;font-size:smaller"></i></span>
+		</button>
+		<button type="button" class="btn" onclick="return show_export()" title="Export data"><span class="fa-stack fa-1x">
+			<i class="fa fa-file-o fa-stack-1x"></i>
+			<i class="fa fa-arrow-right fa-stack-1x" style="text-indent: 7px;font-size:smaller"></i></span>
+		</button>
+		<span style="color:white">| use colors for: </span><select id="color_mode" onchange="set_color_mode();" disabled="disabled">
+			<option value="entities" selected="selected">entity types</option>
+			<option value="coref">coref</option>
+		</select>
+	</div>
+
+	<div id="import_dialog" class="dialog">
+		<p>
+			<div>Paste text, WebAnno or CWB format:</div>
+			<textarea></textarea>
+		</p>
+	</div>
+
+	<div id="export_dialog" class="dialog">
+		<p>
+			<div><b>Choose format:</b><br/>
+			  <input type="radio" id="webanno" name="export_format" value="webanno" checked="checked" onclick="run_export('webanno')">
+			  <label for="webanno">WebAnno</label><br>
+			  <input type="radio" id="tt" name="export_format" value="tt" onclick="run_export('tt')">
+			  <label for="tt">TT/CWB SGML</label><br>
+			</div>
+			<textarea></textarea>
+		</p>
+	</div>
+
+	<div id="annotation_dialog" class="dialog">
+		<p>
+			<div id="anno_entity_text"></div>
+			<select id="sel_anno_key" onchange="select_anno_key();"></select>
+			<select id="sel_anno_value" onchange="select_anno_value();"></select>
+		</p>
+	</div>
+
+
+	</div>
+	<div id="editor">
+		<div id="selectable">
+
+		</div>
+	</div>
+</div>
+
+
+
+
+<script>
+function get_doc_tt(){
+	return document.getElementById('DOC_TT_STRING').value;
+}
+read_tt($("#DOC_TT_STRING").val(),{"tok":"%%DEFAULT_SGML_TOK_ATTR%%","sent":"%%DEFAULT_SGML_SENT_TAG%%"});
+</script>
+
+<!--
+<div class="entity_type box menu-1">hello</div>
+
+
+<div class="entity_type box menu-1"><i title="abstract" class="fa fa-cloud entity_icon">bla</i>blubb</div>-->
+</body>
+</html>
