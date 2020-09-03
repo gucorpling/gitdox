@@ -45,7 +45,7 @@ def export_all_docs(config=None, corpus_filter=None, status=None, extension="sgm
 		if mode == "xml" and config!="[CSV]":
 			content = build_meta_tag(doc_id) + content.strip() + "\n</meta>\n"
 			files.append((content,filename + ".xml"))
-		elif mode == "ether":
+		elif mode in ["ether","entities"]:
 			ether_name = "_".join(["gd", corpus, docname])
 			if config=="[CSV]":
 				csv = ether_to_csv(ether_url,ether_name)
