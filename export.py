@@ -91,13 +91,16 @@ def export_doc(doc_id, stylesheet=None):
 
 	cpout = ""
 	cpout += "Content-Type: application/download\n"
-	cpout += "Content-Disposition: attachment; filename=" + corpus + "_" + docname + ".sgml\n\n"
+	if "tt" in stylesheet:
+		cpout += "Content-Disposition: attachment; filename=" + docname + ".tt\n\n"
+	else:
+		cpout += "Content-Disposition: attachment; filename=" + corpus + "_" + docname + ".sgml\n\n"
 
 	if isinstance(cpout,unicode):
 		cpout = str(cpout.encode("utf8"))
 
 	cpout += sgml
-	print(cpout)
+	return cpout
 
 
 if __name__ == "__main__":
