@@ -124,3 +124,11 @@
 #loading_screen{position:absolute; height:100%; width:100%; display:none; left:0; top:0; z-index:200; padding-top: 100px; text-align: center}
 .loading{display:block !important;background-color:gray; overflow: hidden}
 .loading i{display:block !important;}
+
+.selected-entity{background-color: #b2f4fd !important}
+#anno_entity_text{    border: 1px solid gray;
+    margin: 4px 0px 10px 0px;
+    padding: 2px;
+    color: gray;
+    font-style: italic;
+}
