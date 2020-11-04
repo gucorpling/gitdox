@@ -26,6 +26,8 @@ from xml.sax.saxutils import escape
 
 __version__ = "2.0.0"
 
+CELL_ID_PATTERN = re.compile(r'^([A-Z]+)([0-9]+)$')
+
 class ExportConfig:
 
 	def __init__(self, **kwargs):
@@ -136,14 +138,10 @@ def parse_ether(ether, doc_id=None):
 			parts = line.split(":")
 			if len(parts) > 3:  # Otherwise invalid row
 				cell_id = parts[1]
-				cell_row = cell_id[1:]
-				cell_col = cell_id[0]
-				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
-				# for c in cell_id:
-				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
-				#		cell_row += c
-				#	else:
-				#		cell_col += c
+				match = re.match(CELL_ID_PATTERN, cell_id)
+				if not match:
+					raise Exception('malformed ethercalc cell ID: "' + cell_id + '"')
+				cell_col, cell_row = match.groups()
 				cell_content = parts[3].replace("\\c", ":")
 				cell_span = parts[-1] if "rowspan:" in line else "1"
 
