@@ -124,7 +124,7 @@ function do_guess_linking(){
 	guess_data = to_guess.join("|");
 	toggle_nlp_button("#link_guess_button");
 	$.ajax({
-		url: 'https://corpling.uis.georgetown.edu/gitdox/scriptorium/get_entities.py',
+		url: 'https://corpling.uis.georgetown.edu/gitdox/ling367/get_entities.py',
 		type: 'POST',
 		data: {entries: guess_data, action: 'guess'},
 		//async: false,
@@ -158,7 +158,7 @@ function do_save_linking(){
 	ref_cells.each(function(){
 			if (!($(this).data("guess"))){ // do not save unverified guesses
 				if ($(this).val().length>0){
-					save_entry = $(this).data("text").replace(/[|+]/g,'') + "+" + $(this).data("head").replace(/[|+]/g,'')  + "+" + $(this).data("etype") + "+" + $(this).val().replace(/(^\s+|[|+;]|\s+$)/g,'').replace(/\s+/g,' ');
+					save_entry = $(this).data("text").replace(/[|+]/g,'').replace(/&quot;/g,'"') + "+" + $(this).data("head").replace(/[|+]/g,'').replace(/&quot;/g,'"')  + "+" + $(this).data("etype") + "+" + $(this).val().replace(/(^\s+|[|+;]|\s+$)/g,'').replace(/\s+/g,' ');
 					payload.push(save_entry);
 					erefs.push($(this).data("etype") + "+" + $(this).val().replace(/[|+]/g,''));
 				}
@@ -180,7 +180,7 @@ function do_save_linking(){
 	ecount = $('.eref').length;
 	toggle_nlp_button("#link_save_button",'floppy-o');
 	$.ajax({
-		url: 'https://corpling.uis.georgetown.edu/gitdox/scriptorium/get_entities.py',
+		url: 'https://corpling.uis.georgetown.edu/gitdox/ling367/get_entities.py',
 		type: 'POST',
 		data: {entries: save_data, action: 'save', docid:  docId.toString(), entcount: ecount },
 		//async: false,
@@ -200,7 +200,7 @@ function report_no_entities(){
 	toggle_nlp_button("#no_entities_button",'low-vision');
 	let docId = $("#id").val();
 	$.ajax({
-		url: 'https://corpling.uis.georgetown.edu/gitdox/scriptorium/get_entities.py',
+		url: 'https://corpling.uis.georgetown.edu/gitdox/ling367/get_entities.py',
 		type: 'POST',
 		data: {action: 'empty', docid:  docId.toString(), entcount: 0 },
 		//async: false,
@@ -252,9 +252,10 @@ function validate_entityref()
 function show_ner(){
 	list_groups = 	document.getElementById('spannotator_container').contentWindow.list_entities($("#NER_POS_LIST").val(),$("#NER_POS_FILTER").val());
 	entity_links = $('#spannotator_container').contents().find('#DOC_ENTITY_LIST').val();
+	entity_links = entity_links.replace(/%%quot%%/g,'"');
 	entity_lookup = {};
 	for (entry of entity_links.split("|")){
-		parts = entry.split("+");
+		parts = entry.replace(/&amp;/g,"&").split("+");
 		entity_lookup[parts[0] + "+" + parts[1]] = parts[2];
 	}
 	output = "";
@@ -274,8 +275,8 @@ function show_ner(){
 				entnum +=1;
 				lookup = "";
 				if (ent_text+"+"+ group in entity_lookup){lookup = entity_lookup[ent_text+"+"+ group];}
-				output += '\t\t\t<tr><td class="words" data-etype="'+group+'" data-head="'+ent_head+'" data-text="'+ent_text+'" id="enttext_'+groupnum.toString()+'_'+entnum.toString()+'">' + ent_text + '</td>';
-				output += '<td class="refcell"><input class="eref" id="entref_'+groupnum.toString()+'_'+entnum.toString()+'" data-head="'+ent_head+'" data-text="'+ent_text+'" data-etype="'+group+'" type="text" list="erefs'+groupnum.toString()+'" value="'+lookup+'"></td>';
+				output += '\t\t\t<tr><td class="words" data-etype="'+group+'" data-head="'+ent_head.replace(/"/g,'&quot;')+'" data-text="'+ent_text.replace(/"/g,'&quot;')+'" id="enttext_'+groupnum.toString()+'_'+entnum.toString()+'">' + ent_text + '</td>';
+				output += '<td class="refcell"><input class="eref" id="entref_'+groupnum.toString()+'_'+entnum.toString()+'" data-head="'+ent_head.replace(/"/g,'&quot;')+'" data-text="'+ent_text.replace(/"/g,'&quot;')+'" data-etype="'+group+'" type="text" list="erefs'+groupnum.toString()+'" value="'+lookup+'"></td>';
 				output += '<td class="vercell"><div class="verify button" id="verify_'+groupnum.toString()+'_'+entnum.toString()+'" onclick="verify_guess('+"'"+'entref_'+groupnum.toString()+'_'+entnum.toString()+"'"+');"><i class="fa fa-check"> </i></div></td></tr>\n';
 			}
 			output += "\t\t</table></li>\n";
