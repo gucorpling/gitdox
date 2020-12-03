@@ -281,12 +281,15 @@ def load_page(user,admin,theform):
 		ether_sgml  = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
 		if len(entity_sgml.strip()) > 0:
 			word_anno = config["DEFAULT_SGML_TOK_ATTR"] if config["DEFAULT_SGML_TOK_ATTR"].lower() != "none" else None
-			merged_sgml = merge_entities(ether_sgml, entity_sgml, merge_anno="entity", word_anno=word_anno)
+			other_annos = [a.split(":")[0] for a in config["entity_annos"].split(";")] if ":" in config["entity_annos"] else None
+			merged_sgml = merge_entities(ether_sgml, entity_sgml, merge_anno="entity", word_anno=word_anno,
+										 other_annos=other_annos)
 			if not merged_sgml:  # merged_sgml = False means token counts don't match, can't merge
 				render_data["entity_save_message"] = "Failed to save entities: token counts do not match with spreadsheet!"
 				render_data["entity_save_color"] = "red"
 				render_data["entity_save_icon"] = "ban"
 			else:
+				merged_sgml = merged_sgml.replace("&amp;", "&")
 				out, err = make_spreadsheet(merged_sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
 				render_data["entity_save_message"] = "Saved merged entity annotations to spreadsheet"
 				render_data["entity_save_color"] = "green"
@@ -430,8 +433,10 @@ def load_page(user,admin,theform):
 			#ether_url = ether_url.replace("https","http")  # fix AZ
 			soc = get_socialcalc(ether_url, ether_name)
 			tt_string = ether_to_sgml(soc, doc_id, config="tt_sgml")
-			tt_string = reorder(tt_string,priorities=["entity",str(config["DEFAULT_SGML_TOK_ATTR"])])
+			tt_string = reorder(tt_string,priorities=[config["DEFAULT_SGML_SENT_TAG"],"entity",config["NER_POS_COL"],str(config["DEFAULT_SGML_TOK_ATTR"])])
 			base_template = io.open("templates" + os.sep + "spannotator_template.html",encoding="utf8").read().replace('"','&quot;')
+			if 'entity_annos' in config:
+				base_template = base_template.replace("%%entity_annos%%", config["entity_annos"])  # optional key-value annotations
 			base_template = base_template.replace("%%DEFAULT_SGML_SENT_TAG%%",config["DEFAULT_SGML_SENT_TAG"]).replace("%%DEFAULT_SGML_TOK_ATTR%%",config["DEFAULT_SGML_TOK_ATTR"])
 			import_disabled = "" if int(admin) > 1 else ' disabled=&quot;disabled&quot; style=&quot;background-color: #6f6f6f&quot;'
 			base_template = base_template.replace("%%DISABLE_IMPORT%%",import_disabled)
@@ -450,7 +455,7 @@ def load_page(user,admin,theform):
 				for row in entity_links:
 					words, etype, eref = row
 					entity_list.append(words + "+" + etype + "+" + eref)
-			base_template = base_template.replace("%%DOC_ENTITY_LIST%%","|".join(entity_list))
+			base_template = base_template.replace("%%DOC_ENTITY_LIST%%","|".join(entity_list).replace('"',"%%quot%%"))
 			all_entity_links = get_entity_options()
 			all_entity_list = []
 			if all_entity_links is not None:
