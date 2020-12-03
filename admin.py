@@ -11,7 +11,7 @@ from modules.pathutils import *
 import urllib
 from modules.gitdox_sql import *
 from modules.dataenc import pass_dec, pass_enc
-from paths import get_menu
+from paths import get_menu, ether_url
 from editor import harvest_meta
 from modules.ether import make_spreadsheet, get_ether_stylesheets
 from modules.renderer import render
@@ -192,7 +192,7 @@ def load_admin(user, admin, theform):
 					del meta_key_val["schema"]
 
 				if mode == "ether":
-					make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=False)
+					make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=False)
 				else:
 					content = re.sub("</?meta ?[^>]*>[\r\n]*","",sgml)
 					content = unicode(content.decode("utf8"))
