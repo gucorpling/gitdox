@@ -132,3 +132,5 @@
     color: gray;
     font-style: italic;
 }
+
+.highlight-star{position: absolute; top:11px; left:0px; color: yellow; -webkit-text-stroke-width: 1px; -webkit-text-stroke-color: orange; display: none}

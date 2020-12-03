@@ -4,7 +4,7 @@ function arrayRemove(arr, value) { return arr.filter(function(ele){ return ele !
 // constants configuration
 ICON_MAP = {
 	'person':['male','blue'], 
-	'quantity':['sort-numeric-asc','yellow'], 
+	//'quantity':['sort-numeric-asc','yellow'], 
 	'time':['clock-o','pink'], 
 	'abstract':['cloud','cyan'], 
 	'object':['cube','green'], 
@@ -30,6 +30,14 @@ global_defaults = {
 
 coref_colors = ["Red","RoyalBlue","ForestGreen","DarkMagenta","Brown","DarkTurquoise","Plum","Orange","Navy","Olive","LightSeaGreen","MediumSeaGreen","Aqua","Blue","BlueViolet","CadetBlue","Chartreuse","Chocolate","Coral","CornflowerBlue","Crimson","DarkBlue","DarkCyan","DarkGoldenRod","DarkGreen","DarkKhaki","DarkOliveGreen","DarkOrange","DarkOrchid","DarkRed","DarkSalmon","DarkSeaGreen","DarkSlateBlue","DarkSlateGray","DeepPink","DarkViolet","DeepSkyBlue","DimGray","DodgerBlue","FireBrick","Fuchsia","Gold","GoldenRod","Gray","Green","GreenYellow","HotPink","IndianRed","Indigo","Khaki","LawnGreen","LightBlue","LightCoral","LightGreen","LightPink","LightSalmon","LightSkyBlue","LightSlateGray","LightSteelBlue","Lime","LimeGreen","Magenta","Maroon","MediumAquaMarine","MediumBlue","MediumOrchid","MediumPurple","MediumSlateBlue","MediumSpringGreen","MediumTurquoise","MediumVioletRed","MidnightBlue","NavajoWhite","OliveDrab","OrangeRed","Orchid","PaleGreen","PaleTurquoise","PaleVioletRed","PeachPuff","Peru","Pink","PowderBlue","Purple","RebeccaPurple","RosyBrown","SaddleBrown","Salmon","SandyBrown","SeaGreen","Sienna","SkyBlue","SlateBlue","SlateGray","SpringGreen","SteelBlue","Tan","Teal","Thistle","Tomato","Turquoise","Violet","Wheat","Yellow"];  // Prioritized list of fixed colors to use for groups
 
+// Data model
+var entities = {};  // Stores all Entity objects for the current document, keys are span like strings, e.g. "3-4" for entity spanning tokens 3-4
+var toks2entities = {}; // Hash map from 1-based token indices to all Entity objects containing them
+var tokens = {}; // Stores all Token objects for the current document, keys are strings starting with "1"
+var groups = {}; // Stores all span groups, keys are group types, values map group ids to included entity spans
+groups[def_group] = {0: []};
+groups["bridge"] = {0:[]}; // TODO: read from config
+
 var collapse_edges = {"appos":"coref","ana":"coref","cata":"coref"};  // edge type replacements
 var anno_keys = [];  // additional span annotations beyond entity type
 var anno_values = {}; // possible values for each annotation key
@@ -43,6 +51,8 @@ assigned_colors[def_group] = {0: def_color};
 var active_group = def_group;
 var color_modes = new Set();
 color_modes.add("entities");
+color_modes.add("bridge");  // TODO: read from config
+
 
 for (key in global_defaults){
 	if ($('#' + key).val()){
@@ -66,9 +76,14 @@ class Entity{
 		this.div_id = this.start.toString() + '-' + this.end.toString();
 		this.annos = {};  // key-value pairs of additional annotations, such as "infstat": "new"
 		this.next = {};  // object mapping group types (e.g. coref) to next entity object in chain; only filled during export
-		let def_group = global_defaults["DEFAULT_GROUP"];
 		let g = {};
-		g[def_group] = 0;
+		let def_group = global_defaults["DEFAULT_GROUP"];
+		for (let init_grp in groups){
+			g[init_grp] = 0;
+		}
+		if (!(def_group in groups)){
+			g[def_group] = 0;
+		}
 		this.groups = g;
 		if (Object.keys(groups).length==0) {groups[def_group] = {0:[]};}
 		for (var g_type in groups){
@@ -79,7 +94,7 @@ class Entity{
 		
 		this.get_text = function (){ 
 			var entity_text = [];
-			for (i of this.toks){
+			for (var i of this.toks){
 				entity_text.push(tokens[i].word);
 			}
 			return entity_text.join(" ");
@@ -97,12 +112,6 @@ class Token{
 		this.sent_tooltip = sent_tooltip;  // Tooltip to display on sentence span, such as a translation
 	}
 }
-// Data model
-var entities = {};  // Stores all Entity objects for the current document, keys are span like strings, e.g. "3-4" for entity spanning tokens 3-4
-var toks2entities = {}; // Hash map from 1-based token indices to all Entity objects containing them
-var tokens = {}; // Stores all Token objects for the current document, keys are strings starting with "1"
-var groups = {}; // Stores all span groups, keys are group types, values map group ids to included entity spans
-groups[def_group] = {0: []}
 
 // Drop down menu for entity selection
 // if the document is clicked somewhere
@@ -212,9 +221,11 @@ if (dragged_side == "left" && proposed_start > 1){ // Add one for left boundary,
   old_entity = entities[old_id];
   entity_type = old_entity.type;
   old_groups = old_entity.groups;
+  old_annos = old_entity.annos;
   $(ui.draggable).remove();
   new_entity = add_entity(toks_to_check);  
   new_entity.groups = old_groups;
+  new_entity.annos = old_annos;
   for (mode of color_modes){
 	if (mode != "entities"){
 		if (mode in old_entity.groups){
@@ -436,6 +447,7 @@ function bind_tok_events(){
 
 function set_color_mode(color_mode){
 	if (color_mode == null){color_mode=$("#color_mode").val();}
+	active_group = anno_mode = color_mode;
 	
 	for (div_id in entities){
 		entity_to_color = entities[div_id];
@@ -508,7 +520,13 @@ function assign_group(existing_span, gtype, new_group){
 	if (gtype in existing_span.groups){ // if this already has a group of this kind, remove the old group information
 		groups[gtype][existing_span.groups[gtype]] = arrayRemove(groups[gtype][existing_span.groups[gtype]],existing_span.div_id);
 	}
-	if (groups[gtype][existing_span.groups[gtype]].length==0 && existing_span.groups[gtype] != 0 && existing_span.groups[gtype] != new_group){delete groups[gtype][existing_span.groups[gtype]];} // remove group if empty
+	if (existing_span.groups[gtype] != 0 && existing_span.groups[gtype]!=null){
+		if (existing_span.groups[gtype] != new_group){
+			if (groups[gtype][existing_span.groups[gtype]].length==0){
+				delete groups[gtype][existing_span.groups[gtype]]; // remove group if empty
+			} 
+		}
+	}
 	existing_span.groups[gtype] = new_group;
 	groups[gtype][new_group].push(existing_span.div_id);
 }
@@ -1007,6 +1025,9 @@ function set_entity_classes(){
 		// clear selection
 		$("#selectable").selectable({filter: '.tok', distance: 10});
 		$('#selectable .ui-selected').removeClass('ui-selected');
+		for (e_id in entities){
+			toggle_star(e_id);
+		}
 }
 
 function delete_entity(entity_span){
@@ -1044,10 +1065,23 @@ function delete_entity(entity_span){
 			  groups[gtype][g] = arrayRemove(groups[gtype][g],entity_span);
 		  }
 		if (groups[gtype][g].length==0 & parseInt(g) != 0){delete groups[gtype][g];} // delete group if empty
+		else if (groups[gtype][g].length==1 & parseInt(g) != 0){
+			assign_group(entities[groups[gtype][g][0]], gtype,0);  // make last member of group a singleton
+		}
 	  }
   }
 
   $(".custom-menu").hide(100); // hide the menu
+}
+
+function toggle_star(div_id){
+	if ("infstat" in entities[div_id].annos){
+	  if (entities[div_id].annos["infstat"]=="acc"){
+		  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
+	  } else{
+		  $('#icon' + div_id).find(".highlight-star").css("display","none");
+	  }
+	}
 }
 
 // Set the entity type for an entity and handle color + icon
@@ -1055,11 +1089,12 @@ function change_entity(entity_type){
   entity_span = document.getElementById("active_entity").value;
   icon = $('#icon' + entity_span);
   html = '<i title="%TYPE%" class="fa fa-%FATYPE% entity_icon"></i>';
+  html += '<i title="accessible" class="fa fa-star entity_icon highlight-star"></i>';
   icon_type = DEFAULT_ICON;
   color = DEFAULT_COLOR;
   if (entity_type in ICON_MAP){
 	  icon_type = ICON_MAP[entity_type][0];
-	  if (anno_mode != "coref"){
+	  if (anno_mode == "entities"){
 		color = ICON_MAP[entity_type][1];
 	  } else{
 		  group_id = parseInt(entities[entity_span].groups[active_group]);
@@ -1076,6 +1111,7 @@ function change_entity(entity_type){
   entities[entity_span].type = entity_type;
   $('#'+entities[entity_span].div_id).css('border-color',color);
   $(".custom-menu").hide(100); // hide the menu
+  toggle_star(entity_span);
 }
 
 // Insert an entity into the data model
@@ -1209,6 +1245,7 @@ function select_anno_value(){
 	if (val != ""){
 		ent.annos[key] = val;
 	}
+	toggle_star(div_id);
 }
 
 function make_token_div(tok){ // Take a Token object and return HTML representation with sentence break element if needed
@@ -1221,7 +1258,7 @@ function make_token_div(tok){ // Take a Token object and return HTML representat
 		if (tok.sent_tooltip != ''){
 			title_string = 'title="'+tok.sent_tooltip.replace(/"/g,"&quot;")+'" ';
 		}
-		out_html = '  <span id="s'+sentnum+'" '+title_string+'class="sent s'+sentnum.toString() +'"/>\n' + out_html;
+		out_html = '  <span id="s'+sentnum+'" '+title_string+'class="sent s'+sentnum.toString() +'"></span>\n' + out_html;
 	}
 	return out_html;
 }
@@ -1329,7 +1366,7 @@ function read_webanno(data){
 				}
 			}
 			if (edge_types!="_"){
-				anno_mode = "coref";
+				//anno_mode = "coref";
 				for (i in edge_types){
 					edge_type = edge_types[i];
 					edge_path = edge_paths[i];
@@ -1408,7 +1445,8 @@ function read_webanno(data){
 				else if (grouping[etype][group].includes(trg)){
 					old_group = parseInt(entities[src].groups[etype]);
 					if (old_group!=0){
-						for (e of entities){
+						for (ent_id in entities){
+							e = entities[ent_id];
 							if (e.groups[etype] == old_group){
 								assign_group(e, etype, group);
 							}
@@ -1437,6 +1475,11 @@ function read_webanno(data){
 		}
 		$("#color_mode").html(sel_opts);
 	}
+	
+	if (!("bridge" in grouping)) { // TODO: read from config
+		grouping["bridge"] = {0:[]};
+		groups["bridge"] = {0:[]};
+	}
 
 	set_entity_classes();
 	init_doc();
@@ -1445,9 +1488,12 @@ function read_webanno(data){
 function read_tt(data, config){
 
 	// set tok to an SGML attribute name to use markup instead of TT plain text tokens as words
-	default_conf = {"span_tag": DEFAULT_SGML_SPAN_TAG, "span_attr": DEFAULT_SGML_SPAN_ATTR, "sent":DEFAULT_SGML_SENT_TAG, "tok": DEFAULT_SGML_TOK_ATTR};
+	default_conf = {"span_tag": DEFAULT_SGML_SPAN_TAG, "span_attr": DEFAULT_SGML_SPAN_ATTR, "sent":DEFAULT_SGML_SENT_TAG, "tok": DEFAULT_SGML_TOK_ATTR,
+								"entity_annos":"infstat:auto|giv|acc|new|split"};
 	
 	group_info = [];
+	anno_keys = [];
+	anno_values = {};
 
 	if (typeof config == "undefined"){
 		config = {};
@@ -1458,6 +1504,16 @@ function read_tt(data, config){
 		}
 	}
 
+	import_annos = {};
+	default_annos = {};
+	for (anno of config["entity_annos"].split(";")){
+		let anno_parts = anno.split(":");
+		import_annos[anno_parts[0]] = anno_parts[1].split("|");
+		anno_values[anno_parts[0]] = new Set(anno_parts[1].split("|"));
+		default_annos[anno_parts[0]] = anno_parts[1].split("|")[0];
+		anno_keys.push(anno_parts[0]);
+	}
+
 	if (config["tok"].toLowerCase()=="none"){config["tok"]=null;}
 
 	$("#selectable").html("");  // Clear editor
@@ -1466,8 +1522,11 @@ function read_tt(data, config){
 	toks2entities = {};
 	tokens = {};
 	groups = {};
+	
+	groups["bridge"] = {0:[]};  // TODO: read from config
 
 	data = data.replace(/%%quot%%/g,'"').replace(/%%lt%%/g,"<").replace(/%%gt%%/g,">").replace(/\\n/g,"\n");
+	data = $.trim(data);
 	lines = data.split("\n");
 	sent = 1;
 	tid= 1;
@@ -1477,11 +1536,14 @@ function read_tt(data, config){
 	e2groups = {};
 	new_sent = true;
 	span_buffer = [];
+	anno_buffer = {};
+	all_annos = {};
 	sent_tooltip = '';
 
 	tok_array = [];
+
 	for (line of lines){
-		
+
 		if (line.startsWith("<") && line.endsWith(">")){ // tag
 			if (line.startsWith('<'+config["sent"]+" ") && line.includes("=")){  // sentence opening tag with attribute - use as sentence title tooltip
 				find = '="([^"]*)"'; // catch first attribute
@@ -1496,23 +1558,34 @@ function read_tt(data, config){
 					span_info = {"start": tid, "type": span_type};
 					span_buffer.push(span_info);
 				}
+				for (a in import_annos){
+					if (line.includes(' ' + a +'=')){
+						m =  new RegExp(' ' + a + '="([^"]*)"');
+						anno_val = line.match(m)[1];
+						m =  new RegExp(/<([^\s]+)/);
+						elem = line.match(m)[1];
+						if (!(elem in anno_buffer)){anno_buffer[elem] = [];}
+						anno_buffer[elem].push({"start":tid,"key":a, "val":anno_val});
+					}
+				}
 				if (line.includes(' group:')){  // coref/other group information is available
 					group_info = [];
 					var regex = / group:([^=]+)="([^"]+)"/g;
 					match = regex.exec(line);
 					while (match != null) {
 					  group_info.push(match[1] + "=" + match[2]);
-					  if (!(match[1]) in groups){
-						  groups[match[1]] = [];
+					  if (!(match[1] in groups)){
+						  groups[match[1]] = {0:[]};
 					  }
 					  match = regex.exec(line);
 					}
 					if (group_info.length>0){
 						// apply to most recent span
+						existing_groups = [];
 						if ("groups" in span_buffer[span_buffer.length-1]){
-							groups_info = span_buffer[span_buffer.length-1]["groups"] + group_info;
+							existing_groups = span_buffer[span_buffer.length-1]["groups"].split(">");
 						}
-						span_buffer[span_buffer.length-1]["groups"] = group_info.join(">");
+						span_buffer[span_buffer.length-1]["groups"] = group_info.concat(existing_groups).join(">");
 						//span_info["groups"] = group_info.join(">");
 					}
 				}
@@ -1537,7 +1610,19 @@ function read_tt(data, config){
 				sent += 1;
 				toknum_in_sent = 1;
 				new_sent = true;
-			} 
+			} else if (line.startsWith('</')){ // a key-value annotation has possibly closed
+				elem = line.replace(/[</>]/g,'');
+				if (elem in anno_buffer){
+					if (anno_buffer[elem].length > 0){
+						last_anno = anno_buffer[elem].pop();
+						anno_span = last_anno["start"] + "-" +(tid-1);
+						if (! (anno_span in all_annos)){all_annos[anno_span] = [];}
+						all_annos[anno_span].push({key: last_anno["key"], val: last_anno["val"]});
+						if (!(last_anno["key"] in anno_values)) {anno_values[last_anno["key"]] = new Set();}
+						anno_values[last_anno["key"]].add(last_anno["val"]);
+					}
+				}
+			}
 			if (config["tok"] != null){
 				if (line.includes(' ' + config["tok"] + '="')){ // only process target tags
 					find = ' ' + config["tok"] + '="([^"]*)"';
@@ -1568,13 +1653,22 @@ function read_tt(data, config){
 	$("#selectable").append(tok_array.join("\n\t\t"));
 	
 	// Add entities
-	for (mode in color_modes){
-		if (!(mode in groups && mode != "entities")){ groups[mode] = {};}
+	for (mode of color_modes){
+		if (!(mode in groups) && mode != "entities"){ groups[mode] = {};}
 	}
 	for (e_id in e2tok){
 		e_type = e2type[e_id];
 		tok_span = e2tok[e_id];
 		new_entity = add_entity(tok_span,null,true);
+		if (e_id in all_annos){
+			for (a of all_annos[e_id]){
+				new_entity.annos[a["key"]] = a["val"];
+			}
+		} else{
+			for (a in default_annos){
+				new_entity.annos[a] = default_annos[a];
+			}
+		}
 		change_entity(e_type);
 		for (m of color_modes){  // make sure this entity is at least in group 0 of each group type
 			if (m != "entities"){
@@ -1586,11 +1680,27 @@ function read_tt(data, config){
 			for (gtype in e2groups[e_id]){
 				gid = e2groups[e_id][gtype];
 				assign_group(new_entity,gtype,gid);
-				//if (!(gid in groups[gtype])){groups[gtype][gid] = [];}
-				//groups[gtype][gid].push(new_entity.div_id);
 			}
 		} 
 	}
+
+	// set up additional key-value anno choosers
+	anno_opts = "";
+	val_opts = "";
+	for (anno_key in import_annos){
+		anno_opts += '<option value="'+anno_key+'">'+anno_key+'</option>\n';
+	}
+	$("#sel_anno_key").html(anno_opts);
+
+	// set up color modes
+		sel_opts = '<option value="entities" selected="selected">entity types</option>\n';
+	for (m of color_modes){
+		if (m != "entities"){
+			sel_opts += '<option value="'+m+'">' + m + '</option>\n';
+		}
+	}
+	$("#color_mode").html(sel_opts);
+
 	set_entity_classes();
 	init_doc();
 }
@@ -1607,7 +1717,7 @@ function show_export() {
     $("span.ui-dialog-title").text('Export data');
 } 
 
-function show_annotation() {
+function show_annotation(e) {
     //$('#annotation_dialog').find('textarea').val(''); // clear textarea on modal open
 	div_id = $(this).attr("id");
 	document.getElementById("active_entity").value = div_id;
@@ -1620,11 +1730,35 @@ function show_annotation() {
     $("#annotation_dialog").dialog("option", "title", "Loading....").dialog("open");
     $("span.ui-dialog-title").text('Annotate entity');
 	select_anno_key();
+	e.stopPropagation();
 	
 }
 
 
-function write_webanno(){
+function write_webanno(config){
+	
+	function postprocess_annos(ent, instructions, isfirst){
+		// transform an entity's additional key-value annotations based on initial/non-initial chain position and instructions
+		for (inst of instructions){
+			if ((isfirst && inst[0] =="nonfirst")||(inst[0] == "first" && !isfirst)){continue;}
+			if (!(inst[2] in ent.annos)){continue;}
+			if (ent.annos[inst[2]] != inst[3]){continue;}
+			if (inst[1]!=null){
+				re = new RegExp(inst[1]);
+				if (!(re.test(ent.get_text().toLowerCase()))){ continue;}
+			}
+			ent.annos[inst[2]] = inst[4];
+		}
+	}
+	
+	if (config==null){
+		config = {fountain_edge_types:"bridge",
+						postprocess: {  // each instruction: edgetype: [[first or not in chain, string filter (lowered), anno key, old anno val, new anno val], ...]
+							"bridge": [ ["nonfirst","^(i|you|your|yours|she|her|hers|he|him|his|it|its|we|us|our|ours|them|they|their|theirs)$","infstat","auto","giv"], ["nonfirst",null,"infstat","auto","acc"]],
+							"coref": [ ["nonfirst",null,"infstat","auto","giv"],["first",null,"infstat","auto","new"]]
+						}
+						};
+		}  // edge types which link to first member of group, instead of chaining
 
 	output = [];
 	buffer = [];
@@ -1646,6 +1780,16 @@ function write_webanno(){
 	}
 	output.push(header += "\n");
 	
+	// Make sure we have no singleton groups
+	for (gtype in groups){
+		for (g_id in groups[gtype]){
+			if (parseInt(g_id) == 0){continue;}
+			if (groups[gtype][g_id].length==1){
+				assign_group(entities[groups[gtype][g_id][0]],gtype,0);
+			}
+		}
+	}
+	
 	// first pass - build tokens and entities
 	sent = '#Text=';
 	for (t in tokens){
@@ -1662,7 +1806,8 @@ function write_webanno(){
 		anno_string = '';
 		if (tok.tid in toks2entities){
 			overlapped_ents = toks2entities[tok.tid];
-			for (span_id in overlapped_ents){
+			sorted_keys = Object.keys(overlapped_ents).sort(function(a,b){return overlapped_ents[b].length-overlapped_ents[a].length;});
+			for (span_id of sorted_keys){
 				e = overlapped_ents[span_id];
 				if (!(e.div_id in e_ids)){
 					e_ids[e.div_id] = max_ent_id;
@@ -1697,6 +1842,8 @@ function write_webanno(){
 	output.push(buffer.join("\n"));
 	output = output.join("\n");
 	
+	first_in_component = {};
+	
 	// second pass - add annotations and edges
 	if (anno_keys.length>0 || color_modes.size > 1){
 		if (color_modes.size >1){
@@ -1704,6 +1851,7 @@ function write_webanno(){
 			for (div_id in entities){entities[div_id].next = {};}
 			// create chains of antecedents
 			for (gtype in groups){
+				if (!(gtype in first_in_component)) {first_in_component[gtype] = {};}
 				for (group_num in groups[gtype]){
 					// sort by entity start and reverse end
 					if (parseInt(group_num)==0){continue;}
@@ -1713,22 +1861,94 @@ function write_webanno(){
 						ents_to_sort.push(entities[div_id]);
 					}
 					ents_to_sort.sort(function(a, b){if (a.start == b.start){return b.end - a.end} return a.start - b.start});
-					for (i in range(0,ents_to_sort.length-1)){
-						// make an edge specification pointing from next member of chain
-						i = parseInt(i);
-						ent = ents_to_sort[i];
-						next_ent = ents_to_sort[i+1];
-						next_start = tokens[next_ent.start].sentnum + "-" + tokens[next_ent.start].toknum_in_sent;
-						this_webanno_id = (ent.length > 1 ? e_ids[ent.div_id] : "0");
-						next_webanno_id = (next_ent.length > 1 ? e_ids[next_ent.div_id] : "0");
-						id_part = "[" + next_webanno_id.toString() + "_" + this_webanno_id.toString()+"]";
-						if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
-						edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
-						ent.next[gtype]  = edge;
+					reverse_fountain = false;
+					for (ent of ents_to_sort){
+						if ("infstat" in ent.annos){
+							if (ent.annos["infstat"]=="split"){
+								reverse_fountain = true;
+							}
+						}
+					}
+					if (!(config["fountain_edge_types"].includes(gtype))){  // this is a chain-style edge annotation, a <- b <- c...
+						for (i in range(0,ents_to_sort.length-1)){
+							// make an edge specification pointing from next member of chain
+							i = parseInt(i);
+							ent = ents_to_sort[i];
+							next_ent = ents_to_sort[i+1];
+							first_in_component[gtype][next_ent.div_id] = false;
+							next_start = tokens[next_ent.start].sentnum + "-" + tokens[next_ent.start].toknum_in_sent;
+							this_webanno_id = (ent.length > 1 ? e_ids[ent.div_id] : "0");
+							next_webanno_id = (next_ent.length > 1 ? e_ids[next_ent.div_id] : "0");
+							id_part = "[" + next_webanno_id.toString() + "_" + this_webanno_id.toString()+"]";
+							if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
+							edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
+							ent.next[gtype]  = edge;
+						}
+					}
+					else if (reverse_fountain){
+						fountain_edges = [];
+						ents_to_sort = ents_to_sort.reverse();
+						ent = ents_to_sort[0];  // connect the last entity in the group to all others
+						for (i in range(0,ents_to_sort.length-1)){
+							// make an edge specification pointing from next member of chain
+							i = parseInt(i);
+							next_ent = ents_to_sort[i+1];
+							if (!(i==ents_to_sort.length-1)){
+								first_in_component[gtype][ents_to_sort[i].div_id] = false;
+							}
+							next_start = tokens[ent.start].sentnum + "-" + tokens[ent.start].toknum_in_sent;
+							this_webanno_id = (ent.length > 1 ? e_ids[ent.div_id] : "0");
+							next_webanno_id = (next_ent.length > 1 ? e_ids[next_ent.div_id] : "0");
+							id_part = "[" + this_webanno_id.toString() + "_" + next_webanno_id.toString()+"]";
+							if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
+							edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
+							//fountain_edges.push(edge);
+							next_ent.next[gtype]  = edge;
+						}
+					}
+					else{  // this is a fountain-style link anno: a <- b, a <- c, a <- d ...
+						fountain_edges = [];
+						ent = ents_to_sort[0];  // connect everything to the first entity in the group
+						for (i in range(0,ents_to_sort.length-1)){
+							// make an edge specification pointing from next member of chain
+							i = parseInt(i);
+							next_ent = ents_to_sort[i+1];
+							first_in_component[gtype][next_ent.div_id] = false;
+							next_start = tokens[next_ent.start].sentnum + "-" + tokens[next_ent.start].toknum_in_sent;
+							this_webanno_id = (ent.length > 1 ? e_ids[ent.div_id] : "0");
+							next_webanno_id = (next_ent.length > 1 ? e_ids[next_ent.div_id] : "0");
+							id_part = "[" + next_webanno_id.toString() + "_" + this_webanno_id.toString()+"]";
+							if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
+							edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
+							fountain_edges.push(edge);
+						}
+						ent.next[gtype]  = fountain_edges.join("|");
 					}
 				}
 			}
 		}
+		
+		// Postprocess annotations if needed
+		if ("postprocess" in config){
+			for (gtype in config["postprocess"]){
+				if (gtype in groups){
+					for (group_num in groups[gtype]){
+						div_ids = groups[gtype][group_num];
+						ents_to_process = [];
+						for (div_id of div_ids){
+							isfirst = true;
+							if (gtype in first_in_component){
+								if (div_id in first_in_component[gtype]){
+									isfirst = first_in_component[gtype][div_id] ;
+								}
+							}
+							postprocess_annos(entities[div_id], config["postprocess"][gtype], isfirst)
+						}
+					}
+				}
+			}
+		}
+		
 		lines = output.split("\n");
 		edge_types = [];
 		for (m of color_modes){
@@ -1768,10 +1988,25 @@ function write_webanno(){
 					}
 				}
 				for (i in anno_holder){
-					fields[4+parseInt(i)] = anno_holder[i].join("|");
+					if (anno_holder[i].length>0){
+						fields[4+parseInt(i)] = anno_holder[i].join("|");
+					}
 				}
-				fields[fields.length-3] = (edge_holder[0].length > 0 ? edge_holder[0].join("|") : "_");
-				fields[fields.length-2] = (edge_holder[1].length > 0 ? edge_holder[1].join("|") : "_");
+				if (edge_holder[1].length > 0){
+					edge_labels = [];
+					fields[fields.length-2] = edge_holder[1].join("|");
+					for (edge_idx in edge_holder[1]){
+						edge_idx = parseInt(edge_idx);
+						num_edges = (edge_holder[1][edge_idx].split("|").length)
+						for (let edge_num = 0; edge_num < num_edges; edge_num++){
+							edge_labels.push(edge_holder[0][edge_idx]);
+						}
+						fields[fields.length-3]  = edge_labels.join("|");
+					}
+				} else{ // no edge annotations
+					fields[fields.length-3] = "_";
+					fields[fields.length-2] = "_";
+				}
 				output.push(fields.join("\t"));
 			}
 			else{output.push(line);}
@@ -1821,7 +2056,7 @@ function write_tt(sent_tag){
 		if (tok.tid in toks2entities){
 			overlapped_ents = toks2entities[tok.tid];
 			//overlapped_ents = Object.values(overlapped_ents).sort((a, b) => a.length < b.length);
-			sorted_ids = Object.keys(overlapped_ents).sort((a, b) => overlapped_ents[a].length < overlapped_ents[b].length)
+			sorted_ids = Object.keys(overlapped_ents).sort((a, b) => overlapped_ents[b].end - overlapped_ents[a].end);
 			for (span_id of sorted_ids){
 				if (open_spans.includes(span_id)){
 					continue;
@@ -1829,6 +2064,11 @@ function write_tt(sent_tag){
 				e = overlapped_ents[span_id];
 				open_spans.push(span_id);
 				entity_string = '<entity entity="'+e.type+'"';
+				for (a in e.annos) {
+					if (e.annos[a] != ""){
+						entity_string += ' ' + a + '="'+e.annos[a].toString()+'"'; 
+					}
+				}
 				for (gtype in e.groups){
 					if (e.groups[gtype] != 0){
 						entity_string += ' group:' + gtype + '="'+e.groups[gtype].toString()+'"'; 
@@ -1856,6 +2096,7 @@ function list_entities(pos_list, pos_filter){
 	pos_filter = pos_filter.split("|");
 	list_groups = {}
 	seen = {};
+	right_headed = true;
 	for (i of range(1,Object.keys(tokens).length+1)){
 		pos = pos_list[i-1].replace("&#124;","|");
 		if (pos_filter.includes(pos)){ // this is a tageted pos
@@ -1869,10 +2110,21 @@ function list_entities(pos_list, pos_filter){
 					list_groups[smallest.type] = [];
 					seen[smallest.type] = [];
 				}
-				entity_spanned_text = smallest.get_text();
+				entity_spanned_text = smallest.get_text().replace(/&amp;/g,"&");
 				if (!(seen[smallest.type].includes(entity_spanned_text))){
 					list_groups[smallest.type].push(entity_spanned_text+"|||"+head);
 					seen[smallest.type].push(entity_spanned_text);
+				} else{
+					if (right_headed){ // replace existing entity head with new head candidate further to the right
+						new_list = [];
+						for (entry of list_groups[smallest.type]){
+							if (entry.split("|||")[0] != entity_spanned_text){
+								new_list.push(entry);
+							}
+						}
+						list_groups[smallest.type] = new_list;
+						list_groups[smallest.type].push(entity_spanned_text+"|||"+head);
+					}
 				}
 			}
 		}

@@ -15,6 +15,7 @@
   <script src="js/spannotator/spannotator.js"></script>
 <input type="hidden" name="active_entity" id="active_entity" value="">
 
+<input type="hidden" name="entity_annos" id="entity_annos" value="%%entity_annos%%">
 <input type="hidden" name="DEFAULT_SGML_SENT_TAG" id="DEFAULT_SGML_SENT_TAG" value="%%DEFAULT_SGML_SENT_TAG%%">
 <input type="hidden" name="DEFAULT_SGML_TOK_ATTR" id="DEFAULT_SGML_TOK_ATTR" value="%%DEFAULT_SGML_TOK_ATTR%%">
 <input type="hidden" name="DOC_TT_STRING" id="DOC_TT_STRING" value="%%DOC_TT_STRING%%">
@@ -89,7 +90,7 @@
 function get_doc_tt(){
 	return document.getElementById('DOC_TT_STRING').value;
 }
-read_tt($("#DOC_TT_STRING").val(),{"tok":"%%DEFAULT_SGML_TOK_ATTR%%","sent":"%%DEFAULT_SGML_SENT_TAG%%"});
+read_tt($("#DOC_TT_STRING").val(),{"tok":"%%DEFAULT_SGML_TOK_ATTR%%","sent":"%%DEFAULT_SGML_SENT_TAG%%","entity_annos":"%%entity_annos%%"});
 </script>
 
 <!--
