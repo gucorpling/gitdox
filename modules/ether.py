@@ -63,7 +63,7 @@ class ExportConfig:
 			if anno not in self.priorities:
 				self.priorities.append(anno)
 		# Anything that is in 'tok_annos' must have some sort of priority
-		for anno in sorted(self.tok_annos):
+		for anno in self.tok_annos:
 			if anno not in self.priorities:
 				self.priorities.append(anno)
 
@@ -319,6 +319,40 @@ def number_to_letters(number):
 
 
 def sgml_to_ether(sgml, ignore_elements=False):
+	"""
+	Convert TT SGML (one token, opening element or closing element per line) to Ether/SocialCalc format
+
+	:param sgml: TT SGML input
+	:param ignore_elements: Elements to ignore
+	:return: SocialCalc format
+	"""
+	def tabs_to_elements(tt_format, col1="pos",col2="lemma"):
+		"""Transform tab delimited annotations into element annotations, for example:
+
+		<s>
+		Come	VB	come
+		here	RB	here
+		</s>
+
+		Becomes
+
+		<s>
+		<pos pos="VB">
+		<lemma lemma="come">
+		Come
+		</lemma>
+		</pos>
+		<pos> ...
+		"""
+		if "\t" in tt_format:
+			tab_lines = [l for l in tt_format.split("\n") if "\t" in l]
+			if all([l.count("\t") == 2 for l in tab_lines]):
+				repl = r'<col1 col1="\2"\>\n<col2 col2="\3">\n\1\n</col2>\n</col1>'
+				repl = repl.replace("col1",col1).replace("col2",col2)
+				return re.sub(r'([^\t\n]+)\t([^\t\n]+)\t([^\t\n]+)',repl,tt_format)
+		return tt_format
+
+	sgml = tabs_to_elements(sgml)
 	open_annos = defaultdict(list)
 
 	# a mapping from a tag name to a list of values. the list is a stack
@@ -362,7 +396,8 @@ version:1.5
 	current_row = 2
 
 	# TODO: de-hardwire special anno name list for which element name is ignored
-	ignore_element_annos = [("norm","lang"),("morph","lang"),("entity","group:coref"),("entity","group:bridge")]
+	ignore_element_annos = [("norm","lang"),("morph","lang"),("entity","group\\ccoref"),("entity","group\\cbridge"),
+							("entity","infstat")]
 
 	for line in sgml.strip().split("\n"):
 		line = line.strip()
@@ -602,7 +637,7 @@ def add_entities(sgml, entity_table, entity_anno="entity", identity_anno="identi
 		if " " + entity_anno + '="' in line:
 			entity_type = re.search(" " + entity_anno + '="([^"]*)"', line).group(1)
 			stack.append((i,word_idx,entity_type))
-		elif "</" + entity_anno in line:
+		elif "</" + entity_anno + ">" in line:
 			start_line, start_word, entity_type = stack.pop()
 			entity_text = words[start_word-1:]
 			spans[start_line] = (" ".join(entity_text), entity_type)
@@ -629,7 +664,7 @@ def add_entities(sgml, entity_table, entity_anno="entity", identity_anno="identi
 					if ignore_identity.match(identity) is not None:
 						skip = True
 				if " " + entity_anno + '="' in line and not skip:
-					line = line.replace(" " + entity_anno + "=", " " + identity_anno + '="' + identity + '" ' + entity_anno + "=")
+					line = line.replace(" " + entity_anno + "=", " " + identity_anno + '="' + identity.encode("utf8") + '" ' + entity_anno + "=")
 		output.append(line.decode("utf8"))
 
 	return "\n".join(output).encode("utf8")
@@ -793,7 +828,7 @@ def ether_to_sgml(ether, doc_id, config=None):
 			if col_name == 'tok':
 				if "<" in content or "&" in content or ">" in content:
 					content = escape(content)
-				toks[row] = content
+				toks[row] = {"tok":content}
 			else:
 				if element in config.no_content:
 					if element == attrib:
@@ -803,7 +838,7 @@ def ether_to_sgml(ether, doc_id, config=None):
 					# TT SGML token annotation, append to token with tab separator and move on
 					if "<" in content or "&" in content or ">" in content:
 						content = escape(content)
-					toks[row] += "\t" + content
+					toks[row][attrib] = content
 					continue
 
 				if element not in config.priorities and len(config.priorities) > 0:
@@ -868,8 +903,16 @@ def ether_to_sgml(ether, doc_id, config=None):
 			output += tag
 
 		if r not in toks:
-			toks[r] = ""  # Caution - empty token!
-		output += toks[r] + '\n'
+			toks[r] = {"tok":""}  # Caution - empty token!
+
+		if len(config.tok_annos) > 0:
+			tab_annos = []
+			for attr in config.tok_annos:
+				if attr in toks[r]:
+					tab_annos.append(toks[r][attr])
+			if len(tab_annos) > 0:
+				toks[r]["tok"] = "\t".join([toks[r]["tok"]] + tab_annos)
+		output += toks[r]["tok"] + '\n'
 
 	output = output.replace('\\c', ':')
 	#output += "</meta>\n"
@@ -886,7 +929,7 @@ def ether_to_sgml(ether, doc_id, config=None):
 	output = deunique_properly_nested_tags(output)
 
 	# deunique can destroy ordering, so we repeat it again
-	if config.reorder:
+	if config.reorder or len(config.map_entities) > 0:
 		output = reorder(output,priorities=config.priorities)
 
 	if len(config.map_entities) > 0:
@@ -974,7 +1017,7 @@ def postprocess_sgml(sgml,instructions=None):
 		return sgml
 
 
-def merge_entities(spreadsheet_sgml, entity_sgml, merge_anno="entity", word_anno=None):
+def merge_entities(spreadsheet_sgml, entity_sgml, merge_anno="entity", word_anno=None, other_annos=None):
 	"""
 	Take TT SGML from an ethercalc spreadsheet and TT SGML from entity annotation;
 	merge entity data from a selected markup annotation based on identical word offsets
@@ -985,6 +1028,7 @@ def merge_entities(spreadsheet_sgml, entity_sgml, merge_anno="entity", word_anno
 	:param merge_anno: name of the XML tag AND attribute to import from entity_sgml
 	:param word_anno: name of the SGML tag AND attribute representing the 'words' in spreadsheet SGML;
 							If None, use plain text tokens as words
+	:param other_annos: list of other annotation key names to allow merging from entity_sgml
 	:return: merged TT SGML
 	"""
 
@@ -993,6 +1037,9 @@ def merge_entities(spreadsheet_sgml, entity_sgml, merge_anno="entity", word_anno
 			return not (line.startswith("<") and line.endswith(">"))
 		else:
 			return ' '+anno+'="' in line
+
+	def match_elem(line, elem):
+		return line.startswith("<" + elem + ">") or line.startswith("<" + elem + " ") or line.startswith("</" + elem + ">")
 
 	# Validate token counts match
 	entity_tokens = len([line for line in entity_sgml.strip().split("\n") if is_token(line.strip(), anno=None)])
@@ -1016,11 +1063,17 @@ def merge_entities(spreadsheet_sgml, entity_sgml, merge_anno="entity", word_anno
 			group_search = re.findall(r' (group:[^=\s]+="[^"]*")',line)
 			for group in group_search:
 				groups.append(group)
-			open_entities.append((entity_start,entity_type,groups))
+			annos = []
+			if other_annos is not None:
+				anno_search = re.findall(r' (([^=\s]+)="[^"]*")',line)
+				for anno in anno_search:
+					if anno[1] in other_annos:
+						annos.append(anno[0])
+			open_entities.append((entity_start,entity_type,groups,annos))
 			continue
 		if line.strip() == "</" + merge_anno + ">":
-			entity_start, entity_type, groups = open_entities.pop()
-			entity_starts[entity_start].append((toknum-1, entity_type, groups))
+			entity_start, entity_type, groups, annos = open_entities.pop()
+			entity_starts[entity_start].append((toknum-1, entity_type, groups, annos))
 			entity_ends[toknum-1].append((entity_start, entity_type))
 			continue
 		if not (line.startswith("<") and line.endswith(">")):  # Token
@@ -1029,15 +1082,17 @@ def merge_entities(spreadsheet_sgml, entity_sgml, merge_anno="entity", word_anno
 	toknum = 1
 	output = []
 	for line in spreadsheet_sgml.split("\n"):
-		if line.startswith("<" + merge_anno + ">") or line.startswith("<" + merge_anno + " ") or line.startswith("</" + merge_anno + ">"):
+		if match_elem(line, merge_anno) or any([match_elem(line,e) for e in other_annos]) or " group:" in line or "</group:" in line:
 			continue  # Ignore lines with existing entity annotations
 		if (not (line.startswith("<") and line.endswith(">"))) or " " + str(word_anno) + '="' in line:  # Token begins
 			# Add any needed entities sorted descending by length
 			if word_anno is None or " " + str(word_anno) + '="' in line:  # Token is immediately over
-				for _, entity_type, groups in sorted(entity_starts[toknum],reverse=True):
+				for _, entity_type, groups, annos in sorted(entity_starts[toknum],reverse=True):
 					entity_tag = "<" + merge_anno + " " + merge_anno + '="' + entity_type + '"'
 					if len(groups) > 0:
 						entity_tag += " " + " ".join(groups)
+					if len(annos) > 0:
+						entity_tag += " " + " ".join(annos)
 					entity_tag += '>'
 					output.append(entity_tag)
 			if word_anno is None:
