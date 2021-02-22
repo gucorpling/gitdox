@@ -66,7 +66,7 @@ def get_last_commit(user, admin, account, repo, path):
 	msg = False
 	url = ""
 	try:
-		for i, cmt in enumerate(repository.iter_commits(path=path)):
+		for i, cmt in enumerate(repository.commits(path=path)):
 			author = str(cmt.author)
 			msg = cmt.commit.message
 			#sha = cmt.commit.sha
