@@ -84,7 +84,3 @@ def get_last_commit(user, admin, account, repo, path):
 	except Exception as e:
 		msg = "Error: " + str(e)
 	return msg
-
-if __name__ == "__main__":
-	git_username, git_token, git_2fa = get_git_credentials("amir-zeldes",1, "")
-	push_update_to_git(git_username, git_token, "test.txt", "gucorpling", "gitdox_tests", "test commit")
