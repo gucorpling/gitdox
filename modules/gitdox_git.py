@@ -1,6 +1,7 @@
 import github3, os, platform
 from modules.dataenc import pass_dec, pass_enc
 from modules.configobj import ConfigObj
+from github3.exceptions import NotFoundError
 code_2fa = ""
 
 
@@ -26,7 +27,10 @@ def push_update_to_git(username, token, path, account, repo, message):
 	for file_info in files_to_upload:
 		with open(prefix+file_info, 'rb') as fd:
 			contents = fd.read()
-		contents_object = repository.file_contents(file_info)
+		try:
+			contents_object = repository.file_contents(file_info)
+		except NotFoundError:
+			contents_object = None
 		if contents_object: #this file already exists on remote repo
 			#update
 			push_status = contents_object.update(message,contents)
@@ -52,3 +56,31 @@ def get_git_credentials(user, admin, code):
 	git_use2fa = user_dict['git_2fa'] if "git_2fa" in user_dict else "false"
 	return git_username, git_token, git_use2fa
 
+
+def get_last_commit(user, admin, account, repo, path):
+	if admin==0:
+		return ""
+
+	git_username, git_token, _ = get_git_credentials(user,admin,None)
+	gh = github3.login(username=git_username, token=git_token, two_factor_callback=False)
+	repository = gh.repository(account, repo)
+	msg = False
+	url = ""
+	try:
+		for i, cmt in enumerate(repository.commits(path=path)):
+			author = str(cmt.author)
+			msg = cmt.commit.message
+			#sha = cmt.commit.sha
+			date = cmt.commit._json_data["committer"]["date"]
+			url = cmt.html_url
+			if "T" in date:
+				day, time = date.split("T")
+				if ":" in time:
+					time_parts = time.split(":")
+					time = time_parts[0]+":"+time_parts[1]
+				date = day + ", " + time
+			break
+		msg = 'Latest commit ['+ date + ']: <a href="'+url+'">' + msg + "</a> (" + author + ")"
+	except Exception as e:
+		msg = "Error: " + str(e)
+	return msg

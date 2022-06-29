@@ -11,7 +11,7 @@ from modules.pathutils import *
 import urllib
 from modules.gitdox_sql import *
 from modules.dataenc import pass_dec, pass_enc
-from paths import get_menu
+from paths import get_menu, ether_url
 from editor import harvest_meta
 from modules.ether import make_spreadsheet, get_ether_stylesheets
 from modules.renderer import render
@@ -171,14 +171,14 @@ def load_admin(user, admin, theform):
 					corpus = meta_key_val["corpus"]
 				else:
 					corpus = "default_corpus"
-					docname = filename.replace(" ","_")  # No spaces in document names
-					docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)  # Strip extension
+				docname = filename.replace(" ","_")  # No spaces in document names
+				docname = re.sub(r'(.+)\.[^\.]+$',r'\1',docname)  # Strip extension
 				if not doc_exists(docname, corpus):
 					max_id = generic_query("SELECT MAX(id) AS max_id FROM docs", "")[0][0]
 					if not max_id:  # This is for the initial case after init db
 						max_id = 0
-						doc_id = int(max_id) + 1
-						create_document(doc_id, docname, corpus, "init", "default_user", "gucorpling/gitdox", "", mode)
+					doc_id = int(max_id) + 1
+					create_document(doc_id, docname, corpus, "init", "default_user", "gucorpling/gitdox", "", mode)
 				else:
 					# Document already exists, just overwrite spreadsheet/xml and metadata and set mode
 					doc_id = generic_query("SELECT id FROM docs where corpus=? and name=?", (corpus,docname))[0][0]
@@ -192,7 +192,7 @@ def load_admin(user, admin, theform):
 					del meta_key_val["schema"]
 
 				if mode == "ether":
-					make_spreadsheet(sgml, "https://etheruser:etherpass@corpling.uis.georgetown.edu/ethercalc/_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=True)
+					make_spreadsheet(sgml, ether_url + "_/gd_" + corpus + "_" + docname, format="sgml", ignore_elements=False)
 				else:
 					content = re.sub("</?meta ?[^>]*>[\r\n]*","",sgml)
 					content = unicode(content.decode("utf8"))

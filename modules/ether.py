@@ -13,6 +13,7 @@ from collections import defaultdict
 from collections import OrderedDict
 from operator import itemgetter
 from gitdox_sql import *
+from reorder_sgml import reorder
 from os import listdir
 from os.path import isfile, join
 from configobj import ConfigObj
@@ -24,6 +25,8 @@ import requests
 from xml.sax.saxutils import escape
 
 __version__ = "2.0.0"
+
+CELL_ID_PATTERN = re.compile(r'^([A-Z]+)([0-9]+)$')
 
 class ExportConfig:
 
@@ -43,6 +46,8 @@ class ExportConfig:
 			self.no_content = kwargs.get("no_content",[])
 			self.no_ignore = kwargs.get("no_ignore",True)
 			self.tok_annos = kwargs.get("tok_annos",[])
+			self.reorder = kwargs.get("reorder",False)
+			self.map_entities = kwargs.get("map_entities", [])
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
 		else:
 			if not self.config.endswith(".ini"):
@@ -58,7 +63,7 @@ class ExportConfig:
 			if anno not in self.priorities:
 				self.priorities.append(anno)
 		# Anything that is in 'tok_annos' must have some sort of priority
-		for anno in sorted(self.tok_annos):
+		for anno in self.tok_annos:
 			if anno not in self.priorities:
 				self.priorities.append(anno)
 
@@ -87,6 +92,10 @@ class ExportConfig:
 			self.tok_annos = []
 		if config.has_key("export_all"):
 			self.export_all = config["export_all"].lower() == "true"
+		if config.has_key("map_entities"):
+			self.map_entities = literal_eval(config["map_entities"])
+		else:
+			self.map_entities = []
 		if config.has_key("no_ignore"):
 			self.no_ignore = config["no_ignore"].lower() == "true"
 		else:
@@ -95,6 +104,10 @@ class ExportConfig:
 			self.template = config["template"]
 		else:
 			self.template = "<meta %%all%%>\n%%body%%\n</meta>\n"
+		if config.has_key("reorder"):
+			self.reorder = config["reorder"]
+		else:
+			self.reorder = False
 
 
 def parse_ether(ether, doc_id=None):
@@ -125,14 +138,10 @@ def parse_ether(ether, doc_id=None):
 			parts = line.split(":")
 			if len(parts) > 3:  # Otherwise invalid row
 				cell_id = parts[1]
-				cell_row = cell_id[1:]
-				cell_col = cell_id[0]
-				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
-				# for c in cell_id:
-				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
-				#		cell_row += c
-				#	else:
-				#		cell_col += c
+				match = re.match(CELL_ID_PATTERN, cell_id)
+				if not match:
+					raise Exception('malformed ethercalc cell ID: "' + cell_id + '"')
+				cell_col, cell_row = match.groups()
 				cell_content = parts[3].replace("\\c", ":")
 				cell_span = parts[-1] if "rowspan:" in line else "1"
 
@@ -220,6 +229,19 @@ def fill_meta_template(doc_id,template):
 		if key != "body": # Never overwrite body template position
 			template = template.replace("%%" + key + "%%",meta_dict[key])
 
+	ents = get_entity_mappings(doc_id)
+	entity_lookup = defaultdict(set)
+	for row in ents:
+		doc, corpus, words, head, etype, eref, mentionnum = row
+		if eref != "(pass)":
+			entity_lookup[etype].add(eref)
+	ent_meta = re.findall(r'%%ent:([^% "]+)%%',template)
+	for etype in ent_meta:
+		names = "; ".join(sorted(list(entity_lookup[etype]))).encode("utf8")
+		if len(names) == 0:
+			names = "none"
+		template = template.replace("%%ent:" + etype + "%%",names)
+
 	template = template.replace("<meta >","<meta>")
 	return template
 
@@ -247,6 +269,9 @@ def get_ether_stylesheets():
 	scriptpath = os.path.dirname(os.path.realpath(__file__)) + os.sep
 	stylesheet_dir = scriptpath + os.sep + ".." + os.sep + "schemas" + os.sep
 	stylesheet_list = get_file_list(stylesheet_dir,"ini",hide_extension=True)
+	if "tt_sgml" in stylesheet_list:
+		stylesheet_list.remove("tt_sgml")
+		stylesheet_list = ["tt_sgml"] + stylesheet_list # tt_sgml is always first
 	return stylesheet_list
 
 
@@ -294,6 +319,40 @@ def number_to_letters(number):
 
 
 def sgml_to_ether(sgml, ignore_elements=False):
+	"""
+	Convert TT SGML (one token, opening element or closing element per line) to Ether/SocialCalc format
+
+	:param sgml: TT SGML input
+	:param ignore_elements: Elements to ignore
+	:return: SocialCalc format
+	"""
+	def tabs_to_elements(tt_format, col1="pos",col2="lemma"):
+		"""Transform tab delimited annotations into element annotations, for example:
+
+		<s>
+		Come	VB	come
+		here	RB	here
+		</s>
+
+		Becomes
+
+		<s>
+		<pos pos="VB">
+		<lemma lemma="come">
+		Come
+		</lemma>
+		</pos>
+		<pos> ...
+		"""
+		if "\t" in tt_format:
+			tab_lines = [l for l in tt_format.split("\n") if "\t" in l]
+			if all([l.count("\t") == 2 for l in tab_lines]):
+				repl = r'<col1 col1="\2"\>\n<col2 col2="\3">\n\1\n</col2>\n</col1>'
+				repl = repl.replace("col1",col1).replace("col2",col2)
+				return re.sub(r'([^\t\n]+)\t([^\t\n]+)\t([^\t\n]+)',repl,tt_format)
+		return tt_format
+
+	sgml = tabs_to_elements(sgml)
 	open_annos = defaultdict(list)
 
 	# a mapping from a tag name to a list of values. the list is a stack
@@ -336,6 +395,10 @@ version:1.5
 	maxcol = 1
 	current_row = 2
 
+	# TODO: de-hardwire special anno name list for which element name is ignored
+	ignore_element_annos = [("norm","lang"),("morph","lang"),("entity","group\\ccoref"),("entity","group\\cbridge"),
+							("entity","infstat")]
+
 	for line in sgml.strip().split("\n"):
 		line = line.strip()
 		# SocialCalc uses colons internally, \\c used to repr colon in data
@@ -356,11 +419,10 @@ version:1.5
 			if "=" not in line:
 				line = "<" + element + " " + element + '="' + element + '">'
 
-			attrs = re.findall('([^" =]+)="([^"]+)"',line)
-			anno_name = ""
-			anno_value = ""
+			attrs = re.findall('([^" =]+)\s*=\s*"([^"]+)"',line)
+
 			for attr in attrs:
-				if element != attr[0] and ignore_elements is False:
+				if element != attr[0] and ignore_elements is False and (element,attr[0]) not in ignore_element_annos:
 					if attr[0] == "xml\\clang":
 						anno_name = "lang"  # TODO: de-hardwire fix for xml:lang
 					else:
@@ -416,7 +478,38 @@ Content-type: text/plain; charset=UTF-8
 --SocialCalcSpreadsheetControlSave--
 """
 
+	output = reorder_multicols(output)
 	return output
+
+
+def reorder_multicols(socialcalc):
+	cols = re.findall(r'cell:([A-Z]+)1:.:([^:]+):',socialcalc)
+	counts = defaultdict(int)
+	for col_letter, col_header in cols:
+		counts[col_header] += 1
+	multicols = []
+	for col_header in counts:
+		if counts[col_header] > 1:
+			multicols.append(col_header)
+	if len(multicols) == 0:  # No need to reorder
+		return socialcalc
+
+	mapping = {"A":"A"}  # Token col does not move
+	counter = 1
+	for col_letter, col_header  in cols:
+		if col_header not in multicols and col_header != "tok":
+			counter += 1
+			mapping[col_letter] = number_to_letters(counter)
+	# Now place the multicols adjacently at the end
+	for col_letter, col_header in cols:
+		if col_header in multicols:
+			counter += 1
+			mapping[col_letter] = number_to_letters(counter)
+
+	for key in mapping:
+		socialcalc = re.sub(r"cell:" + key + r"(\d+:)","cell:REP" + mapping[key] + r"\1",socialcalc)
+	socialcalc = socialcalc.replace("cell:REP","cell:")
+	return socialcalc
 
 
 def ether_to_csv(ether_path, name):
@@ -442,7 +535,8 @@ def strip_unique_identifier(tag):
 	tag = tag.replace("<" + tag_name, "<" + orig_tag_name)
 	tag = tag.replace("</" + tag_name, "</" + orig_tag_name)
 	tag = tag.replace(tag_name + "=" + '"' + orig_tag_name + '"',
-					  orig_tag_name + "=" + '"' + orig_tag_name + '"')
+					  orig_tag_name + "=" + '"' + orig_tag_name + '"')  # Tags like <x x="x">
+	tag = tag.replace(tag_name + "=" + '"', orig_tag_name + "=" + '"')  # Tags like <x x="val">
 	return tag
 
 def deunique_should_skip_line(line):
@@ -487,6 +581,10 @@ def deunique_properly_nested_tags(sgml):
 
 	output = copy(lines)
 
+	multitags = set(re.findall(r'([^<> ]+__\d+__)',sgml))
+	for tag in list(multitags):
+		multitags.add(re.sub(r'__\d+__','',tag))
+
 	for i, line in enumerate(lines):
 		if deunique_should_skip_line(line) or line.startswith("</"):
 			continue
@@ -501,12 +599,14 @@ def deunique_properly_nested_tags(sgml):
 
 			if line2.startswith("</"):
 				element = re.match("</([^>]+)>", line2).groups(0)[0]
-				open_counts[element] -= 1
+				if element in multitags:
+					open_counts[element] -= 1
 				if element == open_element:
 					break
 			else:
 				element = re.match("<([^ >]+)[ >]", line2).groups(0)[0]
-				open_counts[element] += 1
+				if element in multitags:
+					open_counts[element] += 1
 
 		# element is properly nested if no element was opened in the block that
 		# was not also closed in the block or vice versa
@@ -519,7 +619,58 @@ def deunique_properly_nested_tags(sgml):
 	return "\n".join(output)
 
 
-def ether_to_sgml(ether, doc_id,config=None):
+def add_entities(sgml, entity_table, entity_anno="entity", identity_anno="identity", word_anno="tok", ignore_identity=None):
+
+	# Make entity lookup
+	entity_lookup = {}
+	for row in entity_table:
+		doc, corpus, words, head, etype, eref, mentionnum = row
+		entity_lookup[(words, etype, str(mentionnum))] = eref
+
+	# First pass, get entity spans and positions
+	lines = sgml.split("\n")
+	stack = []
+	spans = {}
+	words = []
+	word_idx = 1
+	for i, line in enumerate(lines):
+		if " " + entity_anno + '="' in line:
+			entity_type = re.search(" " + entity_anno + '="([^"]*)"', line).group(1)
+			stack.append((i,word_idx,entity_type))
+		elif "</" + entity_anno + ">" in line:
+			start_line, start_word, entity_type = stack.pop()
+			entity_text = words[start_word-1:]
+			spans[start_line] = (" ".join(entity_text), entity_type)
+		if word_anno == "tok":
+			if not line.startswith("<") and not line.endswith(">"):
+				word_idx += 1
+				words.append(line)
+		else:
+			if " " + word_anno + '="' in line:
+				word = re.search(" " + word_anno + '="([^"]*)"', line).group(1)
+				word_idx += 1
+				words.append(word)
+
+	# Second pass, insert identity annotations
+	output = []
+	for i, line in enumerate(lines):
+		skip = False
+		if i in spans:
+			entity_text, entity_type = spans[i]
+			key = (entity_text.decode("utf8"), entity_type, "None")
+			if key in entity_lookup:
+				identity = entity_lookup[key]
+				if ignore_identity is not None:
+					if ignore_identity.match(identity) is not None:
+						skip = True
+				if " " + entity_anno + '="' in line and not skip:
+					line = line.replace(" " + entity_anno + "=", " " + identity_anno + '="' + identity.encode("utf8") + '" ' + entity_anno + "=")
+		output.append(line.decode("utf8"))
+
+	return "\n".join(output).encode("utf8")
+
+
+def ether_to_sgml(ether, doc_id, config=None):
 	"""
 	:param ether: String in SocialCalc format
 	:param doc_id: GitDox database internal document ID number as string
@@ -677,7 +828,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 			if col_name == 'tok':
 				if "<" in content or "&" in content or ">" in content:
 					content = escape(content)
-				toks[row] = content
+				toks[row] = {"tok":content}
 			else:
 				if element in config.no_content:
 					if element == attrib:
@@ -687,7 +838,7 @@ def ether_to_sgml(ether, doc_id,config=None):
 					# TT SGML token annotation, append to token with tab separator and move on
 					if "<" in content or "&" in content or ">" in content:
 						content = escape(content)
-					toks[row] += "\t" + content
+					toks[row][attrib] = content
 					continue
 
 				if element not in config.priorities and len(config.priorities) > 0:
@@ -715,7 +866,6 @@ def ether_to_sgml(ether, doc_id,config=None):
 				# We take care of this later with close_tag_debt
 				close_tags[close_row].append(element)
 				open_tag_length[element] = int(close_row) - int(last_open_index[element])
-
 
 	# Sort last row tags
 	if row + 1 in close_tags:
@@ -753,8 +903,16 @@ def ether_to_sgml(ether, doc_id,config=None):
 			output += tag
 
 		if r not in toks:
-			toks[r] = ""  # Caution - empty token!
-		output += toks[r] + '\n'
+			toks[r] = {"tok":""}  # Caution - empty token!
+
+		if len(config.tok_annos) > 0:
+			tab_annos = []
+			for attr in config.tok_annos:
+				if attr in toks[r]:
+					tab_annos.append(toks[r][attr])
+			if len(tab_annos) > 0:
+				toks[r]["tok"] = "\t".join([toks[r]["tok"]] + tab_annos)
+		output += toks[r]["tok"] + '\n'
 
 	output = output.replace('\\c', ':')
 	#output += "</meta>\n"
@@ -763,8 +921,33 @@ def ether_to_sgml(ether, doc_id,config=None):
 
 	output = re.sub("%%[^%]+%%", "none", output)
 
+	# attempt to reorder SGML by nesting hierarchy for next step, since deunique requires ordered input
+	if config.reorder:
+		output = reorder(output,priorities=config.priorities)
+
 	# fix tags that look like elt__2__ if it still gives correct sgml
 	output = deunique_properly_nested_tags(output)
+
+	# deunique can destroy ordering, so we repeat it again
+	if config.reorder or len(config.map_entities) > 0:
+		output = reorder(output,priorities=config.priorities)
+
+	if len(config.map_entities) > 0:
+		entity_key, identity_key, word_key, ignore_identity = config.map_entities
+		ignore_identity = re.compile(ignore_identity)
+		entity_table = get_entity_mappings(doc_id)
+		output = add_entities(output, entity_table, entity_key, identity_key, word_key, ignore_identity)
+
+	lines = output.split("\n")
+	if lines[0].startswith("<meta ") and "=" in lines[0]:  # Sort metadata
+		meta = re.sub('^<meta ','',lines[0]).strip()[:-1]
+		sorted_meta = []
+		keyvals = re.findall(r'([^ =]+?="[^"]*?")',meta)
+		for kv in keyvals:
+			sorted_meta.append(kv)
+		sorted_meta.sort(key=lambda x:x.lower())
+		lines[0] = "<meta " + " ".join(sorted_meta) + ">"
+		output = "\n".join(lines)
 
 	return output
 
@@ -801,6 +984,7 @@ def fix_colnames(socialcalc):
 	socialcalc = re.sub(r'(:[A-Z]1:t:)morph_((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
 	socialcalc = re.sub(r'(:[A-Z]1:t:)norm_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
 	socialcalc = re.sub(r'(:[A-Z]1:t:)morph_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
+	socialcalc = re.sub(r'(:[A-Z]1:t:)entity_(group\\c(coref|bridge):)', r'\1\2', socialcalc)
 	return socialcalc
 
 
@@ -831,6 +1015,110 @@ def postprocess_sgml(sgml,instructions=None):
 			sgml = re.sub(r'(<[^<>\n]*)'+f+r'([^<>\n]*>)',r'\1'+r+r'\2',sgml)
 			sgml = re.sub(r'(<[^<>\n]*)'+f+r'([^<>\n]*>)',r'\1'+r+r'\2',sgml)
 		return sgml
+
+
+def merge_entities(spreadsheet_sgml, entity_sgml, merge_anno="entity", word_anno=None, other_annos=None):
+	"""
+	Take TT SGML from an ethercalc spreadsheet and TT SGML from entity annotation;
+	merge entity data from a selected markup annotation based on identical word offsets
+
+	:param spreadsheet_sgml: TT SGML containing all annotations except the entity information
+							(entity annotations will be overwritten if present)
+	:param entity_sgml: TT SGML containing the entity spans
+	:param merge_anno: name of the XML tag AND attribute to import from entity_sgml
+	:param word_anno: name of the SGML tag AND attribute representing the 'words' in spreadsheet SGML;
+							If None, use plain text tokens as words
+	:param other_annos: list of other annotation key names to allow merging from entity_sgml
+	:return: merged TT SGML
+	"""
+
+	def is_token(line, anno=None):
+		if anno is None:
+			return not (line.startswith("<") and line.endswith(">"))
+		else:
+			return ' '+anno+'="' in line
+
+	def match_elem(line, elem):
+		return line.startswith("<" + elem + ">") or line.startswith("<" + elem + " ") or line.startswith("</" + elem + ">")
+
+	# Validate token counts match
+	entity_tokens = len([line for line in entity_sgml.strip().split("\n") if is_token(line.strip(), anno=None)])
+	ether_tokens = len([line for line in spreadsheet_sgml.strip().split("\n") if is_token(line.strip(), word_anno)])
+	if entity_tokens != ether_tokens:
+		return False
+
+	open_entities = []
+	entity_starts = defaultdict(list)
+	entity_ends = defaultdict(list)
+	toknum = 1
+	for line in entity_sgml.strip().split("\n"):
+		line = line.strip()
+		if len(line.strip())==0:
+			continue
+		m = re.match(r'<'+merge_anno+r' ' + merge_anno + r'="([^"]*)"',line)
+		if m is not None:
+			entity_type = m.group(1)
+			entity_start = toknum
+			groups = []
+			group_search = re.findall(r' (group:[^=\s]+="[^"]*")',line)
+			for group in group_search:
+				groups.append(group)
+			annos = []
+			if other_annos is not None:
+				anno_search = re.findall(r' (([^=\s]+)="[^"]*")',line)
+				for anno in anno_search:
+					if anno[1] in other_annos:
+						annos.append(anno[0])
+			open_entities.append((entity_start,entity_type,groups,annos))
+			continue
+		if line.strip() == "</" + merge_anno + ">":
+			entity_start, entity_type, groups, annos = open_entities.pop()
+			entity_starts[entity_start].append((toknum-1, entity_type, groups, annos))
+			entity_ends[toknum-1].append((entity_start, entity_type))
+			continue
+		if not (line.startswith("<") and line.endswith(">")):  # Token
+			toknum += 1
+
+	toknum = 1
+	output = []
+	for line in spreadsheet_sgml.split("\n"):
+		if match_elem(line, merge_anno) or any([match_elem(line,e) for e in other_annos]) or " group:" in line or "</group:" in line:
+			continue  # Ignore lines with existing entity annotations
+		if (not (line.startswith("<") and line.endswith(">"))) or " " + str(word_anno) + '="' in line:  # Token begins
+			# Add any needed entities sorted descending by length
+			if word_anno is None or " " + str(word_anno) + '="' in line:  # Token is immediately over
+				for _, entity_type, groups, annos in sorted(entity_starts[toknum],reverse=True):
+					entity_tag = "<" + merge_anno + " " + merge_anno + '="' + entity_type + '"'
+					if len(groups) > 0:
+						entity_tag += " " + " ".join(groups)
+					if len(annos) > 0:
+						entity_tag += " " + " ".join(annos)
+					entity_tag += '>'
+					output.append(entity_tag)
+			if word_anno is None:
+				output.append(line)
+				for _, entity_type in entity_ends[toknum]:
+					output.append("</" + merge_anno + ">")
+				toknum += 1
+				continue
+		output.append(line)
+		if word_anno is not None:
+			if "</" + word_anno + ">" in line:  # Token based on annotation ends
+				for _, entity_type in entity_ends[toknum]:
+					output.append("</" + merge_anno + ">")
+				toknum += 1
+
+	return "\n".join(output)
+
+
+def get_pos_list(tt_string,pos_tag_name):
+	output = []
+	tt_string = tt_string.replace("|","&#124;")
+	for line in tt_string.split("\n"):
+		m = re.search(r' ' + pos_tag_name + '="([^"]*)"',line)
+		if m is not None:
+			output.append(m.group(1))
+	return "|".join(output)
 
 
 def make_spreadsheet(data, ether_path, format="sgml", ignore_elements=False):
@@ -886,6 +1174,9 @@ def get_socialcalc(ether_path, name):
 	socialcalc = stdout.decode("utf8")
 	# Destroy empty span cells without content, typically nested underneath longer, filled spans
 	socialcalc = re.sub(r'cell:[A-Z]+[0-9]+:f:1:rowspan:[0-9]+\n','',socialcalc)
+
+	if ":A1:t:tok:" not in socialcalc and len(socialcalc.strip()) > 0:
+		raise IOError("Missing column header 'tok' in document " + name)
 
 	return socialcalc
 

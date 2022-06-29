@@ -27,8 +27,8 @@ def create_zip(content_name_pairs):
 
 	return io_file
 
-def export_all_docs(config=None, corpus_filter=None, status=None, extension="sgml"):
-	docs = get_all_docs(corpus_filter,status)
+def export_all_docs(config=None, corpus_filter=None, status=None, extension="sgml", names=None, no_corpus_name=False):
+	docs = get_all_docs(corpus_filter,status, names)
 	files = []
 	all_corpus_meta = defaultdict(dict)
 	for doc in docs:
@@ -38,14 +38,14 @@ def export_all_docs(config=None, corpus_filter=None, status=None, extension="sgm
 			for md in corpus_meta:
 				key, val = md[2], md[3]
 				all_corpus_meta[corpus][key] = val
-		if corpus_filter is None:  # All documents exported, use corpus prefix to avoid name clashes
+		if corpus_filter is None and not no_corpus_name:  # All documents exported, use corpus prefix to avoid name clashes
 			filename = corpus + "_" + docname
 		else:  # Only exporting one user specified corpus, name documents without prefix
 			filename = docname
 		if mode == "xml" and config!="[CSV]":
 			content = build_meta_tag(doc_id) + content.strip() + "\n</meta>\n"
 			files.append((content,filename + ".xml"))
-		elif mode == "ether":
+		elif mode in ["ether","entities"]:
 			ether_name = "_".join(["gd", corpus, docname])
 			if config=="[CSV]":
 				csv = ether_to_csv(ether_url,ether_name)
@@ -91,13 +91,16 @@ def export_doc(doc_id, stylesheet=None):
 
 	cpout = ""
 	cpout += "Content-Type: application/download\n"
-	cpout += "Content-Disposition: attachment; filename=" + corpus + "_" + docname + ".sgml\n\n"
+	if "tt" in stylesheet:
+		cpout += "Content-Disposition: attachment; filename=" + docname + ".tt\n\n"
+	else:
+		cpout += "Content-Disposition: attachment; filename=" + corpus + "_" + docname + ".sgml\n\n"
 
 	if isinstance(cpout,unicode):
 		cpout = str(cpout.encode("utf8"))
 
 	cpout += sgml
-	print(cpout)
+	return cpout
 
 
 if __name__ == "__main__":
@@ -140,9 +143,18 @@ if __name__ == "__main__":
 	if status == "--ALL--":
 		status = None
 
+	if status is not None:
+		status = status.replace("%252C",",").replace("%2C",",")  # unmangle commas
+
+	no_corpus_name = False
+	if "no_corpus_name" in theform:
+		no_corpus_name = bool(theform.getvalue("no_corpus_name"))
+
 	if "docs" in theform:
-		docs = theform.getvalue("docs")
-		if docs == "%all%":
-			export_all_docs(export_stylesheet,corpus_filter=corpus,extension=extension,status=status)
+		docs = theform.getvalue("docs").replace("%252C",",").replace("%2C",",")
+		if docs == "%all%" or docs=="--ALL--":
+			export_all_docs(export_stylesheet,corpus_filter=corpus,extension=extension,status=status,no_corpus_name=no_corpus_name)
+		elif ',' in docs or not docs.isdigit():
+			export_all_docs(export_stylesheet,corpus_filter=corpus,extension=extension,status=status,names=docs,no_corpus_name=no_corpus_name)
 		else:
-			export_doc(docs, export_stylesheet)
+			print(export_doc(docs, export_stylesheet))

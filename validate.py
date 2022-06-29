@@ -144,6 +144,12 @@ def validate_doc_meta(doc_id, rules):
 		else:
 			report += res['report']
 
+	if meta is not None:
+		for d in meta:
+			if " " in d[2] or "\t" in d[2] or "\n" in d[2]:
+				report += "Metadata key contains whitespace: " + d[2] + "<br/>"
+				meta_rule_fired = True
+
 	if not meta_rule_fired:
 		report = "<strong>No applicable metadata rules</strong><br>"
 	elif len(report) == 0:
@@ -178,7 +184,10 @@ def validate_doc_ether(doc_id, rules, timestamps=None, editor=False):
 			continue
 
 		ether_rule_fired = True
-		res = rule.validate(parsed_ether)
+		try:
+			res = rule.validate(parsed_ether)
+		except:
+			raise IOError("Invalid EtherCalc layout: " + doc_name)
 		if len(res['tooltip']) > 0:
 			report += ("""<div class="tooltip">"""
 					+ res['report'][:-5]
@@ -203,11 +212,26 @@ def validate_doc_ether(doc_id, rules, timestamps=None, editor=False):
 	return report
 
 
+def validate_doc_entities(doc_id):
+	entcount = get_entity_count(doc_id)
+	annotated = get_annotated_entity_count(doc_id)
+	report = ""
+	if entcount is not None:
+		if entcount == annotated:
+			report += "<strong>Entity annotation is valid (" + str(annotated) + "/" + str(entcount) + " identified)</strong><br>"
+		else:
+			report += "<strong>Identities missing: " + str(annotated) + "/" + str(entcount) + "</strong><br>" + report
+	else:
+		report = "<strong>No entity identity annotations</strong><br>"
+
+	return report
+
+
 def validate_doc_export(doc_id, rules, timestamps=None):
 	doc_info = get_doc_info(doc_id)
 	doc_name = doc_info[0]
 	doc_corpus = doc_info[1]
-	doc_content = get_doc_content(doc_id)
+	#doc_content = get_doc_content(doc_id)
 
 	ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
 	if not timestamps:
@@ -258,6 +282,10 @@ def validate_doc(doc_id):
 		export_rules = [ExportValidator(x) for x in get_export_rules()]
 		report += validate_doc_export(doc_id, export_rules)
 
+	# entities
+	if doc_mode != "xml":
+		report += validate_doc_entities(doc_id)
+
 	return report
 
 def validate_all_meta(docs):
@@ -290,7 +318,7 @@ def validate_all_ether(docs):
 
 	for doc in docs:
 		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
-		if doc_mode != "ether":
+		if doc_mode not in ["ether","entities"]:
 			continue
 
 		reports[doc_id] = validate_doc_ether(doc_id, rules, timestamps=timestamps)
@@ -304,12 +332,25 @@ def validate_all_export(docs):
 
 	for doc in docs:
 		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
-		if doc_mode != "ether":
+		if doc_mode == "xml":
 			continue
 
 		reports[doc_id] = validate_doc_export(doc_id, rules, timestamps=timestamps)
 
 	return json.dumps(reports)
+
+
+def validate_all_entities(docs):
+	reports = {}
+	for doc in docs:
+		doc_id, doc_name, corpus, doc_mode, doc_schema, validation, timestamp = doc
+		if doc_mode == "xml":
+			continue
+
+		reports[doc_id] = validate_doc_entities(doc_id)
+
+	return json.dumps(reports)
+
 
 def validate_all_export_bulk(docs):
 	cached_reports = {}
@@ -320,7 +361,7 @@ def validate_all_export_bulk(docs):
 	doc_ids = []
 	for doc in docs:
 		doc_id, doc_name, doc_corpus, doc_mode, doc_schema, validation, timestamp = doc
-		if doc_mode != "ether":
+		if doc_mode not in ["ether","entities"]:
 			continue
 
 		ether_doc_name = "gd_" + doc_corpus + "_" + doc_name
@@ -375,6 +416,8 @@ def validate_all_docs(validation_type):
 		# "<docname> fails to validate" text
 		#return validate_all_export_bulk(docs)
 		return validate_all_export(docs)
+	elif validation_type == "entities":
+		return validate_all_entities(docs)
 	else:
 		raise Exception("Unknown validation type: " + validation_type)
 

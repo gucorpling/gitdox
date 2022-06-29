@@ -20,6 +20,7 @@ def setup_db():
 	cur.execute("DROP TABLE IF EXISTS users")
 	cur.execute("DROP TABLE IF EXISTS metadata")
 	cur.execute("DROP TABLE IF EXISTS validate")
+	cur.execute("DROP TABLE IF EXISTS entities")
 
 	conn.commit()
 
@@ -31,7 +32,7 @@ def setup_db():
 
 	#docs table
 	cur.execute('''CREATE TABLE IF NOT EXISTS docs
-				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text, cache text)''')
+				 (id INTEGER PRIMARY KEY AUTOINCREMENT, name text, corpus text, status text,assignee_username text ,filename text, content text, mode text, schema text, validation text, timestamp text, cache text, entcount INTEGER)''')
 	#metadata table
 	cur.execute('''CREATE TABLE IF NOT EXISTS metadata
 				 (docid INTEGER, metaid INTEGER PRIMARY KEY AUTOINCREMENT, key text, value text, corpus_meta text, UNIQUE (docid, metaid) ON CONFLICT REPLACE, UNIQUE (docid, key) ON CONFLICT REPLACE)''')
@@ -39,6 +40,9 @@ def setup_db():
 	cur.execute('''CREATE TABLE IF NOT EXISTS validate
 				 (doc text, corpus text, domain text, name text, operator text, argument text, id INTEGER PRIMARY KEY AUTOINCREMENT)''')
 
+	#entity linking table
+	cur.execute('''CREATE TABLE IF NOT EXISTS entities
+				 (doc text, corpus text, words text, head text, etype text, eref TEXT, mentionnum INTEGER, id INTEGER PRIMARY KEY AUTOINCREMENT)''')
 
 	conn.commit()
 	conn.close()
@@ -94,14 +98,18 @@ def update_status(id,status):
 	generic_query("UPDATE docs SET status=? WHERE id=?",(status,id))
 
 def update_docname(id,docname):
+	old_name, corpus_name, _, _, _, _, _ = get_doc_info(id)
 	generic_query("UPDATE docs SET name=? WHERE id=?",(docname,id))
+	generic_query("UPDATE entities SET doc=? WHERE doc=? AND corpus=?",(docname,old_name,corpus_name))
 	invalidate_doc_by_id(id)
 
 def update_filename(id,filename):
 	generic_query("UPDATE docs SET filename=? WHERE id=?",(filename,id))
 
 def update_corpus(id,corpusname):
+	_, old_corpus_name, _, _, _, _, _ = get_doc_info(id)
 	generic_query("UPDATE docs SET corpus=? WHERE id=?",(corpusname,id))
+	generic_query("UPDATE entities SET corpus=? WHERE corpus=?",(corpusname,old_corpus_name))
 	invalidate_doc_by_id(id)
 
 def update_mode(id,mode):
@@ -155,20 +163,38 @@ def get_doc_content(doc_id):
 	return res[0][0]
 
 def get_all_doc_ids_for_corpus(corpus):
-	return map(lambda x: x[0],
-               generic_query("SELECT id FROM docs WHERE corpus=?", (corpus,)))
+	return map(lambda x: x[0], generic_query("SELECT id FROM docs WHERE corpus=?", (corpus,)))
 
-def get_all_docs(corpus=None, status=None):
-	if corpus is None:
-		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs", None)
-		else:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs where status=?", (status,))
-	else:
-		if status is None:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs where corpus=?", (corpus,))
-		else:
-			return generic_query("SELECT id, name, corpus, mode, content FROM docs where corpus=? and status=?", (corpus, status))
+def get_all_docs(corpus=None, status=None, docs=None):
+	def make_param(multiparam, colname, params):
+		if multiparam is not None:
+			if "," in multiparam:  # Multiple values
+				multiparam = multiparam.split(",")
+				params += multiparam
+				return colname + " in (" + ('?,' * len(multiparam))[:-1] + ")", params
+			else:
+				params.append(multiparam)
+				return colname + " =?", params
+		return "", params
+
+	params = []
+	status_string, params = make_param(status, "status", params)
+	docs_string, params = make_param(docs, "name", params)
+	corpus_string, params = make_param(corpus, "corpus", params)
+	params = tuple(params)
+
+	sql = "SELECT id, name, corpus, mode, content FROM docs "
+	where_list = [x for x in [status_string,docs_string,corpus_string] if x != ""]
+	where_string = ""
+	if len(where_list) > 0:
+		where_string = "WHERE "+ "AND ".join(where_list)
+	if any([x is not None for x in [status, docs, corpus]]):
+		sql += where_string
+	if len(params) == 0:
+		params = None
+
+	return generic_query(sql,params)
+
 
 def get_doc_meta(doc_id, corpus=False):
 	if corpus:
@@ -234,3 +260,49 @@ def update_validation(doc_id,validation):
 
 def update_timestamp(doc_id, timestamp):
 	generic_query("UPDATE docs SET timestamp=? where id=?", (timestamp, doc_id))
+
+def get_doc_entities(doc_id):
+	doc, corpus, _, _, _, _, _ = get_doc_info(doc_id)
+	return generic_query("SELECT DISTINCT words, etype, eref FROM entities WHERE doc=? and corpus=?",(doc,corpus))
+
+def get_entity_options():
+	return generic_query("SELECT DISTINCT etype, eref FROM entities", None)
+
+def get_common_entity_map(doc_id=None):
+	output = []
+	if doc_id is not None:
+		_, corpus, _, _, _, _, _ = get_doc_info(doc_id)
+	else:
+		corpus = '%'
+
+	sql = "SELECT head, etype, eref, COUNT(*) as freq FROM entities WHERE corpus like ? GROUP BY head, eref ORDER BY freq ASC;"
+	ents = generic_query(sql, (corpus,))
+	if ents is not None:
+		output += ents
+	sql = "SELECT words, etype, eref, COUNT(*) as freq FROM entities WHERE corpus like ? GROUP BY words, eref ORDER BY freq ASC;"
+	ents = generic_query(sql, (corpus,))
+	if ents is not None:
+		output += ents
+	return output
+
+def insert_entity_links(rows, entcount, doc_id):
+	dbpath = os.path.dirname(os.path.realpath(__file__)) + os.sep + ".." + os.sep + "gitdox.db"
+	conn = sqlite3.connect(dbpath)
+
+	with conn:
+		cur = conn.cursor()
+		if len(rows)>0:
+			cur.executemany('INSERT INTO entities (doc, corpus, words, head, etype, eref) VALUES(?,?,?,?,?,?);', rows)
+		cur.execute("UPDATE docs SET entcount = ? where id = ?",(entcount,doc_id))
+
+def get_entity_count(doc_id):
+	return generic_query("SELECT entcount FROM docs WHERE id = ?",(doc_id,))[0][0]
+
+def get_annotated_entity_count(doc_id):
+	doc, corpus, _, _, _, _, _ = get_doc_info(doc_id)
+	return generic_query("SELECT count(doc) FROM entities WHERE doc = ? AND corpus = ?",(doc,corpus))[0][0]
+
+def get_entity_mappings(doc_id):
+	doc, corpus, _, _, _, _, _ = get_doc_info(doc_id)
+	sql = "SELECT doc, corpus, words, head, etype, eref, mentionnum FROM entities WHERE doc=? AND corpus=?"
+	return generic_query(sql,(doc,corpus))

@@ -2,7 +2,7 @@
 <head>
     <title>{{docname}} - GitDox: Edit</title>
     {{> shared_head_content }}
-    <script src="js/editor.js?version=4"></script>
+    <script src="js/editor.js?version=2"></script>
     <script src="js/validate.js"></script>
     <!-- hack to make back button work as expected -->
     <!--
@@ -31,7 +31,8 @@
                         <input type="hidden" name="schema" id="schema" value="{{schema}}">
                         <input type="hidden" name="nlp_xml" id="nlp_xml">
                         <input type="hidden" name="nlp_spreadsheet" id="nlp_spreadsheet">
-                        <h2>Editor | <a href="index.py">back to document list</a> </h2>
+                        <input type="hidden" name="sent_mode" id="sent_mode" value="{{sent_mode}}">
+                        <h2>Editor | <a href="index.py">back to document list</a> | <a href="index.py?sel_corpus={{corpusname}}">back to corpus</a></h2>
 
                         <table id="doc_data" style="background:#eee;padding:5pt;">
                             <colgroup>
@@ -131,7 +132,12 @@
                         {{/ether_mode}}
 
                         {{^ether_mode}}
-                        {{> codemirror}}
+                            {{#xml_mode}}
+                                {{> codemirror}}
+                            {{/xml_mode}}
+                            {{^xml_mode}}
+                                {{> spannotator}}
+                            {{/xml_mode}}
                         {{/ether_mode}}
 
                         <ul class="tabs" style="margin-top: 18px;">
