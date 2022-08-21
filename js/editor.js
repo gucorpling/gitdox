@@ -124,7 +124,7 @@ function do_guess_linking(){
 	guess_data = to_guess.join("|");
 	toggle_nlp_button("#link_guess_button");
 	$.ajax({
-		url: 'https://corpling.uis.georgetown.edu/gitdox/ling367/get_entities.py',
+		url: 'get_entities.py',
 		type: 'POST',
 		data: {entries: guess_data, action: 'guess'},
 		//async: false,
@@ -158,7 +158,7 @@ function do_save_linking(){
 	ref_cells.each(function(){
 			if (!($(this).data("guess"))){ // do not save unverified guesses
 				if ($(this).val().length>0){
-					save_entry = $(this).data("text").replace(/[|+]/g,'').replace(/&quot;/g,'"') + "+" + $(this).data("head").replace(/[|+]/g,'').replace(/&quot;/g,'"')  + "+" + $(this).data("etype") + "+" + $(this).val().replace(/(^\s+|[|+;]|\s+$)/g,'').replace(/\s+/g,' ');
+					save_entry = $(this).data("text").toString().replace(/[|+]/g,'').replace(/&quot;/g,'"') + "+" + $(this).data("head").toString().replace(/[|+]/g,'').replace(/&quot;/g,'"')  + "+" + $(this).data("etype").toString() + "+" + $(this).val().toString().replace(/(^\s+|[|+;]|\s+$)/g,'').replace(/\s+/g,' ');
 					payload.push(save_entry);
 					erefs.push($(this).data("etype") + "+" + $(this).val().replace(/[|+]/g,''));
 				}
@@ -180,7 +180,7 @@ function do_save_linking(){
 	ecount = $('.eref').length;
 	toggle_nlp_button("#link_save_button",'floppy-o');
 	$.ajax({
-		url: 'https://corpling.uis.georgetown.edu/gitdox/ling367/get_entities.py',
+		url: 'get_entities.py',
 		type: 'POST',
 		data: {entries: save_data, action: 'save', docid:  docId.toString(), entcount: ecount },
 		//async: false,
@@ -200,7 +200,7 @@ function report_no_entities(){
 	toggle_nlp_button("#no_entities_button",'low-vision');
 	let docId = $("#id").val();
 	$.ajax({
-		url: 'https://corpling.uis.georgetown.edu/gitdox/ling367/get_entities.py',
+		url: 'get_entities.py',
 		type: 'POST',
 		data: {action: 'empty', docid:  docId.toString(), entcount: 0 },
 		//async: false,
