@@ -578,6 +578,7 @@ function ungroup_selected(group_type){
 	}
 	
 	$(".selected-entity").removeClass("selected-entity");
+	
 }
 
 function group_selected(group_type){  // add all selected entities to a single group of the current group type
@@ -599,25 +600,35 @@ function group_selected(group_type){  // add all selected entities to a single g
 	
 	// get all group IDs involved
 	let merged_ids = new Set();
+	let no_zeros = true;
 	for (e_id of sel_ent_ids){
 		gid = entities[e_id].groups[group_type];
 		if (gid >0){
 			merged_ids.add(gid);
+		} else{
+			no_zeros = false;
 		}
 	}
 	
 	// choose the min group ID as the ID for the new group
 	let min_id = Math.min(...Array.from(merged_ids.values()));
+	let new_group = false;
 	if (min_id == Infinity){
 		// create a new ID if there are no groups yet
 		min_id = get_new_group_id(group_type);
+	} else if(merged_ids.size == 1 && min_id > 0 && no_zeros){ 
+		// All selected entities are from a single, non-zero group - assume user wants a new group for these entities
+		min_id = get_new_group_id(group_type);
+		new_group = true;
 	}
 	
 	// assign new ID to all entities sharing a merged group's id
-	for (old_id of merged_ids){
-		old_group_member_ids = groups[group_type][old_id];
-		for (m_id of old_group_member_ids){
-			assign_group(entities[m_id], group_type, min_id);
+	if (!(new_group)){
+		for (old_id of merged_ids){
+			old_group_member_ids = groups[group_type][old_id];
+			for (m_id of old_group_member_ids){
+				assign_group(entities[m_id], group_type, min_id);
+			}
 		}
 	}
 	
