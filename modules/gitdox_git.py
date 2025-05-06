@@ -1,7 +1,6 @@
 import github3, os, platform
 from modules.dataenc import pass_dec, pass_enc
 from modules.configobj import ConfigObj
-from github3.exceptions import NotFoundError
 code_2fa = ""
 
 
@@ -29,8 +28,8 @@ def push_update_to_git(username, token, path, account, repo, message):
 			contents = fd.read()
 		try:
 			contents_object = repository.file_contents(file_info)
-		except NotFoundError:
-			contents_object = None
+		except AttributeError:
+			contents_object = False
 		if contents_object: #this file already exists on remote repo
 			#update
 			push_status = contents_object.update(message,contents)
@@ -67,7 +66,7 @@ def get_last_commit(user, admin, account, repo, path):
 	msg = False
 	url = ""
 	try:
-		for i, cmt in enumerate(repository.commits(path=path)):
+		for i, cmt in enumerate(repository.iter_commits(path=path)):
 			author = str(cmt.author)
 			msg = cmt.commit.message
 			#sha = cmt.commit.sha
@@ -81,6 +80,9 @@ def get_last_commit(user, admin, account, repo, path):
 				date = day + ", " + time
 			break
 		msg = 'Latest commit ['+ date + ']: <a href="'+url+'">' + msg + "</a> (" + author + ")"
-	except Exception as e:
-		msg = "Error: " + str(e)
+	except:
+		pass
 	return msg
+
+
+

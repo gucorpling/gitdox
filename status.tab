@@ -1,9 +1,8 @@
-init
-needs_facsimile
-catalogued
-transcription
-segmentation
-annotation
+markup
+tokenization
+tagging
+tagged
 review
-to publish
-published
+reviewed
+entities
+linking

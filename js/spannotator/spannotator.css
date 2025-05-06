@@ -134,3 +134,6 @@
 }
 
 .highlight-star{position: absolute; top:11px; left:0px; color: yellow; -webkit-text-stroke-width: 1px; -webkit-text-stroke-color: orange; display: none}
+.salient{color:red; font-weight:bold;
+/*background: transparent repeating-linear-gradient(45deg, white 1px, lightgray 5px, #6d6d6d 6px, lightgray 5px);*/
+}

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 # -*- coding: utf-8 -*-
 
 """
@@ -25,8 +25,6 @@ import requests
 from xml.sax.saxutils import escape
 
 __version__ = "2.0.0"
-
-CELL_ID_PATTERN = re.compile(r'^([A-Z]+)([0-9]+)$')
 
 class ExportConfig:
 
@@ -138,10 +136,14 @@ def parse_ether(ether, doc_id=None):
 			parts = line.split(":")
 			if len(parts) > 3:  # Otherwise invalid row
 				cell_id = parts[1]
-				match = re.match(CELL_ID_PATTERN, cell_id)
-				if not match:
-					raise Exception('malformed ethercalc cell ID: "' + cell_id + '"')
-				cell_col, cell_row = match.groups()
+				cell_row = cell_id[1:]
+				cell_col = cell_id[0]
+				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
+				# for c in cell_id:
+				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
+				#		cell_row += c
+				#	else:
+				#		cell_col += c
 				cell_content = parts[3].replace("\\c", ":")
 				cell_span = parts[-1] if "rowspan:" in line else "1"
 
@@ -286,6 +288,11 @@ def flush_open(annos, row_num, colmap):
 def flush_close(closing_element, last_value, last_start, row_num, colmap, aliases):
 	flushed = ""
 
+	try:
+		a= aliases[closing_element][-1]
+	except:
+		print(closing_element)
+
 	for alias in aliases[closing_element][-1]:
 		stack_len = len(last_start[alias])
 
@@ -397,7 +404,7 @@ version:1.5
 
 	# TODO: de-hardwire special anno name list for which element name is ignored
 	ignore_element_annos = [("norm","lang"),("morph","lang"),("entity","group\\ccoref"),("entity","group\\cbridge"),
-							("entity","infstat")]
+							("entity","infstat"),("entity","salience")]
 
 	for line in sgml.strip().split("\n"):
 		line = line.strip()

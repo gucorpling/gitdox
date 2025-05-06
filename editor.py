@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 # -*- coding: utf-8 -*-
 
 #print("Content-type:text/html\r\n\r\n")
@@ -282,14 +282,13 @@ def load_page(user,admin,theform):
 		if len(entity_sgml.strip()) > 0:
 			word_anno = config["DEFAULT_SGML_TOK_ATTR"] if config["DEFAULT_SGML_TOK_ATTR"].lower() != "none" else None
 			other_annos = [a.split(":")[0] for a in config["entity_annos"].split(";")] if ":" in config["entity_annos"] else None
-			merged_sgml = merge_entities(ether_sgml, entity_sgml, merge_anno="entity", word_anno=word_anno,
-										 other_annos=other_annos)
+			merged_sgml = merge_entities(ether_sgml, entity_sgml, merge_anno="entity", word_anno=word_anno, other_annos=other_annos)
+			merged_sgml = merged_sgml.replace("&amp;","&")
 			if not merged_sgml:  # merged_sgml = False means token counts don't match, can't merge
 				render_data["entity_save_message"] = "Failed to save entities: token counts do not match with spreadsheet!"
 				render_data["entity_save_color"] = "red"
 				render_data["entity_save_icon"] = "ban"
 			else:
-				merged_sgml = merged_sgml.replace("&amp;", "&")
 				out, err = make_spreadsheet(merged_sgml, ether_url + "_/gd_" + corpus + "_" + docname, "sgml")
 				render_data["entity_save_message"] = "Saved merged entity annotations to spreadsheet"
 				render_data["entity_save_color"] = "green"

@@ -4,7 +4,7 @@ GitDox is an online editor for version controlled collaborative XML and spreadsh
 The editor interface is based on [CodeMirror](https://codemirror.net). GitHub is used as a remote backend, and SQLite is used for local storage. 
 
 GitDox is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts, and by the
-[GUM corpus](https://corpling.uis.georgetown.edu/gum/) to build a multilayer corpus of English Web genres.
+[GUM corpus](https://gucorpling.org/gum/) to build a multilayer corpus of English Web genres.
 
 Some scenarios when GitDox is helpful:
 
@@ -21,7 +21,7 @@ Some scenarios when GitDox is helpful:
     * Built in metadata and export functions to manage data releases
     * Combined with version control, you can track annotator progress towards data release
  
-For more information see http://corpling.uis.georgetown.edu/gitdox/
+For more information see http://gucorpling.org/gitdox/
 
 # Installation
 You have three choices:

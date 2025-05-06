@@ -1,0 +1,53 @@
+<!doctype html>
+
+<title>CodeMirror: Dockerfile mode</title>
+<meta charset="utf-8"/>
+<link rel=stylesheet href="../../doc/docs.css">
+
+<link rel="stylesheet" href="../../lib/codemirror.css">
+<script src="../../lib/codemirror.js"></script>
+<script src="../../addon/mode/simple.js"></script>
+<script src="conllu.js"></script>
+<style type="text/css">.CodeMirror {border-top: 1px solid black; border-bottom: 1px solid black;}</style>
+<div id=nav>
+  <a href="http://codemirror.net"><h1>CodeMirror</h1><img id=logo src="../../doc/logo.png"></a>
+
+  <ul>
+    <li><a href="../../index.html">Home</a>
+    <li><a href="../../doc/manual.html">Manual</a>
+    <li><a href="https://github.com/codemirror/codemirror">Code</a>
+  </ul>
+  <ul>
+    <li><a href="../index.html">Language modes</a>
+    <li><a class=active href="#">CoNLL-U</a>
+  </ul>
+</div>
+
+<article>
+<h2>CoNLL-U mode</h2>
+<form><textarea id="code" name="code">
+# newdoc id = GUM_academic_art
+# sent_id = GUM_academic_art-1
+# text = Aesthetic Appreciation and Spanish Art:
+# s_type=frag
+1	Aesthetic	aesthetic	ADJ	JJ	Degree=Pos	2	amod	_	BeginSeg=Yes
+2	Appreciation	appreciation	NOUN	NN	Number=Sing	0	root	_	_
+3	and	and	CCONJ	CC	_	5	cc	_	_
+4	Spanish	Spanish	ADJ	JJ	Degree=Pos	5	amod	_	_
+5	Art	art	NOUN	NN	Number=Sing	2	conj	_	SpaceAfter=No
+6	:	:	PUNCT	:	_	2	punct	_	_
+
+</textarea></form>
+
+    <script>
+      var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+        lineNumbers: true,
+        mode: "conllu"
+      });
+    </script>
+
+    <p>Dockerfile syntax highlighting for CodeMirror. Depends on
+    the <a href="../../demo/simplemode.html">simplemode</a> addon.</p>
+
+    <p><strong>MIME types defined:</strong> <code>text/x-conllu</code></p>
+  </article>

@@ -158,7 +158,7 @@ function do_save_linking(){
 	ref_cells.each(function(){
 			if (!($(this).data("guess"))){ // do not save unverified guesses
 				if ($(this).val().length>0){
-					save_entry = $(this).data("text").toString().replace(/[|+]/g,'').replace(/&quot;/g,'"') + "+" + $(this).data("head").toString().replace(/[|+]/g,'').replace(/&quot;/g,'"')  + "+" + $(this).data("etype").toString() + "+" + $(this).val().toString().replace(/(^\s+|[|+;]|\s+$)/g,'').replace(/\s+/g,' ');
+					save_entry = $(this).data("text").replace(/[|+]/g,'').replace(/&quot;/g,'"') + "+" + $(this).data("head").replace(/[|+]/g,'').replace(/&quot;/g,'"')  + "+" + $(this).data("etype") + "+" + $(this).val().replace(/(^\s+|[|+;]|\s+$)/g,'').replace(/\s+/g,' ');
 					payload.push(save_entry);
 					erefs.push($(this).data("etype") + "+" + $(this).val().replace(/[|+]/g,''));
 				}
@@ -166,7 +166,7 @@ function do_save_linking(){
 	});
 	
 	// Update browser's store of datalists with added entities
-	known_entities = $('#spannotator_container').contents().find('#ALL_ENTITY_LIST').val().split("|")
+	known_entities = $('#spannotator_container').contents().find('#ALL_ENTITY_LIST').val().split("|");
 	for (e of erefs){
 		if (!(known_entities.includes(e))){
 			known_entities.push(e);
@@ -182,8 +182,9 @@ function do_save_linking(){
 	$.ajax({
 		url: 'get_entities.py',
 		type: 'POST',
+		cache: false,
 		data: {entries: save_data, action: 'save', docid:  docId.toString(), entcount: ecount },
-		//async: false,
+		async: false,
 		success: function (data) {
 			toggle_nlp_button("#link_save_button",'floppy-o');
 			$(".eref").filter(":not([data-guess])").css('background-color','white');
@@ -310,7 +311,7 @@ function auto_ner(){
 	}
 	toggle_nlp_button("#auto_ner_button");
 	$.ajax({
-		url: 'https://corpling.uis.georgetown.edu/coptic-nlp/api.py',
+		url: 'https://gucorpling.org/coptic-nlp/api.py',
 		type: 'POST',
 		data: {data: tt_sgml, format: 'sgml_entities'},
 		//async: false,

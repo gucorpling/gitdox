@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from validator import Validator
 from ..ether import exec_via_temp
 import re
@@ -29,6 +31,9 @@ class XmlValidator(Validator):
         if err.endswith("validates"):
             report = ""
         else:
-            report = "Problems validating with " + self.schema + ":<br>" + err.decode("utf-8") + "<br>"
+            try:
+	            report = "Problems validating with " + self.schema + ":<br>" + err.decode("utf-8") + "<br>"
+            except:
+                    report = "Problems validating with " + self.schema + ":<br>" + err.decode('unicode_escape') + "<br>"
 
         return report
