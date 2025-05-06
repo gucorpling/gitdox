@@ -64,6 +64,7 @@ for (key in global_defaults){
 
 entity_icon = '<div id="%ID%" class="entity_type"><i title="%TYPE%" class="fa fa-%FATYPE% entity_icon"></i></div>';
 close_icon = '<div id="close%ID%" class="close" onclick="delete_entity('+"'"+'%ID%'+"'"+');"><i title="close" class="fa fa-times-circle"></i></div>';
+bridge_icon = '<div id="bridge%ID%" class="bridge"><i title="bridgetype" class="fa fa-check"></i></div>';
 sentnum = 0;
 
 class Entity{
@@ -76,6 +77,7 @@ class Entity{
 		this.div_id = this.start.toString() + '-' + this.end.toString();
 		this.annos = {};  // key-value pairs of additional annotations, such as "infstat": "new"
 		this.identity = "_";
+		this.bridge_antec = "_"
 		this.next = {};  // object mapping group types (e.g. coref) to next entity object in chain; only filled during export
 		let g = {};
 		let def_group = global_defaults["DEFAULT_GROUP"];
@@ -365,6 +367,28 @@ function accept_drop(elm) {
 		}
 }
 
+function loadScript(src, callback) {
+                const script = document.createElement("script");
+                script.src = src;
+                script.onload = callback;
+                document.head.appendChild(script);
+                }
+
+function delete_connections(){
+	if (typeof jsPlumb === 'undefined') {
+		loadScript("https://unpkg.com/jsplumb@2.15.6/dist/js/jsplumb.min.js", function () {
+		const connections = jsPlumb.getConnections();
+		connections.forEach(function (connection) {
+			jsPlumb.deleteConnection(connection);  // Delete each connection
+		}); });
+	} else {
+		const connections = jsPlumb.getConnections();
+		connections.forEach(function (connection) {
+			jsPlumb.deleteConnection(connection);  // Delete each connection
+		});
+	}
+}
+
 // Border highlighting on hover
 var hovered_entity = null;
 function unhighlight_entity_border(event){
@@ -373,7 +397,50 @@ function unhighlight_entity_border(event){
 			$(this).removeClass("entity-border-hover-left");
 			$(this).removeClass("entity-border-hover-right");
 			hovered_entity = null;
+			delete_connections();
 		}
+}
+
+function draw_line(div_id, antec_div_id, col){
+	// Check if jsPlumb is already loaded
+	if (typeof jsPlumb === 'undefined') {
+		// Load jsPlumb if it's not loaded yet
+		loadScript("https://unpkg.com/jsplumb@2.15.6/dist/js/jsplumb.min.js", function () {
+		console.log("jsPlumb is loaded and ready!");
+		JsPlumbLine(div_id, antec_div_id, col);});
+	} else {
+		// If jsPlumb is already loaded, just call your function directly
+		JsPlumbLine(div_id, antec_div_id, col);
+	}
+}
+
+function JsPlumbLine(div_id, antec_div_id, col){
+	repaint_everything();
+	jsPlumb.ready(function () {
+		// Connecting two divs
+		jsPlumb.connect({
+			source: div_id,  // ID of the source div
+			target: antec_div_id,  // ID of the target div
+			connector: ["Straight"],  // Straight line between divs
+			paintStyle: { stroke: col, strokeWidth: 2 },
+			endpoint: "Dot",
+			anchor:[ "Perimeter", { shape:"Rectangle", anchorCount:150 }],
+			endpointStyle: { fill: col, radius: 1.5 } 
+			});
+		});
+}
+
+function repaint_everything(){
+        // Check if jsPlumb is already loaded
+        if (typeof jsPlumb === 'undefined') {
+                // Load jsPlumb if it's not loaded yet
+                loadScript("https://unpkg.com/jsplumb@2.15.6/dist/js/jsplumb.min.js", function () {
+                	jsPlumb.repaintEverything();
+		});
+        } else {
+                // If jsPlumb is already loaded, just call your function directly
+                jsPlumb.repaintEverything();
+        }
 }
 
 function set_hovered_entity(event){
@@ -387,6 +454,15 @@ function set_hovered_entity(event){
 				for (div_id in entities){
 					if (entities[div_id].groups[color_mode] == grp){
 						$("#"+div_id).not(".selected-entity").css("background-color","yellow");
+						// if group is bridge, show lines between ana and antec in group
+						if (color_mode == "bridge"){
+							if (entities[div_id].bridge_antec != "_"){
+								let antec_div_id = entities[div_id].bridge_antec
+								// draw line connecting
+								col = assigned_colors[color_mode][grp]
+								draw_line(div_id, antec_div_id, col)
+							}
+						}
 					}
 				}
 			}
@@ -577,6 +653,13 @@ function ungroup_selected(group_type){
 			}
 		}
 	}
+
+	// if group_type is bridge, for all selected entities, change bridge_antec back to default "_"
+	if (group_type == "bridge") {
+		for (ent_id of sel_ent_ids){
+			entities[ent_id].bridge_antec = "_"
+		}
+	}
 	
 	$(".selected-entity").removeClass("selected-entity");
 	
@@ -637,6 +720,29 @@ function group_selected(group_type){  // add all selected entities to a single g
 	for (e_id of sel_ent_ids){
 		assign_group(entities[e_id], group_type, min_id);
 	}
+
+	// if group_type is bridge, assign the bridge_antec of all selected entities to be the selected entity with the min_id (except for the min_id entity itself)
+	if (group_type == "bridge") {
+		// find min_id entity
+		var sel_div_ids = []
+		sel_spans.each(function(){
+                	sel_div_ids.push($(this).attr("id"));
+		});
+		let sorted = sel_div_ids.sort((a, b) => {
+  			const startA = parseInt(a.split('-')[0], 10);
+  			const startB = parseInt(b.split('-')[0], 10);
+  			return startA - startB;
+			}); 
+		const min_div_id = sorted[0]
+		for (e_id of sel_ent_ids){
+			console.log(entities[e_id].div_id)
+			console.log(min_div_id)
+			if (entities[e_id].div_id != min_div_id) {
+				entities[e_id].bridge_antec = min_div_id
+			}
+		}
+	}
+
 	$(".selected-entity").removeClass("selected-entity");
 }
 
@@ -1014,7 +1120,7 @@ function add_entity(tok_ids, entity_type, batch){
 	new_entity = new Entity(tok_ids, 'abstract');
 	snum = tokens[tok_ids[0]].sentnum;
 	$('#' + Array.from(covering).join(',#')).wrapAll('<div id="'+new_entity.div_id+'" class="entity s' +sentnum.toString()+ '"> </div>');  
-	$('#'+new_entity.div_id).html(entity_icon.replace('%ID%','icon'+new_entity.div_id) +  $('#'+new_entity.div_id).html() + close_icon.replace('%ID%',new_entity.div_id));
+	$('#'+new_entity.div_id).html(entity_icon.replace('%ID%','icon'+new_entity.div_id) +  $('#'+new_entity.div_id).html() + bridge_icon.replace('%ID%',new_entity.div_id) + close_icon.replace('%ID%',new_entity.div_id));
 	record_entity(new_entity);
 	document.getElementById("active_entity").value = new_entity.div_id;
 	change_entity(entity_type);
@@ -1096,6 +1202,18 @@ function toggle_star(div_id){
 	}
 	// also toggle salience marking
 	toggle_salience(div_id);
+	// also toggle bridgesubtype marking
+        toggle_bridgetype(div_id);
+}
+
+function toggle_bridgetype(div_id){
+	if ("bridgetype" in entities[div_id].annos){
+	  if (entities[div_id].annos["bridgetype"]=="nobridge"){
+		  $('#bridge' + div_id + ".bridge").css("display","none");
+	  } else{
+		  $('#bridge' + div_id + ".bridge").css("display","inline-block");
+	  }
+	}
 }
 
 function toggle_salience(div_id){
@@ -1514,7 +1632,7 @@ function read_tt(data, config){
 
 	// set tok to an SGML attribute name to use markup instead of TT plain text tokens as words
 	default_conf = {"span_tag": DEFAULT_SGML_SPAN_TAG, "span_attr": DEFAULT_SGML_SPAN_ATTR, "sent":DEFAULT_SGML_SENT_TAG, "tok": DEFAULT_SGML_TOK_ATTR,
-								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal"};
+								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison|comparison-ellipsis|comparison-sense-hierarchical|comparison-sense-non-hierarchical|comparison-time|entity|entity-associative|entity-meronomy|entity-property|entity-resultative|set|set-member|set-subset|set-span-interval|other"};
 	
 	group_info = [];
 	anno_keys = [];
@@ -1803,6 +1921,15 @@ function write_webanno(config){
                 }
         }
 
+
+        let add_bridgetype = true;
+        if (add_bridgetype){
+                for (e in entities){
+                        if (!("bridgetype" in entities[e].annos)){
+                                entities[e].annos["bridgetype"] = "nobridge";
+                        }
+                }
+        }
 
 	function postprocess_annos(ent, instructions, isfirst){
 		// transform an entity's additional key-value annotations based on initial/non-initial chain position and instructions
@@ -2116,6 +2243,15 @@ function write_tt(sent_tag){
 			}
 		}
 	}
+
+	let add_bridgetype = true;
+        if (add_bridgetype){
+                for (e in entities){
+                        if (!("bridgetype" in entities[e].annos)){
+                                entities[e].annos["bridgetype"] = "nobridge";
+                        }
+                }
+        }
 
 	output = [];
 	buffer = [];

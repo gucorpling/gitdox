@@ -404,7 +404,7 @@ version:1.5
 
 	# TODO: de-hardwire special anno name list for which element name is ignored
 	ignore_element_annos = [("norm","lang"),("morph","lang"),("entity","group\\ccoref"),("entity","group\\cbridge"),
-							("entity","infstat"),("entity","salience")]
+							("entity","infstat"),("entity","salience"), ("entity", "bridgetype")]
 
 	for line in sgml.strip().split("\n"):
 		line = line.strip()

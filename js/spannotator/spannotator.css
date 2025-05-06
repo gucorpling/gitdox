@@ -61,6 +61,15 @@
 	display: inline;
 }
 
+.bridge {
+        font-size: x-small;
+        color: darkblue;
+        margin: 1px;
+        text-align: right;
+        vertical-align: bottom;
+        display: none;
+}
+
 .entity_type {
 	font-size: x-small;
 	color: grey;
