@@ -1,5 +1,11 @@
 let range = (start, stop, step=1) => Array(stop - start).fill(start).map((x, y) => x + y * step) 
 function arrayRemove(arr, value) { return arr.filter(function(ele){ return ele != value; });}
+function splitWithTail(str,delim,count){var parts = str.split(delim); var tail = parts.slice(count).join(delim); var result = parts.slice(0,count); result.push(tail); return result;}
+function countInstances(string, word) {return string.split(word).length - 1;}
+
+var default_annos = {"infstat":"new","salience":"nonsal"};
+var summaries = [];
+var selsummary = 1;
 
 // constants configuration
 ICON_MAP = {
@@ -257,7 +263,15 @@ $(document).on("keyup", function (e) {
 	key = e.which;
 	if (key == 13){ // User hit enter, make a new entity if anything is selected
 		if ($('.ui-selected').length > 0){
-			add_entity();
+			//add_entity();
+
+			new_entity = add_entity();
+			for (a in default_annos){
+				new_entity.annos[a] = default_annos[a];
+			}
+
+
+
 			event.preventDefault();
 			return false;
 		} else if ($('.selected-entity').length>0){
@@ -282,6 +296,107 @@ $(document).on("keydown", function (e) {
 				}
 				window.prompt("Copy to clipboard: Ctrl+C, Enter", to_copy.join(" "));
 			}
+		}else if (e.keyCode==85){ // User hit ctrl+u, offer to update token
+			if ($('.ui-selected').length == 1){
+				e.preventDefault();
+				to_copy = [];
+				for (token of $('.ui-selected')){
+					to_copy.push(token.innerHTML);
+					last_token_id = token.id;
+				}
+				let new_token_string = window.prompt("Enter string to update token", to_copy.join(" "));
+				tokens[parseInt(last_token_id.replace(/t/,''))].word = new_token_string;
+				$("#" + last_token_id).html(new_token_string);
+			}
+		}else if (e.keyCode==73){ // User hit ctrl+i, offer to insert token
+			if ($('.ui-selected').length > 0){
+				e.preventDefault();
+				to_copy = [];
+				for (token of $('.ui-selected')){
+					to_copy.push(token.innerHTML);
+					last_token_id = token.id;
+				}
+				last_token_id = parseInt(last_token_id.replace(/t/,''));
+				last_token_sent = tokens[last_token_id].sentnum;
+				let new_token_string = window.prompt("Enter string for new token", to_copy.join(" "));
+				if (new_token_string.length!=0){
+					//let max_token = Object.keys(tokens).reduce(function(a, b){ return obj[a] > obj[b] ? a : b });
+					let new_tok = new Token(last_token_id.toString(), null, new_token_string,last_token_sent,last_token_sent,'');
+					let new_tokens = {};
+					new_tokens[last_token_id] = new_tok;
+					new_tokens[last_token_id].toknum_in_sent = tokens[last_token_id].toknum_in_sent;
+					if (new_tokens[last_token_id].toknum_in_sent > 1){new_tokens[last_token_id].sent = null;}
+					for (k in tokens){
+						k = parseInt(k);
+						if (k < last_token_id){
+							new_tokens[k] = tokens[k];
+						} else{
+							new_tokens[k+1] = tokens[k];
+							new_tokens[k+1].tid = (k+1).toString();
+							if (tokens[k].sentnum==last_token_sent){new_tokens[k+1].toknum_in_sent++;}
+						}
+					}
+					// bump HTML IDs of other tokens
+					$(".tok").each(function (){
+						let tnum = parseInt(this.id.replace(/t/,''));
+						if (tnum >= last_token_id){
+							$(this).attr("id","t" + (tnum + 1).toString());
+							$(this).attr("toknum",(tnum + 1).toString());
+						}
+					});
+					// insert HTML for the new token
+					let tok_html = make_token_div(new_tok);
+					elem_to_follow = "#t" + (last_token_id-1).toString();
+					min_start = Object.keys(tokens).length;
+					for (eid in entities){
+						ent = entities[eid];
+						if (ent.end==last_token_id-1){
+							if (ent.start < min_start){
+								min_start = ent.end;
+								elem_to_follow = "#" + ent.div_id;
+							}
+						}
+					}
+					$(elem_to_follow).after(tok_html);
+					let new_ents = {};
+					for (eid in entities){
+						ent = entities[eid];
+						if (ent.end > last_token_id){
+							ent.end++;
+							if (ent.start > last_token_id){
+								ent.start++;
+							}
+							let old_eid = ent.div_id;
+							ent.div_id = ent.start.toString() + "-" + ent.end.toString();
+							for (gtype in groups){
+								for (g in groups[gtype]){
+									groups[gtype][g] = groups[gtype][g].map(function(item) { return item == old_eid ? ent.div_id : item; });
+								}
+							}
+							for (tid in toks2entities){
+								if (old_eid in toks2entities[tid]){
+									delete toks2entities[tid][old_eid];
+								}
+							}
+							ent.toks = Array.from(range(ent.start, ent.end+1));
+							for (tok of ent.toks){
+								if (toks2entities[tok] == null){
+									toks2entities[tok] = {};
+								}
+								toks2entities[tok][ent.div_id] = ent;
+							}
+							$("#"+old_eid).attr("id",ent.div_id);
+						}
+						new_ents[ent.div_id] = ent;
+					}
+					tokens = new_tokens;
+					entities = new_ents;
+				}
+			}
+		} else if (e.keyCode == 219){ // ctrl+[
+			document.getElementById("summaryup").click();
+		} else if (e.keyCode == 221){ // ctrl+]
+			document.getElementById("summarydown").click();
 		}
 	}
 });
@@ -516,6 +631,9 @@ function assign_group(existing_span, gtype, new_group){
 			assigned_colors[gtype][new_group] = col;
 		}
 	}
+	if (existing_span==null){
+		a=4;
+	}
 	$("#"+existing_span.div_id).css("border-color",col);
 	if (!(new_group in groups[gtype])){groups[gtype][new_group] = [];}
 	if (gtype in existing_span.groups){ // if this already has a group of this kind, remove the old group information
@@ -579,7 +697,7 @@ function ungroup_selected(group_type){
 	}
 	
 	$(".selected-entity").removeClass("selected-entity");
-	
+	propagate_salience();
 }
 
 function group_selected(group_type){  // add all selected entities to a single group of the current group type
@@ -638,6 +756,7 @@ function group_selected(group_type){  // add all selected entities to a single g
 		assign_group(entities[e_id], group_type, min_id);
 	}
 	$(".selected-entity").removeClass("selected-entity");
+	propagate_salience();
 }
 
 function color_coref(group_type){
@@ -677,6 +796,7 @@ function init_doc(){
 	});
 	$("#selectable").selectable({filter: '.tok', distance: 10});
 	set_color_mode();
+	propagate_salience();
 }
 
 $(document).ready(function() {
@@ -749,195 +869,249 @@ $(document).ready(function() {
 
 demo = false;
 if (demo){
-read_webanno(`#FORMAT=WebAnno TSV 3
-#T_SP=webanno.custom.Referent|entity|infstat
+read_webanno(`#FORMAT=WebAnno TSV 3.2
+#T_SP=webanno.custom.Referent|entity|infstat|salience|identity
 #T_RL=webanno.custom.Coref|type|BT_webanno.custom.Referent
+#Summary1=(human) On March 27, 2006, Greek court has ruled that practitioners of ancient Greek religion, such as followers of Zeus and Hera, may formally worship at archeological sites.
+#Summary2=(claude-3-5-sonnet-20241022) A Greek court has ruled that Hellenic polytheists can now legally worship ancient Greek gods at archaeological sites, overturning previous restrictions and affecting an estimated 40,000-100,000 practitioners despite opposition from the Greek Orthodox Church.
+#Summary3=(gpt4o) A Greek court ruled on March 27, 2006, that worshippers of the ancient Greek religion can now legally associate and worship at archaeological sites, overturning a previous ban by the Greek Ministry of Culture, despite criticism from the Greek Orthodox Church, with an estimated 100,000 Greeks participating in such practices, although the Church estimates the number at 40,000.
+#Summary4=(Llama-3.2-3B-Instruct; postedited) A Greek court has ruled that worship of ancient Greek deities is now allowed, ending a ban on public worship at archeological sites and making the practice more open.
+#Summary5=(Qwen2.5-7B-Instruct) A Greek court has ruled that the worship of ancient Greek deities is legal and permits formal association and worship at archaeological sites, though the Greek Orthodox Church remains critical of this neo-pagan movement.
 
 
 #Text=Greek court rules worship of ancient Greek deities is legal
-1-1	0-5	Greek	event[1]|organization[2]	new[1]|new[2]	coref|coref	3-1[6_1]|3-1[7_2]	
-1-2	6-11	court	event[1]|organization[2]	new[1]|new[2]	_	_	
-1-3	12-17	rules	event[1]	new[1]	_	_	
-1-4	18-25	worship	event[1]|abstract[3]	new[1]|new[3]	bridge|bridge	3-6[8_3]|3-8[9_3]	
-1-5	26-28	of	event[1]|abstract[3]	new[1]|new[3]	_	_	
-1-6	29-36	ancient	event[1]|abstract[3]|abstract[4]	new[1]|new[3]|new[4]	coref	6-16[20_4]	
-1-7	37-42	Greek	event[1]|abstract[3]|abstract[4]	new[1]|new[3]|new[4]	_	_	
-1-8	43-50	deities	event[1]|abstract[3]|abstract[4]	new[1]|new[3]|new[4]	_	_	
-1-9	51-53	is	event[1]	new[1]	_	_	
-1-10	54-59	legal	event[1]	new[1]	_	_	
+1-1	0-5	Greek	event[1]|organization[2]	new[1]|new[2]	sssss[1]|sssss[2]	_	coref|coref	3-1[8_1]|3-1[9_2]	
+1-2	6-11	court	event[1]|organization[2]	new[1]|new[2]	sssss[1]|sssss[2]	_	_	_	
+1-3	12-17	rules	event[1]	new[1]	sssss[1]	_	_	_	
+1-4	18-25	worship	event[1]|event[3]	new[1]|new[3]	sssss[1]|nnnnn[3]	_	bridge	3-6[10_3]	
+1-5	26-28	of	event[1]|event[3]	new[1]|new[3]	sssss[1]|nnnnn[3]	_	_	_	
+1-6	29-36	ancient	event[1]|event[3]|person[4]	new[1]|new[3]|new[4]	sssss[1]|nnnnn[3]|nsnss[4]	_	coref	6-16[24_4]	
+1-7	37-42	Greek	event[1]|event[3]|person[4]	new[1]|new[3]|new[4]	sssss[1]|nnnnn[3]|nsnss[4]	_	_	_	
+1-8	43-50	deities	event[1]|event[3]|person[4]	new[1]|new[3]|new[4]	sssss[1]|nnnnn[3]|nsnss[4]	_	_	_	
+1-9	51-53	is	event[1]	new[1]	sssss[1]	_	_	_	
+1-10	54-59	legal	event[1]	new[1]	sssss[1]	_	_	_	
 
 #Text=Monday , March 27 , 2006
-2-1	60-66	Monday	time[5]	acc[5]	_	_	
-2-2	67-68	,	time[5]	acc[5]	_	_	
-2-3	69-74	March	time[5]	acc[5]	_	_	
-2-4	75-77	27	time[5]	acc[5]	_	_	
-2-5	78-79	,	time[5]	acc[5]	_	_	
-2-6	80-84	2006	time[5]	acc[5]	_	_	
+2-1	60-66	Monday	time[5]	new[5]	snsnn[5]	_	coref	2-3[6_5]	
+2-2	67-68	,	_	_	_	_	_	_	
+2-3	69-74	March	time[6]	giv[6]	snsnn[6]	_	_	_	
+2-4	75-77	27	time[6]	giv[6]	snsnn[6]	_	_	_	
+2-5	78-79	,	time[6]	giv[6]	snsnn[6]	_	_	_	
+2-6	80-84	2006	time[6]|time[7]	giv[6]|acc[7]	snsnn[6]|snsnn[7]	_	_	_	
 
 #Text=Greek court has ruled that worshippers of the ancient Greek religion may now formally associate and worship at archeological sites .
-3-1	85-90	Greek	event[6]|organization[7]	giv[6]|giv[7]	coref	4-3[11_6]	
-3-2	91-96	court	event[6]|organization[7]	giv[6]|giv[7]	_	_	
-3-3	97-100	has	event[6]	giv[6]	_	_	
-3-4	101-106	ruled	event[6]	giv[6]	_	_	
-3-5	107-111	that	event[6]	giv[6]	_	_	
-3-6	112-123	worshippers	event[6]|person[8]	giv[6]|acc[8]	coref	6-14[19_8]	
-3-7	124-126	of	event[6]|person[8]	giv[6]|acc[8]	_	_	
-3-8	127-130	the	event[6]|person[8]|organization[9]	giv[6]|acc[8]|acc[9]	coref	4-6[13_9]	
-3-9	131-138	ancient	event[6]|person[8]|organization[9]	giv[6]|acc[8]|acc[9]	_	_	
-3-10	139-144	Greek	event[6]|person[8]|organization[9]	giv[6]|acc[8]|acc[9]	_	_	
-3-11	145-153	religion	event[6]|person[8]|organization[9]	giv[6]|acc[8]|acc[9]	_	_	
-3-12	154-157	may	event[6]	giv[6]	_	_	
-3-13	158-161	now	event[6]	giv[6]	_	_	
-3-14	162-170	formally	event[6]	giv[6]	_	_	
-3-15	171-180	associate	event[6]	giv[6]	_	_	
-3-16	181-184	and	event[6]	giv[6]	_	_	
-3-17	185-192	worship	event[6]	giv[6]	_	_	
-3-18	193-195	at	event[6]	giv[6]	_	_	
-3-19	196-209	archeological	event[6]|place[10]	giv[6]|new[10]	_	_	
-3-20	210-215	sites	event[6]|place[10]	giv[6]|new[10]	_	_	
-3-21	216-217	.	_	_	_	_	
+3-1	85-90	Greek	event[8]|organization[9]	giv[8]|giv[9]	sssss[8]|sssss[9]	_	coref	4-3[13_8]	
+3-2	91-96	court	event[8]|organization[9]	giv[8]|giv[9]	sssss[8]|sssss[9]	_	_	_	
+3-3	97-100	has	event[8]	giv[8]	sssss[8]	_	_	_	
+3-4	101-106	ruled	event[8]	giv[8]	sssss[8]	_	_	_	
+3-5	107-111	that	event[8]	giv[8]	sssss[8]	_	_	_	
+3-6	112-123	worshippers	event[8]|person[10]	giv[8]|acc[10]	sssss[8]|sssns[10]	_	coref	6-14[23_10]	
+3-7	124-126	of	event[8]|person[10]	giv[8]|acc[10]	sssss[8]|sssns[10]	_	_	_	
+3-8	127-130	the	event[8]|person[10]|organization[11]	giv[8]|acc[10]|acc[11]	sssss[8]|sssns[10]|snsns[11]	_	coref	4-6[15_11]	
+3-9	131-138	ancient	event[8]|person[10]|organization[11]	giv[8]|acc[10]|acc[11]	sssss[8]|sssns[10]|snsns[11]	_	_	_	
+3-10	139-144	Greek	event[8]|person[10]|organization[11]	giv[8]|acc[10]|acc[11]	sssss[8]|sssns[10]|snsns[11]	_	_	_	
+3-11	145-153	religion	event[8]|person[10]|organization[11]	giv[8]|acc[10]|acc[11]	sssss[8]|sssns[10]|snsns[11]	_	_	_	
+3-12	154-157	may	event[8]	giv[8]	sssss[8]	_	_	_	
+3-13	158-161	now	event[8]	giv[8]	sssss[8]	_	_	_	
+3-14	162-170	formally	event[8]	giv[8]	sssss[8]	_	_	_	
+3-15	171-180	associate	event[8]	giv[8]	sssss[8]	_	_	_	
+3-16	181-184	and	event[8]	giv[8]	sssss[8]	_	_	_	
+3-17	185-192	worship	event[8]	giv[8]	sssss[8]	_	_	_	
+3-18	193-195	at	event[8]	giv[8]	sssss[8]	_	_	_	
+3-19	196-209	archeological	event[8]|place[12]	giv[8]|new[12]	sssss[8]|sssss[12]	_	coref	4-15[16_12]	
+3-20	210-215	sites	event[8]|place[12]	giv[8]|new[12]	sssss[8]|sssss[12]	_	_	_	
+3-21	216-217	.	_	_	_	_	_	_	
 
 #Text=Prior to the ruling , the religion was banned from conducting public worship at archeological sites by the Greek Ministry of Culture .
-4-1	218-223	Prior	_	_	_	_	
-4-2	224-226	to	_	_	_	_	
-4-3	227-230	the	event[11]	giv[11]	_	_	
-4-4	231-237	ruling	event[11]	giv[11]	_	_	
-4-5	238-239	,	_	_	_	_	
-4-6	240-243	the	event[12]|organization[13]	new[12]|giv[13]	coref|bridge	5-5[16_13]|5-3[0_12]	
-4-7	244-252	religion	event[12]|organization[13]	new[12]|giv[13]	_	_	
-4-8	253-256	was	event[12]	new[12]	_	_	
-4-9	257-263	banned	event[12]	new[12]	_	_	
-4-10	264-268	from	event[12]	new[12]	_	_	
-4-11	269-279	conducting	event[12]	new[12]	_	_	
-4-12	280-286	public	event[12]	new[12]	_	_	
-4-13	287-294	worship	event[12]	new[12]	_	_	
-4-14	295-297	at	event[12]	new[12]	_	_	
-4-15	298-311	archeological	event[12]	new[12]	_	_	
-4-16	312-317	sites	event[12]	new[12]	_	_	
-4-17	318-320	by	_	_	_	_	
-4-18	321-324	the	organization[14]	new[14]	_	_	
-4-19	325-330	Greek	organization[14]	new[14]	_	_	
-4-20	331-339	Ministry	organization[14]	new[14]	_	_	
-4-21	340-342	of	organization[14]	new[14]	_	_	
-4-22	343-350	Culture	organization[14]	new[14]	_	_	
-4-23	351-352	.	_	_	_	_	
+4-1	218-223	Prior	_	_	_	_	_	_	
+4-2	224-226	to	_	_	_	_	_	_	
+4-3	227-230	the	event[13]	giv[13]	sssss[13]	_	_	_	
+4-4	231-237	ruling	event[13]	giv[13]	sssss[13]	_	_	_	
+4-5	238-239	,	_	_	_	_	_	_	
+4-6	240-243	the	event[14]|organization[15]	new[14]|giv[15]	nnsnn[14]|snsns[15]	_	coref|coref	5-3[19_14]|5-5[20_15]	
+4-7	244-252	religion	event[14]|organization[15]	new[14]|giv[15]	nnsnn[14]|snsns[15]	_	_	_	
+4-8	253-256	was	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-9	257-263	banned	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-10	264-268	from	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-11	269-279	conducting	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-12	280-286	public	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-13	287-294	worship	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-14	295-297	at	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-15	298-311	archeological	event[14]|place[16]	new[14]|giv[16]	nnsnn[14]|sssss[16]	_	_	_	
+4-16	312-317	sites	event[14]|place[16]	new[14]|giv[16]	nnsnn[14]|sssss[16]	_	_	_	
+4-17	318-320	by	event[14]	new[14]	nnsnn[14]	_	_	_	
+4-18	321-324	the	event[14]|organization[17]	new[14]|new[17]	nnsnn[14]|nnsnn[17]	Ministry_of_Culture_and_Sports_%28Greece%29[17]	_	_	
+4-19	325-330	Greek	event[14]|organization[17]	new[14]|new[17]	nnsnn[14]|nnsnn[17]	Ministry_of_Culture_and_Sports_%28Greece%29[17]	_	_	
+4-20	331-339	Ministry	event[14]|organization[17]	new[14]|new[17]	nnsnn[14]|nnsnn[17]	Ministry_of_Culture_and_Sports_%28Greece%29[17]	_	_	
+4-21	340-342	of	event[14]|organization[17]	new[14]|new[17]	nnsnn[14]|nnsnn[17]	Ministry_of_Culture_and_Sports_%28Greece%29[17]	_	_	
+4-22	343-350	Culture	event[14]|organization[17]|abstract[18]	new[14]|new[17]|new[18]	nnsnn[14]|nnsnn[17]|nnsnn[18]	Ministry_of_Culture_and_Sports_%28Greece%29[17]	_	_	
+4-23	351-352	.	_	_	_	_	_	_	
 
 #Text=Due to that , the religion was relatively secretive .
-5-1	353-356	Due	_	_	_	_	
-5-2	357-359	to	_	_	_	_	
-5-3	360-364	that	event	acc	_	_	
-5-4	365-366	,	_	_	_	_	
-5-5	367-370	the	organization[16]	giv[16]	coref	9-19[37_16]	
-5-6	371-379	religion	organization[16]	giv[16]	_	_	
-5-7	380-383	was	_	_	_	_	
-5-8	384-394	relatively	_	_	_	_	
-5-9	395-404	secretive	_	_	_	_	
-5-10	405-406	.	_	_	_	_	
+5-1	353-356	Due	_	_	_	_	_	_	
+5-2	357-359	to	_	_	_	_	_	_	
+5-3	360-364	that	event[19]	acc[19]	nnsnn[19]	_	_	_	
+5-4	365-366	,	_	_	_	_	_	_	
+5-5	367-370	the	organization[20]	giv[20]	snsns[20]	_	coref	9-21[41_20]	
+5-6	371-379	religion	organization[20]	giv[20]	snsns[20]	_	_	_	
+5-7	380-383	was	_	_	_	_	_	_	
+5-8	384-394	relatively	_	_	_	_	_	_	
+5-9	395-404	secretive	_	_	_	_	_	_	
+5-10	405-406	.	_	_	_	_	_	_	
 
 #Text=The Greek Orthodox Church , a Christian denomination , is extremely critical of worshippers of the ancient deities .
-6-1	407-410	The	organization[17]	new[17]	coref|appos	8-1[30_17]|6-6[18_17]	
-6-2	411-416	Greek	organization[17]	new[17]	_	_	
-6-3	417-425	Orthodox	organization[17]	new[17]	_	_	
-6-4	426-432	Church	organization[17]	new[17]	_	_	
-6-5	433-434	,	_	_	_	_	
-6-6	435-436	a	organization[18]	giv[18]	_	_	
-6-7	437-446	Christian	organization[18]	giv[18]	_	_	
-6-8	447-459	denomination	organization[18]	giv[18]	_	_	
-6-9	460-461	,	_	_	_	_	
-6-10	462-464	is	_	_	_	_	
-6-11	465-474	extremely	_	_	_	_	
-6-12	475-483	critical	_	_	_	_	
-6-13	484-486	of	_	_	_	_	
-6-14	487-498	worshippers	person[19]	giv[19]	bridge	7-3[22_19]	
-6-15	499-501	of	person[19]	giv[19]	_	_	
-6-16	502-505	the	person[19]|abstract[20]	giv[19]|giv[20]	coref	7-7[24_20]	
-6-17	506-513	ancient	person[19]|abstract[20]	giv[19]|giv[20]	_	_	
-6-18	514-521	deities	person[19]|abstract[20]	giv[19]|giv[20]	_	_	
-6-19	522-523	.	_	_	_	_	
+6-1	407-410	The	organization[21]	new[21]	nssns[21]	Greek_Orthodox_Church[21]	coref	6-6[22_21]	
+6-2	411-416	Greek	organization[21]	new[21]	nssns[21]	Greek_Orthodox_Church[21]	_	_	
+6-3	417-425	Orthodox	organization[21]	new[21]	nssns[21]	Greek_Orthodox_Church[21]	_	_	
+6-4	426-432	Church	organization[21]	new[21]	nssns[21]	Greek_Orthodox_Church[21]	_	_	
+6-5	433-434	,	_	_	_	_	_	_	
+6-6	435-436	a	organization[22]	giv[22]	nssns[22]	Greek_Orthodox_Church[22]	coref	8-1[33_22]	
+6-7	437-446	Christian	organization[22]	giv[22]	nssns[22]	Greek_Orthodox_Church[22]	_	_	
+6-8	447-459	denomination	organization[22]	giv[22]	nssns[22]	Greek_Orthodox_Church[22]	_	_	
+6-9	460-461	,	_	_	_	_	_	_	
+6-10	462-464	is	_	_	_	_	_	_	
+6-11	465-474	extremely	_	_	_	_	_	_	
+6-12	475-483	critical	_	_	_	_	_	_	
+6-13	484-486	of	_	_	_	_	_	_	
+6-14	487-498	worshippers	person[23]	giv[23]	sssns[23]	_	_	_	
+6-15	499-501	of	person[23]	giv[23]	sssns[23]	_	_	_	
+6-16	502-505	the	person[23]|person[24]	giv[23]|giv[24]	sssns[23]|nsnss[24]	_	coref	7-7[27_24]	
+6-17	506-513	ancient	person[23]|person[24]	giv[23]|giv[24]	sssns[23]|nsnss[24]	_	_	_	
+6-18	514-521	deities	person[23]|person[24]	giv[23]|giv[24]	sssns[23]|nsnss[24]	_	_	_	
+6-19	522-523	.	_	_	_	_	_	_	
 
 #Text=Today , about 100,000 Greeks worship the ancient gods , such as Zeus , Hera , Poseidon , Aphrodite , and Athena .
-7-1	524-529	Today	time	acc	_	_	
-7-2	530-531	,	_	_	_	_	
-7-3	532-537	about	person[22]|quantity[23]	acc[22]|new[23]	coref	8-6[31_23]	
-7-4	538-545	100,000	person[22]|quantity[23]	acc[22]|new[23]	_	_	
-7-5	546-552	Greeks	person[22]	acc[22]	_	_	
-7-6	553-560	worship	_	_	_	_	
-7-7	561-564	the	abstract[24]	giv[24]	bridge|bridge|bridge|bridge|bridge	7-22[0_24]|7-19[0_24]|7-17[0_24]|7-15[0_24]|7-13[0_24]	
-7-8	565-572	ancient	abstract[24]	giv[24]	_	_	
-7-9	573-577	gods	abstract[24]	giv[24]	_	_	
-7-10	578-579	,	_	_	_	_	
-7-11	580-584	such	_	_	_	_	
-7-12	585-587	as	_	_	_	_	
-7-13	588-592	Zeus	person	acc	_	_	
-7-14	593-594	,	_	_	_	_	
-7-15	595-599	Hera	person	acc	_	_	
-7-16	600-601	,	_	_	_	_	
-7-17	602-610	Poseidon	person	acc	_	_	
-7-18	611-612	,	_	_	_	_	
-7-19	613-622	Aphrodite	person	acc	_	_	
-7-20	623-624	,	_	_	_	_	
-7-21	625-628	and	_	_	_	_	
-7-22	629-635	Athena	person	acc	_	_	
-7-23	636-637	.	_	_	_	_	
+7-1	524-529	Today	time[25]	acc[25]	nnnnn[25]	_	_	_	
+7-2	530-531	,	_	_	_	_	_	_	
+7-3	532-537	about	person[26]	acc[26]	nssnn[26]	_	bridge	8-6[34_26]	
+7-4	538-545	100,000	person[26]	acc[26]	nssnn[26]	_	_	_	
+7-5	546-552	Greeks	person[26]	acc[26]	nssnn[26]	_	_	_	
+7-6	553-560	worship	_	_	_	_	_	_	
+7-7	561-564	the	person[27]	giv[27]	nsnss[27]	_	bridge|bridge|bridge|bridge|bridge	7-13[28_27]|7-15[29_27]|7-17[30_27]|7-19[31_27]|7-22[32_27]	
+7-8	565-572	ancient	person[27]	giv[27]	nsnss[27]	_	_	_	
+7-9	573-577	gods	person[27]	giv[27]	nsnss[27]	_	_	_	
+7-10	578-579	,	_	_	_	_	_	_	
+7-11	580-584	such	_	_	_	_	_	_	
+7-12	585-587	as	_	_	_	_	_	_	
+7-13	588-592	Zeus	person[28]	acc[28]	snnnn[28]	Zeus[28]	_	_	
+7-14	593-594	,	_	_	_	_	_	_	
+7-15	595-599	Hera	person[29]	acc[29]	snnnn[29]	Hera[29]	_	_	
+7-16	600-601	,	_	_	_	_	_	_	
+7-17	602-610	Poseidon	person[30]	acc[30]	nnnnn[30]	Poseidon[30]	_	_	
+7-18	611-612	,	_	_	_	_	_	_	
+7-19	613-622	Aphrodite	person[31]	acc[31]	nnnnn[31]	Aphrodite[31]	_	_	
+7-20	623-624	,	_	_	_	_	_	_	
+7-21	625-628	and	_	_	_	_	_	_	
+7-22	629-635	Athena	person[32]	acc[32]	nnnnn[32]	Athena[32]	_	_	
+7-23	636-637	.	_	_	_	_	_	_	
 
 #Text=The Greek Orthodox Church estimates that number is closer to 40,000 .
-8-1	638-641	The	organization[30]	giv[30]	_	_	
-8-2	642-647	Greek	organization[30]	giv[30]	_	_	
-8-3	648-656	Orthodox	organization[30]	giv[30]	_	_	
-8-4	657-663	Church	organization[30]	giv[30]	_	_	
-8-5	664-673	estimates	_	_	_	_	
-8-6	674-678	that	quantity[31]	giv[31]	_	_	
-8-7	679-685	number	quantity[31]	giv[31]	_	_	
-8-8	686-688	is	_	_	_	_	
-8-9	689-695	closer	_	_	_	_	
-8-10	696-698	to	_	_	_	_	
-8-11	699-705	40,000	_	_	_	_	
-8-12	706-707	.	_	_	_	_	
+8-1	638-641	The	organization[33]	giv[33]	nssns[33]	Greek_Orthodox_Church[33]	_	_	
+8-2	642-647	Greek	organization[33]	giv[33]	nssns[33]	Greek_Orthodox_Church[33]	_	_	
+8-3	648-656	Orthodox	organization[33]	giv[33]	nssns[33]	Greek_Orthodox_Church[33]	_	_	
+8-4	657-663	Church	organization[33]	giv[33]	nssns[33]	Greek_Orthodox_Church[33]	_	_	
+8-5	664-673	estimates	_	_	_	_	_	_	
+8-6	674-678	that	abstract[34]	acc[34]	nnnnn[34]	_	_	_	
+8-7	679-685	number	abstract[34]	acc[34]	nnnnn[34]	_	_	_	
+8-8	686-688	is	_	_	_	_	_	_	
+8-9	689-695	closer	_	_	_	_	_	_	
+8-10	696-698	to	_	_	_	_	_	_	
+8-11	699-705	40,000	abstract[35]	new[35]	nssnn[35]	_	_	_	
+8-12	706-707	.	_	_	_	_	_	_	
 
-#Text=Many neo-pagan religions , such as Wicca , use aspects of ancient Greek religions in their practice ; Hellenic polytheism instead focuses exclusively on the ancient religions , as far as the fragmentary nature of the surviving source material allows .
-9-1	708-712	Many	organization[32]	acc[32]	ana|bridge	9-16[0_32]|9-7[0_32]	
-9-2	713-722	neo-pagan	organization[32]	acc[32]	_	_	
-9-3	723-732	religions	organization[32]	acc[32]	_	_	
-9-4	733-734	,	_	_	_	_	
-9-5	735-739	such	_	_	_	_	
-9-6	740-742	as	_	_	_	_	
-9-7	743-748	Wicca	organization	acc	_	_	
-9-8	749-750	,	_	_	_	_	
-9-9	751-754	use	_	_	_	_	
-9-10	755-762	aspects	abstract[34]	new[34]	_	_	
-9-11	763-765	of	abstract[34]	new[34]	_	_	
-9-12	766-773	ancient	abstract[34]|organization[35]	new[34]|giv[35]	coref	9-25[38_35]	
-9-13	774-779	Greek	abstract[34]|organization[35]	new[34]|giv[35]	_	_	
-9-14	780-789	religions	abstract[34]|organization[35]	new[34]|giv[35]	_	_	
-9-15	790-792	in	_	_	_	_	
-9-16	793-798	their	organization	giv	_	_	
-9-17	799-807	practice	_	_	_	_	
-9-18	808-809	;	_	_	_	_	
-9-19	810-818	Hellenic	organization[37]	acc[37]	_	_	
-9-20	819-829	polytheism	organization[37]	acc[37]	_	_	
-9-21	830-837	instead	_	_	_	_	
-9-22	838-845	focuses	_	_	_	_	
-9-23	846-857	exclusively	_	_	_	_	
-9-24	858-860	on	_	_	_	_	
-9-25	861-864	the	organization[38]	giv[38]	_	_	
-9-26	865-872	ancient	organization[38]	giv[38]	_	_	
-9-27	873-882	religions	organization[38]	giv[38]	_	_	
-9-28	883-884	,	_	_	_	_	
-9-29	885-887	as	_	_	_	_	
-9-30	888-891	far	_	_	_	_	
-9-31	892-894	as	_	_	_	_	
-9-32	895-898	the	_	_	_	_	
-9-33	899-910	fragmentary	_	_	_	_	
-9-34	911-917	nature	_	_	_	_	
-9-35	918-920	of	_	_	_	_	
-9-36	921-924	the	abstract[39]	new[39]	_	_	
-9-37	925-934	surviving	abstract[39]	new[39]	_	_	
-9-38	935-941	source	abstract[39]	new[39]	_	_	
-9-39	942-950	material	abstract[39]	new[39]	_	_	
-9-40	951-957	allows	_	_	_	_	
-9-41	958-959	.	_	_	_	_	
+#Text=Many neo - pagan religions , such as Wicca , use aspects of ancient Greek religions in their practice ; Hellenic polytheism instead focuses exclusively on the ancient religions , as far as the fragmentary nature of the surviving source material allows .
+9-1	708-712	Many	organization[36]	acc[36]	nnnnn[36]	_	coref|bridge	9-18[40_36]|9-9[37_36]	
+9-2	713-716	neo	organization[36]	acc[36]	nnnnn[36]	_	_	_	
+9-3	717-718	-	organization[36]	acc[36]	nnnnn[36]	_	_	_	
+9-4	719-724	pagan	organization[36]	acc[36]	nnnnn[36]	_	_	_	
+9-5	725-734	religions	organization[36]	acc[36]	nnnnn[36]	_	_	_	
+9-6	735-736	,	organization[36]	acc[36]	nnnnn[36]	_	_	_	
+9-7	737-741	such	organization[36]	acc[36]	nnnnn[36]	_	_	_	
+9-8	742-744	as	organization[36]	acc[36]	nnnnn[36]	_	_	_	
+9-9	745-750	Wicca	organization[36]|organization[37]	acc[36]|acc[37]	nnnnn[36]|nnnnn[37]	Wicca[37]	_	_	
+9-10	751-752	,	_	_	_	_	_	_	
+9-11	753-756	use	_	_	_	_	_	_	
+9-12	757-764	aspects	abstract[38]	new[38]	nnnnn[38]	_	_	_	
+9-13	765-767	of	abstract[38]	new[38]	nnnnn[38]	_	_	_	
+9-14	768-775	ancient	abstract[38]|organization[39]	new[38]|new[39]	nnnnn[38]|nnnnn[39]	_	coref	9-27[42_39]	
+9-15	776-781	Greek	abstract[38]|organization[39]	new[38]|new[39]	nnnnn[38]|nnnnn[39]	_	_	_	
+9-16	782-791	religions	abstract[38]|organization[39]	new[38]|new[39]	nnnnn[38]|nnnnn[39]	_	_	_	
+9-17	792-794	in	_	_	_	_	_	_	
+9-18	795-800	their	organization[40]	giv[40]	nnnnn[40]	_	_	_	
+9-19	801-809	practice	_	_	_	_	_	_	
+9-20	810-811	;	_	_	_	_	_	_	
+9-21	812-820	Hellenic	organization[41]	giv[41]	snsns[41]	_	_	_	
+9-22	821-831	polytheism	organization[41]	giv[41]	snsns[41]	_	_	_	
+9-23	832-839	instead	_	_	_	_	_	_	
+9-24	840-847	focuses	_	_	_	_	_	_	
+9-25	848-859	exclusively	_	_	_	_	_	_	
+9-26	860-862	on	_	_	_	_	_	_	
+9-27	863-866	the	organization[42]	giv[42]	nnnnn[42]	_	_	_	
+9-28	867-874	ancient	organization[42]	giv[42]	nnnnn[42]	_	_	_	
+9-29	875-884	religions	organization[42]	giv[42]	nnnnn[42]	_	_	_	
+9-30	885-886	,	_	_	_	_	_	_	
+9-31	887-889	as	_	_	_	_	_	_	
+9-32	890-893	far	_	_	_	_	_	_	
+9-33	894-896	as	_	_	_	_	_	_	
+9-34	897-900	the	abstract[43]	new[43]	nnnnn[43]	_	_	_	
+9-35	901-912	fragmentary	abstract[43]	new[43]	nnnnn[43]	_	_	_	
+9-36	913-919	nature	abstract[43]	new[43]	nnnnn[43]	_	_	_	
+9-37	920-922	of	abstract[43]	new[43]	nnnnn[43]	_	_	_	
+9-38	923-926	the	abstract[43]|abstract[44]	new[43]|new[44]	nnnnn[43]|nnnnn[44]	_	_	_	
+9-39	927-936	surviving	abstract[43]|abstract[44]	new[43]|new[44]	nnnnn[43]|nnnnn[44]	_	_	_	
+9-40	937-943	source	abstract[43]|abstract[44]	new[43]|new[44]	nnnnn[43]|nnnnn[44]	_	_	_	
+9-41	944-952	material	abstract[43]|abstract[44]	new[43]|new[44]	nnnnn[43]|nnnnn[44]	_	_	_	
+9-42	953-959	allows	_	_	_	_	_	_	
+9-43	960-961	.	_	_	_	_	_	_	
 `);
 }
+
+//Summaries handling
+    counterDisplay = document.getElementById("summarycounter");
+    upButton = document.getElementById("summaryup");
+    downButton = document.getElementById("summarydown");
+    summaryBox = document.getElementById("summarycontent");
+
+    downButton.addEventListener("click", () => {
+        if (selsummary<summaries.length && summaries.length){
+            selsummary++;
+            counterDisplay.textContent = selsummary + " ";
+            $("#summarycontent").html(summaries[selsummary-1]);
+            propagate_salience();
+        }
+    });
+
+    upButton.addEventListener("click", () => {
+        if (selsummary>1 && summaries.length){
+            selsummary--;
+            counterDisplay.textContent = selsummary + " ";
+            $("#summarycontent").html(summaries[selsummary-1]);
+            propagate_salience();
+        }
+    });
+
+        summaryBox.addEventListener("dblclick", () => {
+        if (summaries.length){
+            edited_val = prompt("Postedited summary:",summaries[selsummary-1]);
+            if (edited_val === null){
+                return;
+            }
+            edited_val = edited_val.trim();
+            if (edited_val.length > 0){
+                if (edited_val != summaries[selsummary-1]){
+                    if (! edited_val.includes("; postedited")){
+                        edited_val = edited_val.replace(/\)/,'; postedited)');
+                        sum_len = edited_val.replace(/\(.*?\) /,'').length;
+                        if (sum_len > 380){
+                            alert("Warning: new summary is too long! (" + sum_len.toString() + " characters)");
+                        }
+                    }
+                }
+                summaries[selsummary-1] = edited_val;
+                $("#summarycontent").html(summaries[selsummary-1]);
+            }
+        }
+    });
 
 });
 
@@ -1094,19 +1268,24 @@ function toggle_star(div_id){
 		  $('#icon' + div_id).find(".highlight-star").css("display","none");
 	  }
 	}
-	// also toggle salience marking
-	toggle_salience(div_id);
 }
 
 function toggle_salience(div_id){
 	if ("salience" in entities[div_id].annos){
-	  if (entities[div_id].annos["salience"]=="sal"){
-		  $('#' + div_id).addClass("salient");
-	  } else{
-		  $('#' + div_id).removeClass("salient");
-	  }
+		if (entities[div_id].annos["salience"].length == 5){
+			salscore = countInstances(entities[div_id].annos["salience"],"s");
+			if (salscore > 0){
+				$('#icon' + div_id).find(".salience").html("+" + salscore.toString());
+				$('#icon' + div_id).find(".salience").css("display","inline-block");
+			} else{
+					  $('#icon' + div_id).find(".salience").css("display","none");
+			}
+		}
+	} else{
+			$('#icon' + div_id).find(".salience").css("display","none");
 	}
 }
+
 
 // Set the entity type for an entity and handle color + icon
 function change_entity(entity_type){
@@ -1114,6 +1293,7 @@ function change_entity(entity_type){
   icon = $('#icon' + entity_span);
   html = '<i title="%TYPE%" class="fa fa-%FATYPE% entity_icon"></i>';
   html += '<i title="accessible" class="fa fa-star entity_icon highlight-star"></i>';
+  html += '<i title="salience" class="fa entity_icon salience">+0</i>';
   icon_type = DEFAULT_ICON;
   color = DEFAULT_COLOR;
   if (entity_type in ICON_MAP){
@@ -1246,19 +1426,48 @@ function toggle_sents(){
 function select_anno_key(){
 	val_opts = "";
 	sel_key = $("#sel_anno_key").val();
-	if (sel_key in anno_values){
-		for (v of anno_values[sel_key]){
-				val_opts +='<option value="'+v+'">'+v+'</option>\n';
-		}
-	}
-	$("#sel_anno_value").html(val_opts);
 	div_id = document.getElementById("active_entity").value;
 	ent = entities[div_id];
-	if (sel_key in ent.annos){
-		$("#sel_anno_value").val(ent.annos[sel_key]);
-	}
 	$("#anno_entity_text").html(ent.get_text());
+	ent_anno_val = null;
+	if (sel_key in ent.annos){
+		ent_anno_val = ent.annos[sel_key];
+	}
 
+	if (sel_key in anno_values){
+		if (anno_values[sel_key].has('nnnnn') || anno_values[sel_key].has('s____') || anno_values[sel_key].has('sssss')){  // Render as checkboxes
+			subvals = ent_anno_val.split('');
+			val_range = Array.from(range(0, subvals.length))
+			for (i in val_range){
+				if (subvals[i] == "s"){
+					$("#sel_anno_check" + (parseInt(i)+1).toString()).prop('checked', true);
+					$("#sel_anno_check" + (parseInt(i)+1).toString()).prop("indeterminate", false);
+				} else if (subvals[i] == "n"){
+					$("#sel_anno_check" + (parseInt(i)+1).toString()).prop('checked', false);
+					$("#sel_anno_check" + (parseInt(i)+1).toString()).prop("indeterminate", false);
+				} else{
+					$("#sel_anno_check" + (parseInt(i)+1).toString()).prop("indeterminate", true);
+				}
+				$("#sel_anno_check" + (parseInt(i)+1).toString()).css("display","inline-block");
+			}
+			$("#sel_anno_value").css("display","none");
+			propagate_salience();
+		}
+		else{
+			for (v of anno_values[sel_key]){
+					val_opts +='<option value="'+v+'">'+v+'</option>\n';
+			}
+				$("#sel_anno_value").html(val_opts);
+				if (sel_key in ent.annos){
+					$("#sel_anno_value").val(ent_anno_val);
+				}
+			val_range = Array.from(range(0, 5))
+			for (i in val_range){
+				$("#sel_anno_check" + (parseInt(i)+1).toString()).css("display","none");
+			}
+			$("#sel_anno_value").css("display","inline-block");
+		}
+	}
 }
 
 function select_anno_value(){
@@ -1270,6 +1479,35 @@ function select_anno_value(){
 		ent.annos[key] = val;
 	}
 	toggle_star(div_id);
+}
+
+ function select_check_value(inputObject){
+	let div_id =	document.getElementById("active_entity").value;
+	let ent = entities[div_id];
+	let key = $("#sel_anno_key").val();
+	let val = ent.annos[key];
+	subvals = val.split('');
+	target = parseInt($(inputObject).attr("id").slice(-1)) - 1;
+	if ($(inputObject).is(':indeterminate')){
+		newval = "_";
+	} else if ($(inputObject).is(':checked')){
+		newval = "s";
+	} else {
+		newval = "n";
+	}
+	subvals[target] = newval;
+	newval = subvals.join("");
+	
+	if (val != ""){
+		ent.annos[key] = newval;
+		ent_coref_group = ent.groups["coref"];
+		if (ent_coref_group != 0){
+			for (eid of groups["coref"][ent_coref_group]){
+				entities[eid].annos[key] = newval;
+			}
+		}
+		propagate_salience();
+	}
 }
 
 function make_token_div(tok){ // Take a Token object and return HTML representation with sentence break element if needed
@@ -1291,6 +1529,22 @@ function make_token_div(tok){ // Take a Token object and return HTML representat
 
 
 function read_webanno(data){
+
+
+	default_conf = {"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal"};
+	
+	anno_keys = [];
+	anno_values = {};
+	//default_annos = {};
+	for (anno of default_conf["entity_annos"].split(";")){
+		let anno_parts = anno.split(":");
+		anno_values[anno_parts[0]] = new Set(anno_parts[1].split("|"));
+		default_annos[anno_parts[0]] = anno_parts[1].split("|")[0];
+		anno_keys.push(anno_parts[0]);
+	}
+
+
+	anno_mode = "entities";
 	$("#selectable").html("");  // Clear editor
 	// Clear data model
 	entities = {};
@@ -1304,6 +1558,7 @@ function read_webanno(data){
 	color_modes.add("bridge");
 	anno_keys = [];
 	anno_values = {};
+	summaries = [];
 
 	lines = data.split("\n");
 	sent = 0;
@@ -1348,6 +1603,17 @@ function read_webanno(data){
 				continue;
 			}
 			ents = ent_data.split("|");
+			row_ent_id_mapping = {};
+			for (e_idx in ents){
+				ent = ents[e_idx];
+				if (ent.includes("[")){
+					[x, e_id] = ent.split("[");
+					e_id = e_id.replace("]","");
+				} else{
+					e_id = fields[1];
+				}
+				row_ent_id_mapping[e_id] = e_idx;
+			}
 			this_row_annos =[];
 			if (anno_keys.length>0){
 				for (i in ents){
@@ -1361,9 +1627,17 @@ function read_webanno(data){
 					if (vals == "_"){continue;}
 					for (j in vals){
 						val = vals[j];
-						if (val.includes("[")){val = val.replace(/\[.*/,'');}
+						if (val.includes("[")){
+							[val, e_id] = val.split("[");
+							e_id = e_id.replace("]","");
+							//val = val.replace(/\[.*/,'');
+						} else{
+							e_id = fields[1];
+						}
 						anno_values[anno_key].add(val);
-						this_row_annos[j][anno_key] = val;
+						mapped_idx = row_ent_id_mapping[e_id];
+						//this_row_annos[j][anno_key] = val;
+						this_row_annos[mapped_idx ][anno_key] = val;
 					}
 				}
 			}			
@@ -1402,6 +1676,9 @@ function read_webanno(data){
 					tid_parts = edge_path.split("[");
 					src_trg = tid_parts[1].split("_");
 					src = src_trg[0];
+					if (src_trg[1]==null){
+						a=4;
+					}
 					trg = src_trg[1].replace(/\]/,'');
 					if (trg=="0"){trg=fields[0];}  // single token target, ID 0 = this line
 					if (src=="0"){src=tid_parts[0];}  // single token source, ID = "sent-wordnum", e.g. 5-3 for sent 5 token 3
@@ -1416,9 +1693,20 @@ function read_webanno(data){
 					anno_keys.push(key);
 				}
 			}
+		} else if (line.startsWith('#Summary')){ // summaries
+			parts = splitWithTail(line,"=",1);
+			summaries.push(parts[1]);
+			selsummary = 1;
+			document.getElementById("summarycounter").textContent = selsummary + " ";
 		}
 	}
-	
+
+	if (summaries.length>0){
+		$("#spannotatorsummary").css("display","inline-block");
+		$("#summarycontent").html(summaries[0]);
+	} else{
+		$("#spannotatorsummary").css("display","none");
+	}
 	
 	anno_opts = "";
 	val_opts = "";
@@ -1850,6 +2138,15 @@ function write_webanno(config){
 		header += "\n#T_RL=webanno.custom.Coref|type|BT_webanno.custom.Referent";
 		extra_fields += "_\t_\t";  // columns to store edge types and paths
 	}
+	
+	if (summaries.length > 0){
+		idx = 1;
+		for (summary of summaries){
+			header += "\n#Summary" + idx.toString() + "=" + summary;
+			idx++;
+		}
+	}
+	
 	output.push(header += "\n");
 	
 	// Make sure we have no singleton groups
@@ -1899,6 +2196,9 @@ function write_webanno(config){
 			anno_string = '_\t';
 		} else{
 			anno_string += "\t";
+		}
+		if (tok.sentnum == null){
+			let b=4;
 		}
 		line = [tok.sentnum.toString() + "-" + toknum.toString() + "\t" + chars.toString() + "-" + 
 					(chars+ tok.word.length).toString()+"\t" + tok.word + "\t" +
@@ -2052,10 +2352,9 @@ function write_webanno(config){
 						this_ent = entities[div_id];
 						for (i in anno_keys){
 							anno_key = anno_keys[i];
-							if (this_ent==null){
-								a=4;
-							}
-							anno_holder[i].push(this_ent.annos[anno_key]+"["+e+"]");
+							if (anno_key in this_ent.annos){
+								anno_holder[i].push(this_ent.annos[anno_key]+"["+e+"]");
+							} 
 						}
 						if (this_ent.identity != "_"){
 							ent_identities.push(this_ent.identity+"["+e+"]")
@@ -2232,3 +2531,61 @@ function list_entities(pos_list, pos_filter){
 	return list_groups;
 }
 
+function propagate_salience(){
+	$(".saltok").removeClass("saltok");
+	$(".saltok-selected-summary").removeClass("saltok-selected-summary");
+	for (gtype in groups){
+		if (gtype != 'coref'){continue;}
+		for (g_id in groups[gtype]){
+			final_val = "_____".split("");
+			for (eid of groups[gtype][g_id]){
+				if (g_id == "0"){final_val = "_____".split("");} // always reset salience value for singletons pseudo-cluster
+				ent = entities[eid];
+				if ("salience" in ent.annos){
+					salval = ent.annos["salience"];
+					if (salval.length == 5){
+						chars = salval.split("");
+						for (i in chars){
+							c = chars[i];
+							if (final_val[i] == "s"){continue;} // s has priority
+							else if (final_val[i] == "n") {
+								if (c == "s"){
+									final_val[i] = c;
+								}
+							}
+							else {final_val[i] = c;} // indeterminate is overwritten by anything
+						}
+					} else {
+						final_val = salval.split("");
+					}
+					ent.annos["salience"] = final_val.join("");
+				}
+			}
+			let first = true;
+			for (eid of Object.entries(groups[gtype][g_id]).sort((a, b) => parseInt(a[1].split("-")[0]) - parseInt(b[1].split("-")[0]))){
+				this_ent = entities[eid[1]];
+				if ("salience" in this_ent.annos && this_ent.annos["salience"].length == 5){
+					if (g_id != "0"){
+						this_ent.annos["salience"] = final_val.join("");
+					}
+					$('#icon' + eid[1]).find(".salience").css("display","none");
+					if ((first || g_id == "0") && this_ent.annos["salience"].includes("s")){
+						for (tok of this_ent.toks){
+							$("#t" + tok).addClass("saltok");
+							toggle_salience(eid[1]);
+						}
+						if (selsummary > 0){
+							selsummary_salience = this_ent.annos["salience"].split("")[selsummary-1];
+							if (selsummary_salience == "s"){
+								for (tok of this_ent.toks){
+									$("#t" + tok).addClass("saltok-selected-summary");
+								}
+							}
+						}
+						first = false;
+					}
+				}
+			}
+		}
+	}
+}
