@@ -144,5 +144,33 @@
 
 .highlight-star{position: absolute; top:11px; left:0px; color: yellow; -webkit-text-stroke-width: 1px; -webkit-text-stroke-color: orange; display: none}
 .salient{color:red; font-weight:bold;
-/*background: transparent repeating-linear-gradient(45deg, white 1px, lightgray 5px, #6d6d6d 6px, lightgray 5px);*/
+	/*background: transparent repeating-linear-gradient(45deg, white 1px, lightgray 5px, #6d6d6d 6px, lightgray 5px);*/
+	}
+
+.single-sense{color:#2ecc71}
+
+#spannotatorsummary{display: inline-block;
+  max-width: 1100px;
+  color: white;
+  font-size: smaller;
+  vertical-align: middle;
+  border: 1px solid white;}
+  
+#spannotatorsummary button.sum-toggle{
+	width: 12px;
+  height: 12px;
+  display: inline-grid;
 }
+
+.sum-toggle i {
+	font-size: 6px
+}
+
+#summarycounter{display:inline}
+
+#summarycontent{display:inline}
+
+.annocheck{display:none}
+.salience{ color: gray;  display: none}
+.saltok{color:blue}
+.saltok-selected-summary{color:red !important}
