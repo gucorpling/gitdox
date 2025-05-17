@@ -396,7 +396,7 @@ version:1.5
 
 """
 
-	sgml = sgml.replace("\r","")
+        sgml = sgml.replace("\r","")
 
 	output = ""
 	maxcol = 1
@@ -404,12 +404,12 @@ version:1.5
 
 	# TODO: de-hardwire special anno name list for which element name is ignored
 	ignore_element_annos = [("norm","lang"),("morph","lang"),("entity","group\\ccoref"),("entity","group\\cbridge"),
-							("entity","infstat"),("entity","salience"), ("entity", "bridgetype")]
+							("entity","infstat"),("entity","salience"), ("entity", "bridgetype"), ("entity", "ent_id"), ("entity", "bridge_antec")]
 
 	for line in sgml.strip().split("\n"):
 		line = line.strip()
 		# SocialCalc uses colons internally, \\c used to repr colon in data
-		line = line.replace(":","\\c")
+                line = line.replace(":","\\c")
 
 		if line.startswith("<?") or line.endswith("/>"):  # Skip unary tags and XML instructions
 			continue
@@ -485,8 +485,8 @@ Content-type: text/plain; charset=UTF-8
 --SocialCalcSpreadsheetControlSave--
 """
 
-	output = reorder_multicols(output)
-	return output
+        output = reorder_multicols(output)
+        return output
 
 
 def reorder_multicols(socialcalc):

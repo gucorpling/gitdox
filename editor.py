@@ -209,7 +209,7 @@ def load_page(user,admin,theform):
 					cache.invalidate_by_doc(doc_id, "meta")
 
 
-	if theform.getvalue('edit_docname'):
+        if theform.getvalue('edit_docname'):
 		docname = theform.getvalue('edit_docname')
 	elif old_docname != "":
 		docname = old_docname
@@ -278,13 +278,15 @@ def load_page(user,admin,theform):
 
 	if theform.getvalue('entity_sgml') and enable_entities:  # Save entity editor output
 		entity_sgml = theform.getvalue('entity_sgml')
-		ether_sgml  = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
-		if len(entity_sgml.strip()) > 0:
+                ether_sgml  = ether_to_sgml(get_socialcalc(ether_url, "gd" + "_" + corpus + "_" + docname),doc_id)
+                if len(entity_sgml.strip()) > 0:
 			word_anno = config["DEFAULT_SGML_TOK_ATTR"] if config["DEFAULT_SGML_TOK_ATTR"].lower() != "none" else None
 			other_annos = [a.split(":")[0] for a in config["entity_annos"].split(";")] if ":" in config["entity_annos"] else None
-			merged_sgml = merge_entities(ether_sgml, entity_sgml, merge_anno="entity", word_anno=word_anno, other_annos=other_annos)
+                        # add bridging antecent annos, to be merged into sgml if present
+                        other_annos += ['ent_id','bridge_antec']
+                        merged_sgml = merge_entities(ether_sgml, entity_sgml, merge_anno="entity", word_anno=word_anno, other_annos=other_annos)
 			merged_sgml = merged_sgml.replace("&amp;","&")
-			if not merged_sgml:  # merged_sgml = False means token counts don't match, can't merge
+                        if not merged_sgml:  # merged_sgml = False means token counts don't match, can't merge
 				render_data["entity_save_message"] = "Failed to save entities: token counts do not match with spreadsheet!"
 				render_data["entity_save_color"] = "red"
 				render_data["entity_save_icon"] = "ban"
@@ -431,7 +433,7 @@ def load_page(user,admin,theform):
 			ether_name = "_".join(["gd", corpus, docname])
 			#ether_url = ether_url.replace("https","http")  # fix AZ
 			soc = get_socialcalc(ether_url, ether_name)
-			tt_string = ether_to_sgml(soc, doc_id, config="tt_sgml")
+                        tt_string = ether_to_sgml(soc, doc_id, config="tt_sgml")
 			tt_string = reorder(tt_string,priorities=[config["DEFAULT_SGML_SENT_TAG"],"entity",config["NER_POS_COL"],str(config["DEFAULT_SGML_TOK_ATTR"])])
 			base_template = io.open("templates" + os.sep + "spannotator_template.html",encoding="utf8").read().replace('"','&quot;')
 			if 'entity_annos' in config:
@@ -447,14 +449,14 @@ def load_page(user,admin,theform):
 			else:
 				render_data["show_ner"] = False
 			tt_escaped = tt_string.decode("utf8").replace('"',"%%quot%%").replace('\n','\\n').replace("<","%%lt%%").replace(">","%%gt%%")
-			base_template = base_template.replace("%%DOC_TT_STRING%%",tt_escaped)
+                        base_template = base_template.replace("%%DOC_TT_STRING%%",tt_escaped)
 			entity_links = get_doc_entities(doc_id)
 			entity_list = []
 			if entity_links is not None:
 				for row in entity_links:
 					words, etype, eref = row
 					entity_list.append(words + "+" + etype + "+" + eref)
-			base_template = base_template.replace("%%DOC_ENTITY_LIST%%","|".join(entity_list).replace('"',"%%quot%%"))
+                        base_template = base_template.replace("%%DOC_ENTITY_LIST%%","|".join(entity_list).replace('"',"%%quot%%"))
 			all_entity_links = get_entity_options()
 			all_entity_list = []
 			if all_entity_links is not None:
@@ -497,7 +499,6 @@ def load_page(user,admin,theform):
 	render_data["can_save"] = not (int(admin) < 3)
 	render_data["editor_help_link_html"] = editor_help_link
 	render_data["first_load"] = len(theform.keys()) == 1
-
 	return render("editor", render_data)
 
 

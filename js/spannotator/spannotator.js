@@ -482,6 +482,14 @@ function accept_drop(elm) {
 		}
 }
 
+function clearJsPlumb(){
+	if (typeof jsPlumb !== 'undefined') {
+		jsPlumb.deleteEveryConnection();
+        	jsPlumb.deleteEveryEndpoint();
+        	jsPlumb.reset(); 
+	}
+}
+
 function loadScript(src, callback) {
                 const script = document.createElement("script");
                 script.src = src;
@@ -739,6 +747,32 @@ function get_new_group_id(group_type){
 	}
 }
 
+function sort_entity_div_ids(ent_div_ids){
+	let sorted = ent_div_ids.sort((a, b) => {
+                        const startA = parseInt(a.split('-')[0], 10);
+                        const startB = parseInt(b.split('-')[0], 10);
+                        return startA - startB;
+                        });
+        let  min_div_id = sorted[0]
+	return min_div_id
+}
+
+function remove_antec_links_out_of_group(affected_group, group_type){
+	if (affected_group in groups[group_type]) {
+		remaining_in_old_group = groups[group_type][affected_group];
+		min_remaining_div_id = sort_entity_div_ids(remaining_in_old_group)
+		for (div_id of remaining_in_old_group){
+			if (!(remaining_in_old_group.includes(entities[div_id].bridge_antec))) {
+				if (div_id != min_remaining_div_id) {
+					entities[div_id].bridge_antec = min_remaining_div_id
+				} else {
+					entities[div_id].bridge_antec = "_"
+				}
+			}
+		}
+	}
+}
+
 function ungroup_selected(group_type){
 	color_mode=$("#color_mode").val();
 	if (color_mode=="entities"){return false;} // entity highlighting mode, disable grouping
@@ -772,6 +806,25 @@ function ungroup_selected(group_type){
 		}
 	}
 
+	// remove antecedent links pointing to entites selected for ungrouping
+        if (group_type == "bridge") {
+		for (affected_group of affected_groups){                                
+			if (affected_group in groups[group_type]) {
+                        	remaining_in_old_group = groups[group_type][affected_group];
+				min_remaining_div_id = sort_entity_div_ids(remaining_in_old_group)
+				for (div_id of remaining_in_old_group){
+					if (sel_ent_ids.includes(entities[div_id].bridge_antec)) {
+						if (div_id != min_remaining_div_id) {
+							entities[div_id].bridge_antec = min_remaining_div_id
+						} else {
+							entities[div_id].bridge_antec = "_"
+						}
+					}		
+				}
+			}
+		}	
+	}
+
 	// if group_type is bridge, for all selected entities, change bridge_antec back to default "_"
 	if (group_type == "bridge") {
 		for (ent_id of sel_ent_ids){
@@ -796,6 +849,40 @@ function group_selected(group_type){  // add all selected entities to a single g
 	sel_spans.each(function(){
 		sel_ent_ids.push($(this).attr("id"));
 	});
+	var sel_div_ids = []
+        sel_spans.each(function(){
+        	sel_div_ids.push($(this).attr("id"));
+        });
+	const min_div_id = sort_entity_div_ids(sel_div_ids)
+
+	// add alert and return if user is making an already introduced entity a bridging anaphor
+	if (group_type == "bridge"){
+		invalid_assignment = false
+                for (e_id of sel_ent_ids){
+			if (entities[e_id].div_id != min_div_id) {
+                        	if ("infstat" in entities[e_id].annos){
+                        		if (entities[e_id].annos["infstat"] == "giv") {
+                                		invalid_assignment = true
+                                	}
+				}
+				if ("coref" in entities[e_id].groups){
+					coref_group = entities[e_id].groups["coref"]
+					if (coref_group != 0){
+						coref_group_ent_ids = groups["coref"][coref_group]
+						cluster_min = sort_entity_div_ids(coref_group_ent_ids)
+						// if proposed bridging anaphor is not first mention in coref cluster
+						if (entities[e_id].div_id != cluster_min){
+							invalid_assignment = true
+						}
+					}
+				}
+			}
+		}
+		if (invalid_assignment){
+			alert("Bridging anaphor has previous mention. Please reevaluate.")
+			return false
+		}
+	}
 	
 	// check that more than one entity is selected
 	if (sel_ent_ids.length <2){return false;}
@@ -815,6 +902,7 @@ function group_selected(group_type){  // add all selected entities to a single g
 	// choose the min group ID as the ID for the new group
 	let min_id = Math.min(...Array.from(merged_ids.values()));
 	let new_group = false;
+	let new_subgroup = false;
 	if (min_id == Infinity){
 		// create a new ID if there are no groups yet
 		min_id = get_new_group_id(group_type);
@@ -822,6 +910,7 @@ function group_selected(group_type){  // add all selected entities to a single g
 		// All selected entities are from a single, non-zero group - assume user wants a new group for these entities
 		min_id = get_new_group_id(group_type);
 		new_group = true;
+		new_subgroup = true;
 	}
 	
 	// assign new ID to all entities sharing a merged group's id
@@ -842,22 +931,32 @@ function group_selected(group_type){  // add all selected entities to a single g
 	// if group_type is bridge, assign the bridge_antec of all selected entities to be the selected entity with the min_id (except for the min_id entity itself)
 	if (group_type == "bridge") {
 		// find min_id entity
-		var sel_div_ids = []
-		sel_spans.each(function(){
-                	sel_div_ids.push($(this).attr("id"));
-		});
-		let sorted = sel_div_ids.sort((a, b) => {
-  			const startA = parseInt(a.split('-')[0], 10);
-  			const startB = parseInt(b.split('-')[0], 10);
-  			return startA - startB;
-			}); 
-		const min_div_id = sorted[0]
+		//var sel_div_ids = []
+		//sel_spans.each(function(){
+                //	sel_div_ids.push($(this).attr("id"));
+		//}); 
+		//const min_div_id = sort_entity_div_ids(sel_div_ids) 
 		for (e_id of sel_ent_ids){
-			console.log(entities[e_id].div_id)
-			console.log(min_div_id)
 			if (entities[e_id].div_id != min_div_id) {
 				entities[e_id].bridge_antec = min_div_id
 			}
+		}
+		// if a new subgroup was created, assign the bridge_antec of the old and new group entities to "_" if they point outside their current group
+		if (new_subgroup){
+			old_group_id = min_id
+			new_group_id = [...merged_ids][0]
+			old_group_ids = groups[group_type][old_group_id]
+			new_group_ids = groups[group_type][new_group_id]
+			for (e_id of old_group_ids){
+				if (!old_group_ids.includes(entities[e_id].bridge_antec)){
+					entities[e_id].bridge_antec = "_"
+				}
+			}
+			for (e_id of new_group_ids){
+                                if (!new_group_ids.includes(entities[e_id].bridge_antec)){
+                                        entities[e_id].bridge_antec = "_"
+                                }
+                        }
 		}
 	}
 
@@ -1355,6 +1454,9 @@ function delete_entity(entity_span){
 	  for (g in groups[gtype]){
 		  if (groups[gtype][g].includes(entity_span)){
 			  groups[gtype][g] = arrayRemove(groups[gtype][g],entity_span);
+			  if (gtype == "bridge") {
+				  remove_antec_links_out_of_group(g, gtype)
+			  }
 		  }
 		if (groups[gtype][g].length==0 & parseInt(g) != 0){delete groups[gtype][g];} // delete group if empty
 		else if (groups[gtype][g].length==1 & parseInt(g) != 0){
@@ -1855,7 +1957,12 @@ function read_webanno(data){
 			if (!(etype in grouping)){grouping[etype] = {};}
 			if (!(etype in etype_counts)){etype_counts[etype] = 0;}
 			etype_counts[etype]++;
-			
+
+			// if it is a bridge edge, set the antecedent of the src to be the trg 
+			if (etype == "bridge") {
+				entities[src].bridge_antec = trg
+			}
+
 			found = false;
 			for (group in grouping[etype]){
 				if (grouping[etype][group].includes(src)){
@@ -1916,7 +2023,6 @@ function read_webanno(data){
 }
 
 function read_tt(data, config){
-
 	// set tok to an SGML attribute name to use markup instead of TT plain text tokens as words
 	default_conf = {"span_tag": DEFAULT_SGML_SPAN_TAG, "span_attr": DEFAULT_SGML_SPAN_ATTR, "sent":DEFAULT_SGML_SENT_TAG, "tok": DEFAULT_SGML_TOK_ATTR,
 								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison|comparison-ellipsis|comparison-sense-hierarchical|comparison-sense-non-hierarchical|comparison-time|entity|entity-associative|entity-meronomy|entity-property|entity-resultative|set|set-member|set-subset|set-span-interval|other"};
@@ -1954,6 +2060,7 @@ function read_tt(data, config){
 	toks2entities = {};
 	tokens = {};
 	groups = {};
+	clearJsPlumb()
 	
 	groups["bridge"] = {0:[]};  // TODO: read from config
 
@@ -1966,6 +2073,9 @@ function read_tt(data, config){
 	e2tok = {};
 	e2type = {};
 	e2groups = {};
+	e2tempid = {}
+	e2antec = {}
+	tempid2divid = {}
 	new_sent = true;
 	span_buffer = [];
 	anno_buffer = {};
@@ -1973,9 +2083,7 @@ function read_tt(data, config){
 	sent_tooltip = '';
 
 	tok_array = [];
-
 	for (line of lines){
-
 		if (line.startsWith("<") && line.endsWith(">")){ // tag
 			if (line.startsWith('<'+config["sent"]+" ") && line.includes("=")){  // sentence opening tag with attribute - use as sentence title tooltip
 				find = '="([^"]*)"'; // catch first attribute
@@ -1988,6 +2096,21 @@ function read_tt(data, config){
 					m =  new RegExp(find);
 					span_type = line.match(m)[1];
 					span_info = {"start": tid, "type": span_type};
+					// add temp ent_id and bridge_antec to span_info if they are present
+					/*
+					if (line.includes("ent_id")){
+						find = ' ent_id="([^"]*)"';
+                                        	m =  new RegExp(find);
+                                        	span_temp_ent_id = line.match(m)[1];
+						span_info["ent_id"] = span_temp_ent_id
+						if (line.includes("bridge_antec")){
+							find = ' bridge_antec="([^"]*)"';
+                                                	m =  new RegExp(find);
+                                                	span_bridge_antec = line.match(m)[1];
+                                                	span_info["bridge_antec"] = span_bridge_antec
+						}
+					}
+					*/
 					span_buffer.push(span_info);
 				}
 				for (a in import_annos){
@@ -2021,12 +2144,38 @@ function read_tt(data, config){
 						//span_info["groups"] = group_info.join(">");
 					}
 				}
+				// add temp ent_id and bridge_antec to most recent span_info if they are present
+                                if (line.includes("ent_id")){
+                                	find = ' ent_id="([^"]*)"';
+                                	m =  new RegExp(find);
+                                	if (line.match(m) !== null){
+						span_temp_ent_id = line.match(m)[1];
+                                        	// apply to most recent span
+						span_buffer[span_buffer.length-1]["ent_id"] = span_temp_ent_id
+					}
+				}
+				if (line.includes("bridge_antec")){
+                                	find = ' bridge_antec="([^"]*)"';
+                                        m =  new RegExp(find);
+					if (line.match(m) !== null){
+                                        	span_bridge_antec = line.match(m)[1];
+                                        	// apply to most recent span
+						span_buffer[span_buffer.length-1]["bridge_antec"] = span_bridge_antec
+					}
+                                }
 			} else if (line.startsWith('</'+config["span_tag"]+">")) { // closing tag
 				queue = span_buffer.pop();
 				span_toks = Array.from(range(parseInt(queue["start"]), tid));
 				e_id =  queue["start"].toString() + "-" + (tid-1).toString();
 				e2tok[e_id] = span_toks;
 				e2type[e_id] = queue["type"];
+				// loading dictionaries for bridging antecedent
+				if ("ent_id" in queue){
+					e2tempid[e_id] = queue["ent_id"]
+					if("bridge_antec" in queue){
+						e2antec[e_id] = queue["bridge_antec"]
+					}
+				}
 				if ("groups" in queue){
 					sgml_groups = queue["groups"].split(">");
 					e2groups[e_id] = {};
@@ -2092,6 +2241,16 @@ function read_tt(data, config){
 		e_type = e2type[e_id];
 		tok_span = e2tok[e_id];
 		new_entity = add_entity(tok_span,null,true);
+		// mapping temp id to div_id for bridging antecedent
+		if (e_id in e2tempid){
+			tempid2divid[e2tempid[e_id]] = new_entity.div_id
+		}
+		// setting bridging antecedent if present
+		if (e_id in e2antec){
+			antec_tempid = e2antec[e_id]
+			antec_divid = tempid2divid[antec_tempid]
+			new_entity.bridge_antec = antec_divid
+		}
 		if (e_id in all_annos){
 			for (a of all_annos[e_id]){
 				new_entity.annos[a["key"]] = a["val"];
@@ -2407,23 +2566,34 @@ function write_webanno(config){
 							next_ent.next[gtype]  = edge;
 						}
 					}
-					else{  // this is a fountain-style link anno: a <- b, a <- c, a <- d ...
-						fountain_edges = [];
-						ent = ents_to_sort[0];  // connect everything to the first entity in the group
+					else{  // this is a default fountain-style link anno: a <- b, a <- c, a <- d ...
+						// however, if the entity has an antecedent stored in .bridge_antec, it supersedes as the origin: b.bridge_antec <- b, c.bridge_antec <- c ...
+						//fountain_edges = [];
+						//ent = ents_to_sort[0];  // connect everything to the first entity in the group, if there is no specified antecedent
 						for (i in range(0,ents_to_sort.length-1)){
+							ent = ents_to_sort[0];  // connect by default to the first entity in the group, if there is no specified antecedent
 							// make an edge specification pointing from next member of chain
 							i = parseInt(i);
 							next_ent = ents_to_sort[i+1];
 							first_in_component[gtype][next_ent.div_id] = false;
+							// if there is a specified antecedent, connect to that entity (rather than the first entity in the group)
+							if (next_ent.bridge_antec != "_") {
+								ent = entities[next_ent.bridge_antec]
+							}
 							next_start = tokens[next_ent.start].sentnum + "-" + tokens[next_ent.start].toknum_in_sent;
 							this_webanno_id = (ent.length > 1 || !(single_token_id_style) ? e_ids[ent.div_id] : "0");
 							next_webanno_id = (next_ent.length > 1 || !(single_token_id_style) ? e_ids[next_ent.div_id] : "0");
 							id_part = "[" + next_webanno_id.toString() + "_" + this_webanno_id.toString()+"]";
 							if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
 							edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
-							fountain_edges.push(edge);
+							if (gtype in ent.next) {
+								ent.next[gtype] += "|" + edge
+							} else {
+								ent.next[gtype] = edge
+							}
+							//fountain_edges.push(edge);
 						}
-						ent.next[gtype]  = fountain_edges.join("|");
+						//ent.next[gtype]  = fountain_edges.join("|");
 					}
 				}
 			}
@@ -2557,6 +2727,8 @@ function write_tt(sent_tag){
 	prev_sent = 0;
 	first_sent = true;
 	sent = '#Text=';
+	ent_num = 0
+	span2entnum = {}
 	for (t in tokens){
 		tok = tokens[t];
 		
@@ -2594,9 +2766,14 @@ function write_tt(sent_tag){
 				if (open_spans.includes(span_id)){
 					continue;
 				}
+				ent_num += 1
+				span2entnum[span_id] = ent_num
 				e = overlapped_ents[span_id];
 				open_spans.push(span_id);
-				entity_string = '<entity entity="'+e.type+'"';
+				entity_string = '<entity entity="' + e.type + '" ent_id="' + ent_num.toString() + '"';
+				if (e.bridge_antec != "_"){
+                                        entity_string += ' bridge_antec="' + span2entnum[e.bridge_antec].toString() + '"'
+                                }
 				for (a in e.annos) {
 					if (e.annos[a] != ""){
 						entity_string += ' ' + a + '="'+e.annos[a].toString()+'"'; 
@@ -2607,6 +2784,9 @@ function write_tt(sent_tag){
 						entity_string += ' group:' + gtype + '="'+e.groups[gtype].toString()+'"'; 
 					}
 				}
+				//if (e.bridge_antec != "_"){
+                                //	entity_string += ' bridge_antec="' + span2entnum[e.bridge_antec].toString() + '"'
+                                //}
 				entity_string += '>';
 				output.push(entity_string);
 			}
