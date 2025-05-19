@@ -42,7 +42,7 @@ function do_save_entities(){
 	
 	sent_tag = $('#spannotator_container').contents().find('#DEFAULT_SGML_SENT_TAG').val();
 	tt_data = document.getElementById('spannotator_container').contentWindow.write_tt(sent_tag);
-
+	document.getElementById('spannotator_container').contentWindow.check_missing_bridgetype();
 	document.getElementById('entity_sgml').value = tt_data;
 	document.getElementById('editor_form').submit();
 }
