@@ -62,8 +62,7 @@
 }
 
 .bridge {
-        font-size: x-small;
-        color: darkblue;
+        font-size: small;
         margin: 1px;
         text-align: right;
         vertical-align: bottom;

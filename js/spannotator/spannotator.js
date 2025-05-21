@@ -44,6 +44,7 @@ var groups = {}; // Stores all span groups, keys are group types, values map gro
 groups[def_group] = {0: []};
 groups["bridge"] = {0:[]}; // TODO: read from config
 
+var bridgetype_priority = ["other", "set-span-interval", "set-subset", "set-member", "set", "entity-resultative", "entity-property", "entity-meronomy","entity-associative", "entity", "comparison-time", "comparison-sense-non-hierarchical", "comparison-sense-hierarchical", "comparison-ellipsis", "comparison", "nobridge"] // TODO: read from config
 var collapse_edges = {"appos":"coref","ana":"coref","cata":"coref"};  // edge type replacements
 var anno_keys = [];  // additional span annotations beyond entity type
 var anno_values = {}; // possible values for each annotation key
@@ -70,7 +71,7 @@ for (key in global_defaults){
 
 entity_icon = '<div id="%ID%" class="entity_type"><i title="%TYPE%" class="fa fa-%FATYPE% entity_icon"></i></div>';
 close_icon = '<div id="close%ID%" class="close" onclick="delete_entity('+"'"+'%ID%'+"'"+');"><i title="close" class="fa fa-times-circle"></i></div>';
-bridge_icon = '<div id="bridge%ID%" class="bridge"><i title="bridgetype" class="fa fa-check"></i></div>';
+bridge_icon = '<div id="bridge%ID%" class="bridge"><i title="bridgetype"></i></div>'; //class="fa fa-check"
 sentnum = 0;
 
 class Entity{
@@ -832,6 +833,7 @@ function ungroup_selected(group_type){
 	}
 	
 	$(".selected-entity").removeClass("selected-entity");
+	all_ents_toggle_bridgetype()
 	propagate_salience();
 }
 
@@ -840,7 +842,7 @@ function group_selected(group_type){  // add all selected entities to a single g
 	if (color_mode=="entities"){return false;} // entity highlighting mode, disable grouping
 
 	if (group_type==null){group_type = color_mode;}
-	
+
 	// collect selected entities
 	var sel_ent_ids = [];
 	var sel_div_ids = []
@@ -897,6 +899,8 @@ function group_selected(group_type){  // add all selected entities to a single g
 			no_zeros = false;
 		}
 	}
+
+	affected_groups = new Set([...merged_ids]);
 	
 	// choose the min group ID as the ID for the new group
 	let min_id = Math.min(...Array.from(merged_ids.values()));
@@ -912,6 +916,8 @@ function group_selected(group_type){  // add all selected entities to a single g
 		new_subgroup = true;
 	}
 	
+	affected_groups.add(min_id)
+
 	// assign new ID to all entities sharing a merged group's id
 	if (!(new_group)){
 		for (old_id of merged_ids){
@@ -953,7 +959,20 @@ function group_selected(group_type){  // add all selected entities to a single g
 		}
 	}
 
+	// check if there are any singletons left over as a result of ungrouping
+	for (affected_group of affected_groups){
+		if (affected_group in groups[group_type]){
+			remaining_in_old_group = groups[group_type][affected_group];
+			if (remaining_in_old_group.length < 2){
+				for (div_id of remaining_in_old_group){
+					assign_group(entities[div_id], group_type,0);
+				}
+			}
+		}
+	}
+
 	$(".selected-entity").removeClass("selected-entity");
+	all_ents_toggle_bridgetype()
 	propagate_salience();
 }
 
@@ -1458,6 +1477,7 @@ function delete_entity(entity_span){
 	  }
   }
 
+  all_ents_toggle_bridgetype()
   $(".custom-menu").hide(100); // hide the menu
 }
 
@@ -1465,7 +1485,7 @@ function toggle_star(div_id){
 	if ("infstat" in entities[div_id].annos){
 	  if (entities[div_id].annos["infstat"]=="acc"){
 		  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
-	  } else{
+	  } else {
 		  $('#icon' + div_id).find(".highlight-star").css("display","none");
 	  }
 	}
@@ -1475,11 +1495,25 @@ function toggle_star(div_id){
 
 function toggle_bridgetype(div_id){
 	if ("bridgetype" in entities[div_id].annos){
-	  if (entities[div_id].annos["bridgetype"]=="nobridge"){
-		  $('#bridge' + div_id + ".bridge").css("display","none");
-	  } else{
+	  // if there is a bridgetype set, set check mark
+	  if (entities[div_id].annos["bridgetype"]!="nobridge"){
+		  $('#bridge' + div_id + ".bridge").removeClass("fa fa-exclamation").addClass("fa fa-check");
 		  $('#bridge' + div_id + ".bridge").css("display","inline-block");
+		  $('#bridge' + div_id + ".bridge").css("color","green");
+	 // if the entity has a bridging antecedent (is a bridging anaphor) and there is no bridgetype set, set warning symbol
+	  } else if (entities[div_id].annos["bridgetype"]=="nobridge" && entities[div_id].bridge_antec != "_") {
+		  $('#bridge' + div_id + ".bridge").removeClass("fa fa-check").addClass("fa fa-exclamation");
+		  $('#bridge' + div_id + ".bridge").css("display","inline-block");
+                  $('#bridge' + div_id + ".bridge").css("color","red");
+	  } else{
+		  $('#bridge' + div_id + ".bridge").css("display","none");
 	  }
+	}
+}
+
+function all_ents_toggle_bridgetype(){
+	for (div_id in entities) {
+		toggle_bridgetype(div_id)
 	}
 }
 
@@ -1663,23 +1697,70 @@ function select_anno_key(){
 				$("#sel_anno_check" + (parseInt(i)+1).toString()).css("display","inline-block");
 			}
 			$("#sel_anno_value").css("display","none");
+			$("#anno_form").css("display","none");
 			propagate_salience();
 		}
-		else{
-			for (v of anno_values[sel_key]){
-					val_opts +='<option value="'+v+'">'+v+'</option>\n';
+		else if (sel_key == "bridgetype"){ // or some other form type sel_key to use multi-select checkboxes
+			document.getElementById("anno_form").outerHTML = `
+					<form id="anno_form">
+					  <fieldset>
+					    ${[...anno_values[sel_key]].map(opt => `
+					      <label>
+					        <input type="checkbox" name="anno_value" value="${opt}" onchange="select_anno_value()";>
+						${opt}
+          				      </label><br>
+        				    `).join("")}
+      					  </fieldset>
+					</form>
+					`;
+			// transform complex type into array
+			if (ent_anno_val.includes(";")){
+				ent_anno_val = ent_anno_val.split(";")
+			} else {
+				ent_anno_val = [ent_anno_val]
 			}
-				$("#sel_anno_value").html(val_opts);
-				if (sel_key in ent.annos){
-					$("#sel_anno_value").val(ent_anno_val);
+			// fill check boxes
+			$('input[name="anno_value"]').each(function () {
+  				if (ent_anno_val.includes($(this).val())) {
+					$(this).prop("checked", true);
+				} else {
+					$(this).prop("checked", false);
 				}
+			});
 			val_range = Array.from(range(0, 5))
 			for (i in val_range){
 				$("#sel_anno_check" + (parseInt(i)+1).toString()).css("display","none");
 			}
-			$("#sel_anno_value").css("display","inline-block");
+			$("#sel_anno_value").css("display","none");
+		} else {
+			// regular dropdown
+			for (v of anno_values[sel_key]){
+                        	val_opts +='<option value="'+v+'">'+v+'</option>\n';
+                        }
+			$("#sel_anno_value").html(val_opts);
+                        if (sel_key in ent.annos){
+                        	$("#sel_anno_value").val(ent_anno_val);
+                        }
+
+			$("#anno_form").css("display","none");
+			val_range = Array.from(range(0, 5))
+                        for (i in val_range){
+                                $("#sel_anno_check" + (parseInt(i)+1).toString()).css("display","none");
+                        }
+                        $("#sel_anno_value").css("display","inline-block");
+		
 		}
 	}
+}
+
+function priority_order(vals){
+	let new_vals = []
+	for (subtype of bridgetype_priority){
+		if (vals.includes(subtype)){
+			new_vals.push(subtype)
+		}
+	}
+	return new_vals
 }
 
 function select_anno_value(){
@@ -1687,6 +1768,24 @@ function select_anno_value(){
 	let ent = entities[div_id];
 	let key = $("#sel_anno_key").val();
 	let val = $("#sel_anno_value").val();
+	if (key == "bridgetype"){ // or some other complex value type
+		val = Array.from(document.querySelectorAll('input[name="anno_value"]:checked')).map(cb => cb.value);
+		if(val.length==0){
+			val = ["nobridge"] // or default value
+		}
+		// preventing of nobridge co-occuring with other bridgetypes
+		// if val is an array, length > 1, and nobridge is in the array, remove nobridge from val
+		if (typeof(val) == "object"){
+			if (val.includes("nobridge") && val.length > 1){
+				val = val.filter(item => item !== "nobridge");
+			}
+			// enforce priority order of complex type here
+			if (key == "bridgetype") {
+				val = priority_order(val)
+			}
+			val = val.join(";")
+		}
+	}
 	if (val != ""){
 		ent.annos[key] = val;
 	}
@@ -1782,6 +1881,7 @@ function read_webanno(data){
 	e2annos = {};
 	senttok2globaltok = {};  // maps IDs like 2-3 (sent 2, tok 3) to IDs like 6 (sixth token in document)
 	edges = [];
+	bridgetype_annos = {}
 	for (line of lines){
 		if (line.includes("\t")){
 			// Read text
@@ -1885,6 +1985,13 @@ function read_webanno(data){
 					if (edge_type in collapse_edges) {
 						edge_type = collapse_edges[edge_type];
 					}
+					subtype = null
+					if (edge_type.includes(":")){
+						// the edge has a subtype annotation
+						edge_parts = edge_type.split(":")
+						edge_type = edge_parts[0]
+						subtype = edge_parts[1]
+					}
 					if (!(edge_path.includes("["))){edge_path += "[0_0]";}
 					tid_parts = edge_path.split("[");
 					src_trg = tid_parts[1].split("_");
@@ -1896,6 +2003,12 @@ function read_webanno(data){
 					if (trg=="0"){trg=fields[0];}  // single token target, ID 0 = this line
 					if (src=="0"){src=tid_parts[0];}  // single token source, ID = "sent-wordnum", e.g. 5-3 for sent 5 token 3
 					edges.push([src,trg,edge_type]);
+					if (subtype && edge_type == "bridge"){
+						// this is a bridgetype annotation
+						// add bridgetype annotation to anaphora (src)
+						bridgetype_annos[src] = subtype
+					}
+
 				}
 			}
 		} else if (line.includes('#T_SP=webanno.custom')){
@@ -1911,6 +2024,28 @@ function read_webanno(data){
 			summaries.push(parts[1]);
 			selsummary = 1;
 			document.getElementById("summarycounter").textContent = selsummary + " ";
+		}
+	}
+
+	// adding bridgetype annotation if present, otherwise set default
+	for (ent in e2annos) {
+		if (ent in bridgetype_annos){
+			e2annos[ent]["bridgetype"] = bridgetype_annos[ent]
+		} else {
+			e2annos[ent]["bridgetype"] = "nobridge"
+		}
+	}
+	// add defaults from config to anno_keys and anno_values if the anno is not populated
+	for (anno of default_conf["entity_annos"].split(";")){
+                let anno_parts = anno.split(":");
+		if (!(anno_keys.includes(anno_parts[0]))){
+                	anno_keys.push(anno_parts[0]);
+		}
+		let values = new Set(anno_parts[1].split("|"));
+		if (!(anno_parts[0] in anno_values)){
+			anno_values[anno_parts[0]] = values
+		} else {
+			anno_values[anno_parts[0]] = new Set([...anno_values[anno_parts[0]], ...values]);
 		}
 	}
 
@@ -2010,6 +2145,12 @@ function read_webanno(data){
 	if (!("bridge" in grouping)) { // TODO: read from config
 		grouping["bridge"] = {0:[]};
 		groups["bridge"] = {0:[]};
+		for (div_id in entities){  // initialize all entities as belonging to group 0 of this type
+                        entities[div_id].groups["bridge"] = 0;
+			groups["bridge"][0].push(div_id)
+                }
+		sel_opts += '<option value="bridge">bridge</option>\n';
+		$("#color_mode").html(sel_opts);
 	}
 
 	set_entity_classes();
@@ -2179,7 +2320,15 @@ function read_tt(data, config){
 						if (! (anno_span in all_annos)){all_annos[anno_span] = [];}
 						all_annos[anno_span].push({key: last_anno["key"], val: last_anno["val"]});
 						if (!(last_anno["key"] in anno_values)) {anno_values[last_anno["key"]] = new Set();}
-						anno_values[last_anno["key"]].add(last_anno["val"]);
+						// don't add if complex type jointly
+						if (last_anno["key"] == "bridgetype" && last_anno["val"].includes(";")){
+							vals = last_anno["val"].split(";")
+							for (val of vals){
+								anno_values[last_anno["key"]].add(val);
+							}
+						}else{
+							anno_values[last_anno["key"]].add(last_anno["val"]);
+						}
 					}
 				}
 			}
@@ -2397,7 +2546,8 @@ function write_webanno(config){
         }
 
 
-        let add_bridgetype = true;
+        
+	let add_bridgetype = true;
         if (add_bridgetype){
                 for (e in entities){
                         if (!("bridgetype" in entities[e].annos)){
@@ -2405,6 +2555,7 @@ function write_webanno(config){
                         }
                 }
         }
+	
 
 	function postprocess_annos(ent, instructions, isfirst){
 		// transform an entity's additional key-value annotations based on initial/non-initial chain position and instructions
@@ -2425,7 +2576,8 @@ function write_webanno(config){
 						postprocess: {  // each instruction: edgetype: [[first or not in chain, string filter (lowered), anno key, old anno val, new anno val], ...]
 							"bridge": [ ["nonfirst","^(i|you|your|yours|she|her|hers|he|him|his|it|its|we|us|our|ours|them|they|their|theirs)$","infstat","auto","giv"], ["nonfirst",null,"infstat","auto","acc"]],
 							"coref": [ ["nonfirst",null,"infstat","auto","giv"],["first",null,"infstat","auto","new"]]
-						}
+						},
+			edge_annos: ["bridgetype"]
 						};
 		}  // edge types which link to first member of group, instead of chaining
 
@@ -2440,8 +2592,10 @@ function write_webanno(config){
 	header = '#FORMAT=WebAnno TSV 3.2\n#T_SP=webanno.custom.Referent|entity';
 	extra_fields = '';
 	for (anno_key of anno_keys){
-		header += "|" + anno_key;
-		extra_fields += "_\t";
+		if (!(config["edge_annos"].includes(anno_key))) {
+			header += "|" + anno_key;
+			extra_fields += "_\t";
+		}
 	}
 	if (export_identities){  // for NER identities we need to collect the latest identities for each entities
 		get_identities();
@@ -2615,10 +2769,14 @@ function write_webanno(config){
 							id_part = "[" + next_webanno_id.toString() + "_" + this_webanno_id.toString()+"]";
 							if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
 							edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
+							gtype_subtype = gtype
+							if (gtype == "bridge" && "bridgetype" in next_ent.annos) {
+								gtype_subtype = gtype + ":" + next_ent.annos["bridgetype"]
+							}
 							if (gtype in ent.next) {
-								ent.next[gtype] += "|" + edge
+								ent.next[gtype_subtype] += "|" + edge
 							} else {
-								ent.next[gtype] = edge
+								ent.next[gtype_subtype] = edge
 							}
 						}
 					}
@@ -2654,8 +2812,9 @@ function write_webanno(config){
 		}
 		output = [];
 		
+		filtered_anno_keys = anno_keys.filter(item => !(config["edge_annos"].includes(item)));
 		for (line of lines){
-			anno_holder = Array.apply(null, Array(anno_keys.length)).map(function () {return [];});
+			anno_holder = Array.apply(null, Array(filtered_anno_keys.length)).map(function () {return [];});
 			edge_holder = [[],[]];  // one array for edge types, one for edge links
 			ent_identities = [];
 			if (line.includes("\t")){
@@ -2663,7 +2822,7 @@ function write_webanno(config){
 				ents = fields[3].split("|");
 				for (e of ents){
 					if (e == "_"){ // no entity for this line, just append underscores as needed
-						for (i in anno_keys){
+						for (i in filtered_anno_keys){
 							fields[4+parseInt(i)] = "_";
 						}
 						for (j in edge_types){
@@ -2673,8 +2832,8 @@ function write_webanno(config){
 						e = e.replace(/.*\[/,'').replace(/\].*/,'');
 						div_id = webanno2div[e];
 						this_ent = entities[div_id];
-						for (i in anno_keys){
-							anno_key = anno_keys[i];
+						for (i in filtered_anno_keys){
+							anno_key = filtered_anno_keys[i];
 							if (anno_key in this_ent.annos){
 								anno_holder[i].push(this_ent.annos[anno_key]+"["+e+"]");
 							} 
@@ -2683,10 +2842,12 @@ function write_webanno(config){
 							ent_identities.push(this_ent.identity+"["+e+"]")
 						}
 						for (e_type of color_modes){
-							if (e_type in this_ent.next){
-								edge_holder[0].push(e_type);
-								edge_holder[1].push(this_ent.next[e_type]);
-								delete this_ent.next[e_type];  // Every entity only realizes edge annotation on its first token
+							for (e_subtype in this_ent.next) {
+								if (e_subtype.includes(e_type)){
+									edge_holder[0].push(e_subtype);
+									edge_holder[1].push(this_ent.next[e_subtype]);
+									delete this_ent.next[e_subtype];  // Every entity only realizes edge annotation on its first token
+								}
 							}
 						}
 					}
