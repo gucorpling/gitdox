@@ -44,7 +44,7 @@ var groups = {}; // Stores all span groups, keys are group types, values map gro
 groups[def_group] = {0: []};
 groups["bridge"] = {0:[]}; // TODO: read from config
 
-var bridgetype_priority = ["other", "set-span-interval", "set-subset", "set-member", "set", "entity-resultative", "entity-property", "entity-meronomy","entity-associative", "entity", "comparison-time", "comparison-sense-non-hierarchical", "comparison-sense-hierarchical", "comparison-ellipsis", "comparison", "nobridge"] // TODO: read from config
+var bridgetype_priority = ["other", "set-span-interval", "set-subset", "set-member", "entity-resultative", "entity-property", "entity-meronomy","entity-associative", "comparison-time", "comparison-sense", "comparison-relative", "nobridge"] // TODO: read from config
 var collapse_edges = {"appos":"coref","ana":"coref","cata":"coref"};  // edge type replacements
 var anno_keys = [];  // additional span annotations beyond entity type
 var anno_values = {}; // possible values for each annotation key
@@ -1500,8 +1500,8 @@ function toggle_bridgetype(div_id){
 		  $('#bridge' + div_id + ".bridge").removeClass("fa fa-exclamation").addClass("fa fa-check");
 		  $('#bridge' + div_id + ".bridge").css("display","inline-block");
 		  $('#bridge' + div_id + ".bridge").css("color","green");
-	 // if the entity has a bridging antecedent (is a bridging anaphor) and there is no bridgetype set, set warning symbol
-	  } else if (entities[div_id].annos["bridgetype"]=="nobridge" && entities[div_id].bridge_antec != "_") {
+	 // if the entity has a bridging antecedent (is a bridging anaphor) and there is no bridgetype set and the infstat of the entity is not split (split antecedent, not bridging), set warning symbol
+	  } else if (entities[div_id].annos["bridgetype"]=="nobridge" && entities[div_id].bridge_antec != "_" && entities[div_id].annos["infstat"]!="split") {
 		  $('#bridge' + div_id + ".bridge").removeClass("fa fa-check").addClass("fa fa-exclamation");
 		  $('#bridge' + div_id + ".bridge").css("display","inline-block");
                   $('#bridge' + div_id + ".bridge").css("color","red");
@@ -1842,7 +1842,7 @@ function make_token_div(tok){ // Take a Token object and return HTML representat
 function read_webanno(data){
 
 
-	default_conf = {"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison|comparison-ellipsis|comparison-sense-hierarchical|comparison-sense-non-hierarchical|comparison-time|entity|entity-associative|entity-meronomy|entity-property|entity-resultative|set|set-member|set-subset|set-span-interval|other"};
+	default_conf = {"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"};
 	
 	anno_keys = [];
 	anno_values = {};
@@ -2160,7 +2160,7 @@ function read_webanno(data){
 function read_tt(data, config){
 	// set tok to an SGML attribute name to use markup instead of TT plain text tokens as words
 	default_conf = {"span_tag": DEFAULT_SGML_SPAN_TAG, "span_attr": DEFAULT_SGML_SPAN_ATTR, "sent":DEFAULT_SGML_SENT_TAG, "tok": DEFAULT_SGML_TOK_ATTR,
-								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison|comparison-ellipsis|comparison-sense-hierarchical|comparison-sense-non-hierarchical|comparison-time|entity|entity-associative|entity-meronomy|entity-property|entity-resultative|set|set-member|set-subset|set-span-interval|other"};
+								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"};
 	
 	group_info = [];
 	anno_keys = [];
@@ -2477,8 +2477,8 @@ function check_missing_bridgetype(){
 	no_bridgetype_spans = []
 	for (e_id in entities){
 		if ("bridgetype" in entities[e_id].annos){
-			// if we have a bridging antecedent assigned but no bridgetype set
-			if (entities[e_id].bridge_antec != "_" && entities[e_id].annos["bridgetype"] == "nobridge"){
+			// if we have a bridging antecedent assigned but no bridgetype set (and it is not split antecedent)
+			if (entities[e_id].bridge_antec != "_" && entities[e_id].annos["bridgetype"] == "nobridge" && entities[e_id].annos["infstat"]!="split"){
 				missing_bridgetype = true
 				no_bridgetype_spans.push(entities[e_id].toks)
 			}
