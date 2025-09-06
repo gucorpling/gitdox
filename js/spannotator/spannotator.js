@@ -72,6 +72,7 @@ for (key in global_defaults){
 entity_icon = '<div id="%ID%" class="entity_type"><i title="%TYPE%" class="fa fa-%FATYPE% entity_icon"></i></div>';
 close_icon = '<div id="close%ID%" class="close" onclick="delete_entity('+"'"+'%ID%'+"'"+');"><i title="close" class="fa fa-times-circle"></i></div>';
 bridge_icon = '<div id="bridge%ID%" class="bridge"><i title="bridgetype"></i></div>'; //class="fa fa-check"
+show_bridge_triggers=false
 sentnum = 0;
 
 class Entity{
@@ -232,10 +233,12 @@ if (dragged_side == "left" && proposed_start > 1){ // Add one for left boundary,
   entity_type = old_entity.type;
   old_groups = old_entity.groups;
   old_annos = old_entity.annos;
+  old_bridge_antec = old_entity.bridge_antec;
   $(ui.draggable).remove();
   new_entity = add_entity(toks_to_check);  
   new_entity.groups = old_groups;
   new_entity.annos = old_annos;
+  new_entity.bridge_antec = old_bridge_antec
   for (mode of color_modes){
 	if (mode != "entities"){
 		if (mode in old_entity.groups){
@@ -243,6 +246,16 @@ if (dragged_side == "left" && proposed_start > 1){ // Add one for left boundary,
 		}
 		for (g in groups[mode]){
 			if (groups[mode][g].includes(old_id)){
+				// if bridge group, check if bridge_antec for each ent equals old_id, replace w new id
+				if (mode == "bridge") {
+					for (entry in groups[mode][g]){
+						ent_id = groups[mode][g][entry]
+						if (entities[ent_id].bridge_antec == old_id){
+							entities[ent_id].bridge_antec = new_entity.div_id
+						}
+					}
+				}
+				// remove old ent from group
 				groups[mode][g] = arrayRemove(groups[mode][g],old_id);
 			}
 		}
@@ -513,6 +526,18 @@ function delete_connections(){
 	}
 }
 
+function jsplumb_unmanage_div(div_id){
+	if (typeof jsPlumb === 'undefined') {
+        	// Load jsPlumb if it's not loaded yet
+                loadScript("https://unpkg.com/jsplumb@2.15.6/dist/js/jsplumb.min.js", function () {
+                	jsPlumb.unmanage(div_id)
+                });
+        } else {
+        	// If jsPlumb is already loaded, just call your function directly
+                jsPlumb.unmanage(div_id)
+        }
+}
+
 // Border highlighting on hover
 var hovered_entity = null;
 function unhighlight_entity_border(event){
@@ -539,7 +564,7 @@ function draw_line(div_id, antec_div_id, col){
 }
 
 function JsPlumbLine(div_id, antec_div_id, col){
-	repaint_everything();
+	jsPlumb.repaintEverything();
 	jsPlumb.ready(function () {
 		// Connecting two divs
 		jsPlumb.connect({
@@ -646,6 +671,55 @@ function bind_tok_events(){
 	});
 }
 
+function highlight_bridging_triggers(){
+        let box_shadow = "none";
+        if (show_bridge_triggers){
+                // gives light-blue halo affect outside of entity boarder
+                box_shadow = "0 0 8px 4px rgba(0, 150, 255, 0.3)";
+        	// if div_id is a first mention (singleton or first mention in coref chain)
+		if ("coref" in groups){
+			for (div_id in entities) {
+				coref_group = entities[div_id].groups["coref"]
+				if (coref_group == 0) {
+					// singelton
+					$("#"+div_id).css("box-shadow", box_shadow);
+				} else {
+					coref_group_ent_ids = groups["coref"][coref_group]
+					cluster_min = sort_entity_div_ids(coref_group_ent_ids)[0]
+					if (entities[div_id].div_id == cluster_min) {
+						// first mention in coref chain
+						$("#"+div_id).css("box-shadow", box_shadow);
+					}
+				}
+			}		
+		}
+	} else {
+        	for (div_id in entities) {
+		// remove all box shadows
+                	$("#"+div_id).css("box-shadow", box_shadow);
+        	}
+	}
+}
+
+function toggle_show_bridging_triggers(){
+	let color_mode=$("#color_mode").val();
+	if (show_bridge_triggers) {
+		show_bridge_triggers=false
+	} else {
+		show_bridge_triggers=true
+	}
+	highlight_bridging_triggers()
+}
+
+function update_show_bridging_triggers(color_mode){
+	if (color_mode == "bridge"){
+		show_bridge_triggers=true
+	} else {
+		show_bridge_triggers=false
+	}
+	highlight_bridging_triggers()
+}
+
 function set_color_mode(color_mode){
 	if (color_mode == null){color_mode=$("#color_mode").val();}
 	active_group = anno_mode = color_mode;
@@ -682,6 +756,7 @@ function set_color_mode(color_mode){
 		}
 		$("#"+div_id).css("border-color",col);
 	}
+        //update_show_bridging_triggers(color_mode);
 	if (color_modes.size>1){
 		$("#color_mode").prop("disabled",false);
 	} else{
@@ -767,6 +842,8 @@ function remove_antec_links_out_of_group(affected_group, group_type){
 					entities[div_id].bridge_antec = min_remaining_div_id
 				} else {
 					entities[div_id].bridge_antec = "_"
+					entities[div_id].annos["infstat"] = "auto"
+					toggle_star(entities[div_id].div_id)
 				}
 			}
 		}
@@ -801,6 +878,15 @@ function ungroup_selected(group_type){
 			if (remaining_in_old_group.length < 2){
 				for (div_id of remaining_in_old_group){
 					assign_group(entities[div_id], group_type,0);
+					if (group_type == "bridge"){
+						// handle singletons from ungrouping bridging instance
+						entities[div_id].bridge_antec = "_"
+                                                if (entities[div_id].annos["infstat"] == "acc"){
+							entities[div_id].annos["infstat"] = "auto"
+							entities[div_id].annos["bridgetype"] = "nobridge"
+							toggle_star(entities[div_id].div_id)
+						}
+					}
 				}
 			}
 		}
@@ -818,6 +904,9 @@ function ungroup_selected(group_type){
 							entities[div_id].bridge_antec = min_remaining_div_id
 						} else {
 							entities[div_id].bridge_antec = "_"
+							entities[div_id].annos["infstat"] = "auto"
+							entities[div_id].annos["bridgetype"] = "nobridge"
+                                        		toggle_star(entities[div_id].div_id)
 						}
 					}		
 				}
@@ -825,10 +914,13 @@ function ungroup_selected(group_type){
 		}	
 	}
 
-	// if group_type is bridge, for all selected entities, change bridge_antec back to default "_"
+	// if group_type is bridge, for all selected entities, change bridge_antec back to default "_", remove bridgetype
 	if (group_type == "bridge") {
 		for (ent_id of sel_ent_ids){
 			entities[ent_id].bridge_antec = "_"
+			entities[ent_id].annos["infstat"] = "auto"
+			entities[ent_id].annos["bridgetype"] = "nobridge"
+                        toggle_star(entities[ent_id].div_id)
 		}
 	}
 	
@@ -861,11 +953,11 @@ function group_selected(group_type){  // add all selected entities to a single g
 		invalid_assignment = false
                 for (e_id of sel_ent_ids){
 			if (entities[e_id].div_id != min_div_id) {
-                        	if ("infstat" in entities[e_id].annos){
-                        		if (entities[e_id].annos["infstat"] == "giv") {
-                                		invalid_assignment = true
-                                	}
-				}
+                        	//if ("infstat" in entities[e_id].annos){
+                        	//	if (entities[e_id].annos["infstat"] == "giv") {
+                                //		invalid_assignment = true
+                                //	}
+				//}
 				if ("coref" in entities[e_id].groups){
 					coref_group = entities[e_id].groups["coref"]
 					if (coref_group != 0){
@@ -938,6 +1030,8 @@ function group_selected(group_type){  // add all selected entities to a single g
 		for (e_id of sel_ent_ids){
 			if (entities[e_id].div_id != min_div_id) {
 				entities[e_id].bridge_antec = min_div_id
+				entities[e_id].annos["infstat"] = "acc"
+				toggle_star(entities[e_id].div_id)
 			}
 		}
 		// if a new subgroup was created, assign the bridge_antec of the old and new group entities to "_" if they point outside their current group
@@ -949,11 +1043,15 @@ function group_selected(group_type){  // add all selected entities to a single g
 			for (e_id of old_group_ids){
 				if (!old_group_ids.includes(entities[e_id].bridge_antec)){
 					entities[e_id].bridge_antec = "_"
+					entities[e_id].annos["infstat"] = "auto"
+                                        toggle_star(entities[e_id].div_id)
 				}
 			}
 			for (e_id of new_group_ids){
                                 if (!new_group_ids.includes(entities[e_id].bridge_antec)){
                                         entities[e_id].bridge_antec = "_"
+					entities[e_id].annos["infstat"] = "auto"
+                                        toggle_star(entities[e_id].div_id)
                                 }
                         }
 		}
@@ -1014,6 +1112,11 @@ function init_doc(){
 	$("#selectable").selectable({filter: '.tok', distance: 10});
 	set_color_mode();
 	propagate_salience();
+	if (color_modes.has("bridge")) {
+              // make bridge trigger toggle buttons visible
+              bridge_trigger_button = document.getElementById('firstmentions');
+              bridge_trigger_button.style.display = 'inline';
+        }
 }
 
 $(document).ready(function() {
@@ -1021,7 +1124,7 @@ $(document).ready(function() {
 	container = window.parent.document.getElementById("spannotator_container");
 	if ($("#sent_mode",window.parent.document).val() == "sent"){
 		toggle_sents();
-	}
+	}	
 	
 	// Create quick paste dialog
 	$(function () {
@@ -1414,7 +1517,6 @@ function add_entity(tok_ids, entity_type, batch){
 	if (!batch){  // if we are adding just a single entity, already call jquery to set the necessary CSS
 		set_entity_classes();
 	}
-	
 	return new_entity;
   }
 
@@ -1437,8 +1539,10 @@ function delete_entity(entity_span){
  // entity_span = document.getElementById("active_entity").value;
   start = entities[entity_span].start;
   entity_length = entities[entity_span].length;
+  jsplumb_unmanage_div(entities[entity_span].div_id) // clear deleted ent from jsplumb management
   $('#'+entity_span).children('.entity_type').first().remove();
   $('#'+entity_span).children('.close').first().remove();
+  $('#'+entity_span).children('.bridge').first().remove();
     $('#b-left-'+entity_span).remove();
     $('#b-right-'+entity_span).remove();
   child_toks = $('#'+entity_span).children('.tok');
@@ -1451,6 +1555,7 @@ function delete_entity(entity_span){
 		child_divs.first().unwrap();
 	  }
   }
+  ent_div_id = entities[entity_span].div_id // div_id of ent for deleting bridge icon
   delete entities[entity_span];
   indices = Array.from(Array(entity_length).keys());
   for (i of indices){
@@ -1466,8 +1571,8 @@ function delete_entity(entity_span){
 	  for (g in groups[gtype]){
 		  if (groups[gtype][g].includes(entity_span)){
 			  groups[gtype][g] = arrayRemove(groups[gtype][g],entity_span);
-			  if (gtype == "bridge") {
-				  remove_antec_links_out_of_group(g, gtype)
+			  if (gtype == "bridge" && g != 0) {
+				remove_antec_links_out_of_group(g, gtype)
 			  }
 		  }
 		if (groups[gtype][g].length==0 & parseInt(g) != 0){delete groups[gtype][g];} // delete group if empty
@@ -1789,6 +1894,9 @@ function select_anno_value(){
 	if (val != ""){
 		ent.annos[key] = val;
 	}
+	if (key == "infstat" && val == "split"){
+		handle_split(div_id)
+	}
 	toggle_star(div_id);
 }
 
@@ -1818,6 +1926,24 @@ function select_anno_value(){
 			}
 		}
 		propagate_salience();
+	}
+}
+
+function handle_split(div_id){
+	if ("bridge" in entities[div_id].groups){
+		// get bridge group
+		split_antec_group = entities[div_id].groups["bridge"]
+		// get all entities in bridging cluster for ent
+		ent_ids = groups["bridge"][split_antec_group]
+		for (ent_id of ent_ids){
+			// set all bridge_antec to "_"
+			entities[ent_id].bridge_antec = "_" 
+			// change all "acc" infstats to "auto"
+			if (entities[ent_id].annos["infstat"] == "acc") {
+				entities[ent_id].annos["infstat"] = "auto"
+				toggle_star(ent_id)
+			}
+		}
 	}
 }
 
@@ -2087,8 +2213,8 @@ function read_webanno(data){
 			if (!(etype in etype_counts)){etype_counts[etype] = 0;}
 			etype_counts[etype]++;
 
-			// if it is a bridge edge, set the antecedent of the src to be the trg 
-			if (etype == "bridge") {
+			// if it is a bridge edge (and ent is not infstat split), set the antecedent of the src to be the trg 
+			if (etype == "bridge" && entities[src].annos["infstat"] != "split") {
 				entities[src].bridge_antec = trg
 			}
 
@@ -2365,19 +2491,17 @@ function read_tt(data, config){
 	for (mode of color_modes){
 		if (!(mode in groups) && mode != "entities"){ groups[mode] = {};}
 	}
+
+	// setting entity groups and properties
+	new_entities = {}
 	for (e_id in e2tok){
 		e_type = e2type[e_id];
 		tok_span = e2tok[e_id];
-		new_entity = add_entity(tok_span,null,true);
+		new_entity = add_entity(tok_span,null,true); //new_entities[e_id]
+		new_entities[e_id] = new_entity
 		// mapping temp id to div_id for bridging antecedent
 		if (e_id in e2tempid){
 			tempid2divid[e2tempid[e_id]] = new_entity.div_id
-		}
-		// setting bridging antecedent if present
-		if (e_id in e2antec){
-			antec_tempid = e2antec[e_id]
-			antec_divid = tempid2divid[antec_tempid]
-			new_entity.bridge_antec = antec_divid
 		}
 		if (e_id in all_annos){
 			for (a of all_annos[e_id]){
@@ -2402,6 +2526,16 @@ function read_tt(data, config){
 			}
 		} 
 	}
+
+	// setting bridging antecedent if present
+	for (e_id in e2tok) {
+		if (e_id in e2antec){
+			curr_entity = new_entities[e_id]
+                        antec_tempid = e2antec[e_id]
+                        antec_divid = tempid2divid[antec_tempid]
+                        curr_entity.bridge_antec = antec_divid
+                }
+        }
 
 	// set up additional key-value anno choosers
 	anno_opts = "";
@@ -2773,7 +2907,7 @@ function write_webanno(config){
 							if (gtype == "bridge" && "bridgetype" in next_ent.annos) {
 								gtype_subtype = gtype + ":" + next_ent.annos["bridgetype"]
 							}
-							if (gtype in ent.next) {
+							if (gtype_subtype in ent.next) {
 								ent.next[gtype_subtype] += "|" + edge
 							} else {
 								ent.next[gtype_subtype] = edge

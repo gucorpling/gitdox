@@ -171,5 +171,5 @@
 
 .annocheck{display:none}
 .salience{ color: gray;  display: none}
-.saltok{color:blue}
-.saltok-selected-summary{color:red !important}
+.saltok{color:none} /* blue */
+.saltok-selected-summary{color:none !important} /* red */
