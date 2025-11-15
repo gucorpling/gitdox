@@ -124,7 +124,7 @@ function do_guess_linking(){
 	guess_data = to_guess.join("|");
 	toggle_nlp_button("#link_guess_button");
 	$.ajax({
-		url: 'https://gucorpling.org/gitdox/GUMBridge/get_entities.py',
+		url: 'https://gucorpling.org/gitdox/ling4427/get_entities.py',
 		type: 'POST',
 		data: {entries: guess_data, action: 'guess'},
 		//async: false,
@@ -180,7 +180,7 @@ function do_save_linking(){
 	ecount = $('.eref').length;
 	toggle_nlp_button("#link_save_button",'floppy-o');
 	$.ajax({
-		url: 'https://gucorpling.org/gitdox/GUMBridge/get_entities.py',
+		url: 'https://gucorpling.org/gitdox/ling4427/get_entities.py',
 		type: 'POST',
 		cache: false,
 		data: {entries: save_data, action: 'save', docid:  docId.toString(), entcount: ecount },
@@ -201,7 +201,7 @@ function report_no_entities(){
 	toggle_nlp_button("#no_entities_button",'low-vision');
 	let docId = $("#id").val();
 	$.ajax({
-		url: 'https://gucorpling.org/gitdox/GUMBridge/get_entities.py',
+		url: 'https://gucorpling.org/gitdox/ling4427/get_entities.py',
 		type: 'POST',
 		data: {action: 'empty', docid:  docId.toString(), entcount: 0 },
 		//async: false,

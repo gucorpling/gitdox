@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
-  <xs:element name="text">
+<?xml version="1.0" encoding="UTF-8"?> <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified"> <xs:import namespace="http://www.w3.org/XML/1998/namespace" 
+  schemaLocation="http://www.w3.org/2001/xml.xsd" /> 
+<xs:element name="text">
     <xs:complexType>
       <xs:choice maxOccurs="unbounded">
         <xs:element ref="figure"/>
@@ -16,7 +16,7 @@
       <xs:attribute name="id" use="required">
         <xs:simpleType>
           <xs:restriction base="xs:string">
-            <xs:pattern value="GUM_(bio|academic|reddit|fiction|news|whow|voyage|interview|conversation|textbook|vlog|speech)_[a-z]+[0-9]?"/>
+            <xs:pattern value="GUM_(bio|academic|reddit|fiction|news|whow|voyage|interview|conversation|textbook|vlog|speech|letter|podcast|court|essay)_[a-z]+[0-9]?"/>
           </xs:restriction>
         </xs:simpleType>
       </xs:attribute>
@@ -108,6 +108,7 @@
         <xs:element ref="l"/>
         <xs:element ref="list"/>
         <xs:element ref="measure"/>
+        <xs:element ref="foreign"/>
         <xs:element ref="sic"/>
         <xs:element ref="time"/>
       </xs:choice>
@@ -175,6 +176,7 @@
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="ref"/>
  <xs:element minOccurs="0" maxOccurs="unbounded" ref="w"/>
       </xs:sequence>
+ <xs:attribute name="ana" type="xs:string"/>
     </xs:complexType>
   </xs:element>
   <xs:element name="w">
@@ -345,8 +347,10 @@
   <xs:element name="hi">
     <xs:complexType mixed="true">
       <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="foreign"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="ref"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="figure"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="date"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="incident"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="w"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="lg"/>
@@ -356,6 +360,24 @@
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="sic"/>
       </xs:sequence>
       <xs:attribute name="rend" use="required" type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="foreign">
+    <xs:complexType mixed="true">
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="ref"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="figure"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="incident"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="w"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="lg"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="s"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="caption"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="q"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="sic"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="date"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="hi"/>
+      </xs:sequence>
+      <xs:attribute ref="xml:lang" use="required" />
     </xs:complexType>
   </xs:element>
   <xs:element name="q">

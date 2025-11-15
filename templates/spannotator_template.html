@@ -44,6 +44,7 @@
 		<span style="color:white">| use colors for: </span><select id="color_mode" onchange="set_color_mode();" disabled="disabled">
 			<option value="entities" selected="selected">entity types</option>
 			<option value="coref">coref</option>
+			<option value="bridge">bridge</option>
 		</select>
 		<div id="firstmentions" style="display:none"> <button type="button" class="btn" onclick="toggle_show_bridging_triggers();" title="Highlight first mentions"><i class="fa fa-fire"></i></button></div>
 		<div id="spannotatorsummary" style="display:none">  <button id="summaryup" class="btn sum-toggle"><i class="fa fa-arrow-up"></i></button>
@@ -74,6 +75,7 @@
 			<div id="anno_entity_text"></div>
 			<select id="sel_anno_key" onchange="select_anno_key();"></select>
 			<select id="sel_anno_value" onchange="select_anno_value();"></select>
+			<div id="togglesubtypes" style="display:none"> <button type="button" class="btn" onclick="toggle_subtype_granularity();" title="Toggle subtype granularity"><i class="fa fa-exchange"></i></button></div>
 			<form id="anno_form"></form>
 			<input type="checkbox" id="sel_anno_check1" onchange="select_check_value(this);" class="annocheck">
 			<input type="checkbox" id="sel_anno_check2" onchange="select_check_value(this);" class="annocheck">

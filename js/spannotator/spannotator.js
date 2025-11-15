@@ -3,7 +3,7 @@ function arrayRemove(arr, value) { return arr.filter(function(ele){ return ele !
 function splitWithTail(str,delim,count){var parts = str.split(delim); var tail = parts.slice(count).join(delim); var result = parts.slice(0,count); result.push(tail); return result;}
 function countInstances(string, word) {return string.split(word).length - 1;}
 
-var default_annos = {"infstat":"new","salience":"nonsal"};
+var default_annos = {"infstat":"new","salience":"nonsal"}; // changing default salience from nonsal to nnnnn
 var summaries = [];
 var selsummary = 1;
 
@@ -58,6 +58,7 @@ assigned_colors[def_group] = {0: def_color};
 var active_group = def_group;
 var color_modes = new Set();
 color_modes.add("entities");
+color_modes.add("coref");
 color_modes.add("bridge");  // TODO: read from config
 
 
@@ -73,6 +74,7 @@ entity_icon = '<div id="%ID%" class="entity_type"><i title="%TYPE%" class="fa fa
 close_icon = '<div id="close%ID%" class="close" onclick="delete_entity('+"'"+'%ID%'+"'"+');"><i title="close" class="fa fa-times-circle"></i></div>';
 bridge_icon = '<div id="bridge%ID%" class="bridge"><i title="bridgetype"></i></div>'; //class="fa fa-check"
 show_bridge_triggers=false
+show_granular_subtypes=false
 sentnum = 0;
 
 class Entity{
@@ -711,6 +713,15 @@ function toggle_show_bridging_triggers(){
 	highlight_bridging_triggers()
 }
 
+function toggle_subtype_granularity(){
+        if (show_granular_subtypes) {
+                show_granular_subtypes=false
+        } else {
+                show_granular_subtypes=true
+        }
+        select_anno_key()
+}
+
 function update_show_bridging_triggers(color_mode){
 	if (color_mode == "bridge"){
 		show_bridge_triggers=true
@@ -951,13 +962,9 @@ function group_selected(group_type){  // add all selected entities to a single g
 	// add alert and return if user is making an already introduced entity a bridging anaphor
 	if (group_type == "bridge"){
 		invalid_assignment = false
+		is_split = false
                 for (e_id of sel_ent_ids){
 			if (entities[e_id].div_id != min_div_id) {
-                        	//if ("infstat" in entities[e_id].annos){
-                        	//	if (entities[e_id].annos["infstat"] == "giv") {
-                                //		invalid_assignment = true
-                                //	}
-				//}
 				if ("coref" in entities[e_id].groups){
 					coref_group = entities[e_id].groups["coref"]
 					if (coref_group != 0){
@@ -969,9 +976,14 @@ function group_selected(group_type){  // add all selected entities to a single g
 						}
 					}
 				}
+				if ("infstat" in entities[e_id].annos){
+                                        if (entities[e_id].annos["infstat"] == "split") {
+                                                is_split = true
+                                        }
+                                }
 			}
 		}
-		if (invalid_assignment){
+		if (invalid_assignment  && !is_split){
 			alert("Warning: Bridging anaphor has previous mention. Cannot form bridging group.")
 			return false
 		}
@@ -1026,7 +1038,7 @@ function group_selected(group_type){  // add all selected entities to a single g
 	}
 
 	// if group_type is bridge, assign the bridge_antec of all selected entities to be the selected entity with the min_id (except for the min_id entity itself)
-	if (group_type == "bridge") { 
+	if (group_type == "bridge" && !is_split) { 
 		for (e_id of sel_ent_ids){
 			if (entities[e_id].div_id != min_div_id) {
 				entities[e_id].bridge_antec = min_div_id
@@ -1589,13 +1601,21 @@ function delete_entity(entity_span){
 function toggle_star(div_id){
 	if ("infstat" in entities[div_id].annos){
 	  if (entities[div_id].annos["infstat"]=="acc"){
+		  $('#icon' + div_id).find('.highlight-star').css('color', 'yellow');
+                  $('#icon' + div_id).find('.highlight-star').css('-webkit-text-stroke-color', 'orange');
 		  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
-	  } else {
+	  } else if (entities[div_id].annos["infstat"]=="split") {
+                  $('#icon' + div_id).find('.highlight-star').css('color', 'green');
+                  $('#icon' + div_id).find('.highlight-star').css('-webkit-text-stroke-color', 'darkgreen');
+                  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
+          }else {
 		  $('#icon' + div_id).find(".highlight-star").css("display","none");
 	  }
 	}
 	// also toggle bridgesubtype marking
         toggle_bridgetype(div_id);
+	// also toggle binary salience marking
+        toggle_binary_salience(div_id);
 }
 
 function toggle_bridgetype(div_id){
@@ -1636,6 +1656,16 @@ function toggle_salience(div_id){
 	} else{
 			$('#icon' + div_id).find(".salience").css("display","none");
 	}
+}
+
+function toggle_binary_salience(div_id){
+        if ("salience" in entities[div_id].annos){
+          if (entities[div_id].annos["salience"]=="sal"){
+                  $('#' + div_id).addClass("salient");
+          } else{
+                  $('#' + div_id).removeClass("salient");
+          }
+        }
 }
 
 // Set the entity type for an entity and handle color + icon
@@ -1784,9 +1814,14 @@ function select_anno_key(){
 	if (sel_key in ent.annos){
 		ent_anno_val = ent.annos[sel_key];
 	}
+	subtype_granularity_button = document.getElementById('togglesubtypes');
+        subtype_granularity_button.style.display = 'none';
 
 	if (sel_key in anno_values){
 		if (anno_values[sel_key].has('nnnnn') || anno_values[sel_key].has('s____') || anno_values[sel_key].has('sssss')){  // Render as checkboxes
+			if (ent_anno_val == null) {
+                                ent_anno_val = 'nnnnn'
+                        }
 			subvals = ent_anno_val.split('');
 			val_range = Array.from(range(0, subvals.length))
 			for (i in val_range){
@@ -1806,10 +1841,19 @@ function select_anno_key(){
 			propagate_salience();
 		}
 		else if (sel_key == "bridgetype"){ // or some other form type sel_key to use multi-select checkboxes
+			if (ent_anno_val == null) {
+                                ent_anno_val = 'nobridge'
+                        }
+			subtype_granularity_button.style.display = 'inline';
+			if (show_granular_subtypes) {
+                                subtype_values = anno_values[sel_key];
+                        } else {
+                                subtype_values = new Set([...anno_values[sel_key]].map(x => x.split('-')[0]));
+                        }
 			document.getElementById("anno_form").outerHTML = `
 					<form id="anno_form">
 					  <fieldset>
-					    ${[...anno_values[sel_key]].map(opt => `
+					    ${[...subtype_values].map(opt => `
 					      <label>
 					        <input type="checkbox" name="anno_value" value="${opt}" onchange="select_anno_value()";>
 						${opt}
@@ -1824,6 +1868,10 @@ function select_anno_key(){
 			} else {
 				ent_anno_val = [ent_anno_val]
 			}
+			// if not showing granular subtypes, condense ent_anno_val
+                        if (!show_granular_subtypes) {
+                                ent_anno_val = ent_anno_val.map(x => x.split('-')[0]);
+                        }
 			// fill check boxes
 			$('input[name="anno_value"]').each(function () {
   				if (ent_anno_val.includes($(this).val())) {
@@ -1873,7 +1921,11 @@ function select_anno_value(){
 	let ent = entities[div_id];
 	let key = $("#sel_anno_key").val();
 	let val = $("#sel_anno_value").val();
+	let previous_anno = ent.annos[key]
 	if (key == "bridgetype"){ // or some other complex value type
+		if (previous_anno == null) {
+                        previous_anno = "nobridge"
+                }
 		val = Array.from(document.querySelectorAll('input[name="anno_value"]:checked')).map(cb => cb.value);
 		if(val.length==0){
 			val = ["nobridge"] // or default value
@@ -1886,6 +1938,30 @@ function select_anno_value(){
 			}
 			// enforce priority order of complex type here
 			if (key == "bridgetype") {
+				// if we are not showing granular subtypes, expand the input to use the granular subtypes
+                                if (!show_granular_subtypes) {
+                                        previous_anno = previous_anno.split(";")
+                                        // filter out anything that has been unchecked
+                                        updated_anno = previous_anno.filter(item => val.includes(item.split("-")[0]));
+                                        // add in anything newly checked
+                                        for (entry of val) {
+                                                entry_found = updated_anno.some(item => item.includes(entry));
+                                                if (!entry_found) {
+                                                        if (entry == "comparison") {
+                                                                updated_anno.push("comparison-relative")
+                                                        } else if (entry == "entity") {
+                                                                updated_anno.push("entity-associative")
+                                                        } else if (entry == "set") {
+                                                                updated_anno.push("set-member")
+                                                        } else { // just add it if it doesn't have a default granular type
+                                                                updated_anno.push(entry)
+                                                        }
+                                                }
+
+                                        }
+                                        // set val to the updated annotation
+                                        val = updated_anno
+                                }
 				val = priority_order(val)
 			}
 			val = val.join(";")
@@ -1905,6 +1981,9 @@ function select_anno_value(){
 	let ent = entities[div_id];
 	let key = $("#sel_anno_key").val();
 	let val = ent.annos[key];
+	if (val == null) {
+                val = "nnnnn"
+        }
 	subvals = val.split('');
 	target = parseInt($(inputObject).attr("id").slice(-1)) - 1;
 	if ($(inputObject).is(':indeterminate')){
@@ -1933,15 +2012,17 @@ function handle_split(div_id){
 	if ("bridge" in entities[div_id].groups){
 		// get bridge group
 		split_antec_group = entities[div_id].groups["bridge"]
-		// get all entities in bridging cluster for ent
-		ent_ids = groups["bridge"][split_antec_group]
-		for (ent_id of ent_ids){
-			// set all bridge_antec to "_"
-			entities[ent_id].bridge_antec = "_" 
-			// change all "acc" infstats to "auto"
-			if (entities[ent_id].annos["infstat"] == "acc") {
-				entities[ent_id].annos["infstat"] = "auto"
-				toggle_star(ent_id)
+		if (split_antec_group != 0) {
+			// get all entities in bridging cluster for ent
+			ent_ids = groups["bridge"][split_antec_group]
+			for (ent_id of ent_ids){
+				// set all bridge_antec to "_"
+				entities[ent_id].bridge_antec = "_" 
+				// change all "acc" infstats to "auto"
+				if (entities[ent_id].annos["infstat"] == "acc") {
+					entities[ent_id].annos["infstat"] = "auto"
+					toggle_star(ent_id)
+				}
 			}
 		}
 	}
@@ -1968,7 +2049,7 @@ function make_token_div(tok){ // Take a Token object and return HTML representat
 function read_webanno(data){
 
 
-	default_conf = {"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"};
+	default_conf = {"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"}; // changed default from nonsal
 	
 	anno_keys = [];
 	anno_values = {};
@@ -2286,7 +2367,7 @@ function read_webanno(data){
 function read_tt(data, config){
 	// set tok to an SGML attribute name to use markup instead of TT plain text tokens as words
 	default_conf = {"span_tag": DEFAULT_SGML_SPAN_TAG, "span_attr": DEFAULT_SGML_SPAN_ATTR, "sent":DEFAULT_SGML_SENT_TAG, "tok": DEFAULT_SGML_TOK_ATTR,
-								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"};
+								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"}; // changed from nonsal
 	
 	group_info = [];
 	anno_keys = [];
@@ -2324,6 +2405,7 @@ function read_tt(data, config){
 	clearJsPlumb()
 	
 	groups["bridge"] = {0:[]};  // TODO: read from config
+	groups["coref"] = {0:[]};
 
 	data = data.replace(/%%quot%%/g,'"').replace(/%%lt%%/g,"<").replace(/%%gt%%/g,">").replace(/\\n/g,"\n");
 	data = $.trim(data);
@@ -2665,7 +2747,7 @@ function write_webanno(config){
 	if (add_salience){
 		for (e in entities){
 			if (!("salience" in entities[e].annos)){
-				entities[e].annos["salience"] = "nonsal";
+				entities[e].annos["salience"] = "nonsal"; //changed from nonsal
 			}
 		}
 	}
@@ -3029,7 +3111,7 @@ function write_tt(sent_tag){
 	if (add_salience){
 		for (e in entities){
 			if (!("salience" in entities[e].annos)){
-				entities[e].annos["salience"] = "nonsal";
+				entities[e].annos["salience"] = "nonsal"; // changed from nonsal
 			}
 		}
 	}
@@ -3221,7 +3303,15 @@ function propagate_salience(){
 						}
 						first = false;
 					}
-				}
+				} //else { // binary salience propagation
+				//	if ("salience" in this_ent.annos) {
+				//		if (g_id != "0"){
+                                 //               	this_ent.annos["salience"] = final_val.join("");
+                                 //       	}
+				//		toggle_binary_salience(eid[1]);
+				//	}
+				//
+				//}
 			}
 		}
 	}
