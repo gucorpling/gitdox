@@ -136,14 +136,16 @@ def parse_ether(ether, doc_id=None):
 			parts = line.split(":")
 			if len(parts) > 3:  # Otherwise invalid row
 				cell_id = parts[1]
-				cell_row = cell_id[1:]
-				cell_col = cell_id[0]
+				#cell_row = cell_id[1:]
+				#cell_col = cell_id[0]
 				# We'd need something like this to support more than 26 cols, i.e. columns AA, AB...
-				# for c in cell_id:
-				#	if c in ["0","1","2","3","4","5","6","7","8","9"]:
-				#		cell_row += c
-				#	else:
-				#		cell_col += c
+				cell_row = ''
+                                cell_col = ''
+                                for c in cell_id:
+				        if c in ["0","1","2","3","4","5","6","7","8","9"]:
+						cell_row += c
+					else:
+						cell_col += c
 				cell_content = parts[3].replace("\\c", ":")
 				cell_span = parts[-1] if "rowspan:" in line else "1"
 

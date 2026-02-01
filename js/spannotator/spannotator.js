@@ -3,7 +3,7 @@ function arrayRemove(arr, value) { return arr.filter(function(ele){ return ele !
 function splitWithTail(str,delim,count){var parts = str.split(delim); var tail = parts.slice(count).join(delim); var result = parts.slice(0,count); result.push(tail); return result;}
 function countInstances(string, word) {return string.split(word).length - 1;}
 
-var default_annos = {"infstat":"new","salience":"nonsal"};
+var default_annos = {"infstat":"new","salience":"nonsal"}; // changing default salience from nonsal to nnnnn
 var summaries = [];
 var selsummary = 1;
 
@@ -58,6 +58,7 @@ assigned_colors[def_group] = {0: def_color};
 var active_group = def_group;
 var color_modes = new Set();
 color_modes.add("entities");
+color_modes.add("coref");
 color_modes.add("bridge");  // TODO: read from config
 
 
@@ -713,12 +714,12 @@ function toggle_show_bridging_triggers(){
 }
 
 function toggle_subtype_granularity(){
-	if (show_granular_subtypes) {
-		show_granular_subtypes=false
-	} else {
-		show_granular_subtypes=true
-	}
-	select_anno_key()
+        if (show_granular_subtypes) {
+                show_granular_subtypes=false
+        } else {
+                show_granular_subtypes=true
+        }
+        select_anno_key()
 }
 
 function update_show_bridging_triggers(color_mode){
@@ -983,13 +984,13 @@ function group_selected(group_type){  // add all selected entities to a single g
 					}
 				}
 				if ("infstat" in entities[e_id].annos){
-                                	if (entities[e_id].annos["infstat"] == "split") {
-                                        	is_split = true
-                                	}
-                        	}
+                                        if (entities[e_id].annos["infstat"] == "split") {
+                                                is_split = true
+                                        }
+                                }
 			}
 		}
-		if (invalid_assignment && !is_split){
+		if (invalid_assignment  && !is_split){
 			alert("Warning: Bridging anaphor has previous mention. Cannot form bridging group.")
 			return false
 		}
@@ -1622,19 +1623,21 @@ function delete_entity(entity_span){
 function toggle_star(div_id){
 	if ("infstat" in entities[div_id].annos){
 	  if (entities[div_id].annos["infstat"]=="acc"){
-		  $('#icon' + div_id).find('.highlight-star').css('color', 'yellow');
+	  $('#icon' + div_id).find('.highlight-star').css('color', 'yellow');
 		  $('#icon' + div_id).find('.highlight-star').css('-webkit-text-stroke-color', 'orange');
 		  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
 	  } else if (entities[div_id].annos["infstat"]=="split") {
 		  $('#icon' + div_id).find('.highlight-star').css('color', 'green');
 		  $('#icon' + div_id).find('.highlight-star').css('-webkit-text-stroke-color', 'darkgreen');
 		  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
-	  } else {
+	  }else {
 		  $('#icon' + div_id).find(".highlight-star").css("display","none");
 	  }
 	}
 	// also toggle bridgesubtype marking
-        toggle_bridgetype(div_id);
+	toggle_bridgetype(div_id);
+	// also toggle binary salience marking
+	toggle_binary_salience(div_id);
 }
 
 function toggle_bridgetype(div_id){
@@ -1648,7 +1651,7 @@ function toggle_bridgetype(div_id){
 	  } else if (entities[div_id].annos["bridgetype"]=="nobridge" && entities[div_id].bridge_antec != "_" && entities[div_id].annos["infstat"]!="split") {
 		  $('#bridge' + div_id + ".bridge").removeClass("fa fa-check").addClass("fa fa-exclamation");
 		  $('#bridge' + div_id + ".bridge").css("display","inline-block");
-                  $('#bridge' + div_id + ".bridge").css("color","red");
+		  $('#bridge' + div_id + ".bridge").css("color","red");
 	  } else{
 		  $('#bridge' + div_id + ".bridge").css("display","none");
 	  }
@@ -1674,6 +1677,16 @@ function toggle_salience(div_id){
 		}
 	} else{
 			$('#icon' + div_id).find(".salience").css("display","none");
+	}
+}
+
+function toggle_binary_salience(div_id){
+	if ("salience" in entities[div_id].annos){
+	  if (entities[div_id].annos["salience"]=="sal"){
+		  $('#' + div_id).addClass("salient");
+	  } else{
+		  $('#' + div_id).removeClass("salient");
+	  }
 	}
 }
 
@@ -1824,10 +1837,10 @@ function select_anno_key(){
 		ent_anno_val = ent.annos[sel_key];
 	}
 	subtype_granularity_button = document.getElementById('togglesubtypes');
-        subtype_granularity_button.style.display = 'none';
+	subtype_granularity_button.style.display = 'none';
 	if (sel_key in anno_values){
 		if (anno_values[sel_key].has('nnnnn') || anno_values[sel_key].has('s____') || anno_values[sel_key].has('sssss')){  // Render as checkboxes
-			if(ent_anno_val == null) {
+			if (ent_anno_val == null) {
 				ent_anno_val = 'nnnnn'
 			}
 			subvals = ent_anno_val.split('');
@@ -1849,9 +1862,9 @@ function select_anno_key(){
 			propagate_salience();
 		}
 		else if (sel_key == "bridgetype"){ // or some other form type sel_key to use multi-select checkboxes
-			if(ent_anno_val == null) {
-                                ent_anno_val = 'nobridge'
-                        }
+			if (ent_anno_val == null) {
+				ent_anno_val = 'nobridge'
+			}
 			subtype_granularity_button.style.display = 'inline';
 			if (show_granular_subtypes) {
 				subtype_values = anno_values[sel_key];
@@ -1863,11 +1876,11 @@ function select_anno_key(){
 					  <fieldset>
 					    ${[...subtype_values].map(opt => `
 					      <label>
-					        <input type="checkbox" name="anno_value" value="${opt}" onchange="select_anno_value()";>
+						<input type="checkbox" name="anno_value" value="${opt}" onchange="select_anno_value()";>
 						${opt}
-          				      </label><br>
-        				    `).join("")}
-      					  </fieldset>
+					      </label><br>
+					    `).join("")}
+					  </fieldset>
 					</form>
 					`;
 			// transform complex type into array
@@ -1882,7 +1895,7 @@ function select_anno_key(){
 			}
 			// fill check boxes
 			$('input[name="anno_value"]').each(function () {
-  				if (ent_anno_val.includes($(this).val())) {
+				if (ent_anno_val.includes($(this).val())) {
 					$(this).prop("checked", true);
 				} else {
 					$(this).prop("checked", false);
@@ -1896,19 +1909,19 @@ function select_anno_key(){
 		} else {
 			// regular dropdown
 			for (v of anno_values[sel_key]){
-                        	val_opts +='<option value="'+v+'">'+v+'</option>\n';
-                        }
+				val_opts +='<option value="'+v+'">'+v+'</option>\n';
+			}
 			$("#sel_anno_value").html(val_opts);
-                        if (sel_key in ent.annos){
-                        	$("#sel_anno_value").val(ent_anno_val);
-                        }
+			if (sel_key in ent.annos){
+				$("#sel_anno_value").val(ent_anno_val);
+			}
 
 			$("#anno_form").css("display","none");
 			val_range = Array.from(range(0, 5))
-                        for (i in val_range){
-                                $("#sel_anno_check" + (parseInt(i)+1).toString()).css("display","none");
-                        }
-                        $("#sel_anno_value").css("display","inline-block");
+			for (i in val_range){
+				$("#sel_anno_check" + (parseInt(i)+1).toString()).css("display","none");
+			}
+			$("#sel_anno_value").css("display","inline-block");
 		
 		}
 	}
@@ -1947,29 +1960,29 @@ function select_anno_value(){
 			// enforce priority order of complex type here
 			if (key == "bridgetype") {
 				// if we are not showing granular subtypes, expand the input to use the granular subtypes
-				if (!show_granular_subtypes) {
-					previous_anno = previous_anno.split(";")
-					// filter out anything that has been unchecked
-					updated_anno = previous_anno.filter(item => val.includes(item.split("-")[0]));
-					// add in anything newly checked
-					for (entry of val) {
-						entry_found = updated_anno.some(item => item.includes(entry));
-						if (!entry_found) {
-							if (entry == "comparison") {
-								updated_anno.push("comparison-relative")
-							} else if (entry == "entity") {
-								updated_anno.push("entity-associative")
-							} else if (entry == "set") {
-								updated_anno.push("set-member")
-							} else { // just add it if it doesn't have a default granular type
-								updated_anno.push(entry)
-							}
-						}
+                                if (!show_granular_subtypes) {
+                                        previous_anno = previous_anno.split(";")
+                                        // filter out anything that has been unchecked
+                                        updated_anno = previous_anno.filter(item => val.includes(item.split("-")[0]));
+                                        // add in anything newly checked
+                                        for (entry of val) {
+                                                entry_found = updated_anno.some(item => item.includes(entry));
+                                                if (!entry_found) {
+                                                        if (entry == "comparison") {
+                                                                updated_anno.push("comparison-relative")
+                                                        } else if (entry == "entity") {
+                                                                updated_anno.push("entity-associative")
+                                                        } else if (entry == "set") {
+                                                                updated_anno.push("set-member")
+                                                        } else { // just add it if it doesn't have a default granular type
+                                                                updated_anno.push(entry)
+                                                        }
+                                                }
 
-					}
-					// set val to the updated annotation
-					val = updated_anno
-				}
+                                        }
+                                        // set val to the updated annotation
+                                        val = updated_anno
+                                }
 				val = priority_order(val)
 			}
 			val = val.join(";")
@@ -1991,8 +2004,8 @@ function select_anno_value(){
 	let key = $("#sel_anno_key").val();
 	let val = ent.annos[key];
 	if (val == null) {
-		val = "nnnnn"
-	}
+                val = "nnnnn"
+        }
 	subvals = val.split('');
 	target = parseInt($(inputObject).attr("id").slice(-1)) - 1;
 	if ($(inputObject).is(':indeterminate')){
@@ -2058,7 +2071,7 @@ function make_token_div(tok){ // Take a Token object and return HTML representat
 function read_webanno(data){
 
 
-	default_conf = {"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"};
+	default_conf = {"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"}; // changed default from nonsal
 	
 	anno_keys = [];
 	anno_values = {};
@@ -2376,7 +2389,7 @@ function read_webanno(data){
 function read_tt(data, config){
 	// set tok to an SGML attribute name to use markup instead of TT plain text tokens as words
 	default_conf = {"span_tag": DEFAULT_SGML_SPAN_TAG, "span_attr": DEFAULT_SGML_SPAN_ATTR, "sent":DEFAULT_SGML_SENT_TAG, "tok": DEFAULT_SGML_TOK_ATTR,
-								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"};
+								"entity_annos":"infstat:auto|giv|acc|new|split;salience:nonsal|sal;bridgetype:nobridge|comparison-relative|comparison-sense|comparison-time|entity-associative|entity-meronomy|entity-property|entity-resultative|set-member|set-subset|set-span-interval|other"}; // changed from nonsal
 	
 	group_info = [];
 	anno_keys = [];
@@ -2414,6 +2427,7 @@ function read_tt(data, config){
 	clearJsPlumb()
 	
 	groups["bridge"] = {0:[]};  // TODO: read from config
+	groups["coref"] = {0:[]};
 
 	data = data.replace(/%%quot%%/g,'"').replace(/%%lt%%/g,"<").replace(/%%gt%%/g,">").replace(/\\n/g,"\n");
 	data = $.trim(data);
@@ -2755,7 +2769,7 @@ function write_webanno(config){
 	if (add_salience){
 		for (e in entities){
 			if (!("salience" in entities[e].annos)){
-				entities[e].annos["salience"] = "nonsal";
+				entities[e].annos["salience"] = "nonsal"; //changed from nonsal
 			}
 		}
 	}
@@ -3157,7 +3171,7 @@ function write_tt(sent_tag){
 	if (add_salience){
 		for (e in entities){
 			if (!("salience" in entities[e].annos)){
-				entities[e].annos["salience"] = "nonsal";
+				entities[e].annos["salience"] = "nonsal"; // changed from nonsal
 			}
 		}
 	}
@@ -3351,7 +3365,15 @@ function propagate_salience(){
 						}
 						first = false;
 					}
-				}
+				} //else { // binary salience propagation
+				//	if ("salience" in this_ent.annos) {
+				//		if (g_id != "0"){
+                                 //               	this_ent.annos["salience"] = final_val.join("");
+                                 //       	}
+				//		toggle_binary_salience(eid[1]);
+				//	}
+				//
+				//}
 			}
 		}
 	}
