@@ -73,6 +73,7 @@ entity_icon = '<div id="%ID%" class="entity_type"><i title="%TYPE%" class="fa fa
 close_icon = '<div id="close%ID%" class="close" onclick="delete_entity('+"'"+'%ID%'+"'"+');"><i title="close" class="fa fa-times-circle"></i></div>';
 bridge_icon = '<div id="bridge%ID%" class="bridge"><i title="bridgetype"></i></div>'; //class="fa fa-check"
 show_bridge_triggers=false
+show_granular_subtypes=false
 sentnum = 0;
 
 class Entity{
@@ -711,6 +712,15 @@ function toggle_show_bridging_triggers(){
 	highlight_bridging_triggers()
 }
 
+function toggle_subtype_granularity(){
+	if (show_granular_subtypes) {
+		show_granular_subtypes=false
+	} else {
+		show_granular_subtypes=true
+	}
+	select_anno_key()
+}
+
 function update_show_bridging_triggers(color_mode){
 	if (color_mode == "bridge"){
 		show_bridge_triggers=true
@@ -827,7 +837,13 @@ function sort_entity_div_ids(ent_div_ids){
 	let sorted = ent_div_ids.sort((a, b) => {
                         const startA = parseInt(a.split('-')[0], 10);
                         const startB = parseInt(b.split('-')[0], 10);
-                        return startA - startB;
+			const endA = parseInt(a.split('-')[1], 10);
+                        const endB = parseInt(b.split('-')[1], 10);
+			if (startA == startB) {
+				return endA - endB;
+			} else {
+				return startA - startB;
+			}
                         });
 	return sorted
 }
@@ -947,17 +963,14 @@ function group_selected(group_type){  // add all selected entities to a single g
                 sel_div_ids.push($(this).attr("id"));
         });
 	const min_div_id = sort_entity_div_ids(sel_div_ids)[0]
+	//const max_div_id = sort_entity_div_ids(sel_div_ids).at(-1)
 
 	// add alert and return if user is making an already introduced entity a bridging anaphor
 	if (group_type == "bridge"){
 		invalid_assignment = false
+		is_split = false
                 for (e_id of sel_ent_ids){
 			if (entities[e_id].div_id != min_div_id) {
-                        	//if ("infstat" in entities[e_id].annos){
-                        	//	if (entities[e_id].annos["infstat"] == "giv") {
-                                //		invalid_assignment = true
-                                //	}
-				//}
 				if ("coref" in entities[e_id].groups){
 					coref_group = entities[e_id].groups["coref"]
 					if (coref_group != 0){
@@ -969,9 +982,14 @@ function group_selected(group_type){  // add all selected entities to a single g
 						}
 					}
 				}
+				if ("infstat" in entities[e_id].annos){
+                                	if (entities[e_id].annos["infstat"] == "split") {
+                                        	is_split = true
+                                	}
+                        	}
 			}
 		}
-		if (invalid_assignment){
+		if (invalid_assignment && !is_split){
 			alert("Warning: Bridging anaphor has previous mention. Cannot form bridging group.")
 			return false
 		}
@@ -1026,7 +1044,7 @@ function group_selected(group_type){  // add all selected entities to a single g
 	}
 
 	// if group_type is bridge, assign the bridge_antec of all selected entities to be the selected entity with the min_id (except for the min_id entity itself)
-	if (group_type == "bridge") { 
+	if (group_type == "bridge" && !is_split) { 
 		for (e_id of sel_ent_ids){
 			if (entities[e_id].div_id != min_div_id) {
 				entities[e_id].bridge_antec = min_div_id
@@ -1072,6 +1090,7 @@ function group_selected(group_type){  // add all selected entities to a single g
 	$(".selected-entity").removeClass("selected-entity");
 	all_ents_toggle_bridgetype()
 	propagate_salience();
+	set_ana_candidate_markers();
 }
 
 function color_coref(group_type){
@@ -1116,7 +1135,8 @@ function init_doc(){
               // make bridge trigger toggle buttons visible
               bridge_trigger_button = document.getElementById('firstmentions');
               bridge_trigger_button.style.display = 'inline';
-        }
+              set_ana_candidate_markers();
+	}
 }
 
 $(document).ready(function() {
@@ -1535,6 +1555,19 @@ function set_entity_classes(){
 		}
 }
 
+function set_ana_candidate_markers(){
+        for (e_id in entities){
+                //console.log(entities[e_id].annos["infstat"])
+                if (entities[e_id].annos["infstat"] && entities[e_id].annos["infstat"].includes("_candidate")){
+                        candidate_outline = "#FF2E96 dashed 3px";
+                        $("#"+entities[e_id].div_id).css("outline", candidate_outline);
+                }
+                else {
+                        $("#"+entities[e_id].div_id).css("outline", "none");
+                }
+        }
+}
+
 function delete_entity(entity_span){
  // entity_span = document.getElementById("active_entity").value;
   start = entities[entity_span].start;
@@ -1589,6 +1622,12 @@ function delete_entity(entity_span){
 function toggle_star(div_id){
 	if ("infstat" in entities[div_id].annos){
 	  if (entities[div_id].annos["infstat"]=="acc"){
+		  $('#icon' + div_id).find('.highlight-star').css('color', 'yellow');
+		  $('#icon' + div_id).find('.highlight-star').css('-webkit-text-stroke-color', 'orange');
+		  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
+	  } else if (entities[div_id].annos["infstat"]=="split") {
+		  $('#icon' + div_id).find('.highlight-star').css('color', 'green');
+		  $('#icon' + div_id).find('.highlight-star').css('-webkit-text-stroke-color', 'darkgreen');
 		  $('#icon' + div_id).find(".highlight-star").css("display","inline-block");
 	  } else {
 		  $('#icon' + div_id).find(".highlight-star").css("display","none");
@@ -1784,9 +1823,13 @@ function select_anno_key(){
 	if (sel_key in ent.annos){
 		ent_anno_val = ent.annos[sel_key];
 	}
-
+	subtype_granularity_button = document.getElementById('togglesubtypes');
+        subtype_granularity_button.style.display = 'none';
 	if (sel_key in anno_values){
 		if (anno_values[sel_key].has('nnnnn') || anno_values[sel_key].has('s____') || anno_values[sel_key].has('sssss')){  // Render as checkboxes
+			if(ent_anno_val == null) {
+				ent_anno_val = 'nnnnn'
+			}
 			subvals = ent_anno_val.split('');
 			val_range = Array.from(range(0, subvals.length))
 			for (i in val_range){
@@ -1806,10 +1849,19 @@ function select_anno_key(){
 			propagate_salience();
 		}
 		else if (sel_key == "bridgetype"){ // or some other form type sel_key to use multi-select checkboxes
+			if(ent_anno_val == null) {
+                                ent_anno_val = 'nobridge'
+                        }
+			subtype_granularity_button.style.display = 'inline';
+			if (show_granular_subtypes) {
+				subtype_values = anno_values[sel_key];
+			} else {
+				subtype_values = new Set([...anno_values[sel_key]].map(x => x.split('-')[0]));
+			}
 			document.getElementById("anno_form").outerHTML = `
 					<form id="anno_form">
 					  <fieldset>
-					    ${[...anno_values[sel_key]].map(opt => `
+					    ${[...subtype_values].map(opt => `
 					      <label>
 					        <input type="checkbox" name="anno_value" value="${opt}" onchange="select_anno_value()";>
 						${opt}
@@ -1823,6 +1875,10 @@ function select_anno_key(){
 				ent_anno_val = ent_anno_val.split(";")
 			} else {
 				ent_anno_val = [ent_anno_val]
+			}
+			// if not showing granular subtypes, condense ent_anno_val
+			if (!show_granular_subtypes) {
+				ent_anno_val = ent_anno_val.map(x => x.split('-')[0]);
 			}
 			// fill check boxes
 			$('input[name="anno_value"]').each(function () {
@@ -1873,7 +1929,11 @@ function select_anno_value(){
 	let ent = entities[div_id];
 	let key = $("#sel_anno_key").val();
 	let val = $("#sel_anno_value").val();
+	let previous_anno = ent.annos[key]
 	if (key == "bridgetype"){ // or some other complex value type
+		if (previous_anno == null) {
+			previous_anno = "nobridge"
+		}
 		val = Array.from(document.querySelectorAll('input[name="anno_value"]:checked')).map(cb => cb.value);
 		if(val.length==0){
 			val = ["nobridge"] // or default value
@@ -1886,6 +1946,30 @@ function select_anno_value(){
 			}
 			// enforce priority order of complex type here
 			if (key == "bridgetype") {
+				// if we are not showing granular subtypes, expand the input to use the granular subtypes
+				if (!show_granular_subtypes) {
+					previous_anno = previous_anno.split(";")
+					// filter out anything that has been unchecked
+					updated_anno = previous_anno.filter(item => val.includes(item.split("-")[0]));
+					// add in anything newly checked
+					for (entry of val) {
+						entry_found = updated_anno.some(item => item.includes(entry));
+						if (!entry_found) {
+							if (entry == "comparison") {
+								updated_anno.push("comparison-relative")
+							} else if (entry == "entity") {
+								updated_anno.push("entity-associative")
+							} else if (entry == "set") {
+								updated_anno.push("set-member")
+							} else { // just add it if it doesn't have a default granular type
+								updated_anno.push(entry)
+							}
+						}
+
+					}
+					// set val to the updated annotation
+					val = updated_anno
+				}
 				val = priority_order(val)
 			}
 			val = val.join(";")
@@ -1898,6 +1982,7 @@ function select_anno_value(){
 		handle_split(div_id)
 	}
 	toggle_star(div_id);
+	set_ana_candidate_markers();
 }
 
  function select_check_value(inputObject){
@@ -1905,6 +1990,9 @@ function select_anno_value(){
 	let ent = entities[div_id];
 	let key = $("#sel_anno_key").val();
 	let val = ent.annos[key];
+	if (val == null) {
+		val = "nnnnn"
+	}
 	subvals = val.split('');
 	target = parseInt($(inputObject).attr("id").slice(-1)) - 1;
 	if ($(inputObject).is(':indeterminate')){
@@ -1933,15 +2021,17 @@ function handle_split(div_id){
 	if ("bridge" in entities[div_id].groups){
 		// get bridge group
 		split_antec_group = entities[div_id].groups["bridge"]
-		// get all entities in bridging cluster for ent
-		ent_ids = groups["bridge"][split_antec_group]
-		for (ent_id of ent_ids){
-			// set all bridge_antec to "_"
-			entities[ent_id].bridge_antec = "_" 
-			// change all "acc" infstats to "auto"
-			if (entities[ent_id].annos["infstat"] == "acc") {
-				entities[ent_id].annos["infstat"] = "auto"
-				toggle_star(ent_id)
+		if (split_antec_group != 0) {
+			// get all entities in bridging cluster for ent
+			ent_ids = groups["bridge"][split_antec_group]
+			for (ent_id of ent_ids){
+				// set all bridge_antec to "_"
+				entities[ent_id].bridge_antec = "_" 
+				// change all "acc" infstats to "auto"
+				if (entities[ent_id].annos["infstat"] == "acc") {
+					entities[ent_id].annos["infstat"] = "auto"
+					toggle_star(ent_id)
+				}
 			}
 		}
 	}
@@ -2863,24 +2953,62 @@ function write_webanno(config){
 						}
 					}
 					else if (reverse_fountain){
-						fountain_edges = [];
+						//fountain_edges = [];
 						ents_to_sort = ents_to_sort.reverse();
-						ent = ents_to_sort[0];  // connect the last entity in the group to all others
-						for (i in range(0,ents_to_sort.length-1)){
+						split_index = 0
+                                        	ent_index = 0
+						for (ent of ents_to_sort){
+                                                	if ("infstat" in ent.annos){
+                                                        	if (ent.annos["infstat"]=="split"){
+                                                                	split_index = ent_index
+                                                        	}
+                                                	}
+                                                	ent_index += 1
+                                        	}
+						for (i in range(0,ents_to_sort.length)){
+							ent = ents_to_sort[split_index];  // connect the split entity in the group to all others which don't have an antecedent
 							// make an edge specification pointing from next member of chain
 							i = parseInt(i);
-							next_ent = ents_to_sort[i+1];
-							if (!(i==ents_to_sort.length-1)){
-								first_in_component[gtype][ents_to_sort[i].div_id] = false;
+							if (i == split_index){ // don't need end from split
+								continue;
 							}
-							next_start = tokens[ent.start].sentnum + "-" + tokens[ent.start].toknum_in_sent;
-							this_webanno_id = (ent.length > 1 || !(single_token_id_style) ? e_ids[ent.div_id] : "0");
-							next_webanno_id = (next_ent.length > 1 || !(single_token_id_style) ? e_ids[next_ent.div_id] : "0");
-							id_part = "[" + this_webanno_id.toString() + "_" + next_webanno_id.toString()+"]";
-							if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
-							edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
-							//fountain_edges.push(edge);
-							next_ent.next[gtype]  = edge;
+							next_ent = ents_to_sort[i];
+							if (i-1 >= 0 && !(i-1==ents_to_sort.length)){
+								first_in_component[gtype][ents_to_sort[i-1].div_id] = false;
+							}
+							// if there is a specified antecedent, connect to that entity (rather than the first entity in the group)
+                                                        if (next_ent.bridge_antec != "_") {
+                                                                bridge_antec_id = next_ent.bridge_antec
+                                                                bridge_antec_id = enforce_closest_mention_bridge_antec(next_ent)
+                                                                ent = entities[bridge_antec_id]
+								
+								next_start = tokens[next_ent.start].sentnum + "-" + tokens[next_ent.start].toknum_in_sent;
+                                                        	this_webanno_id = (ent.length > 1 || !(single_token_id_style) ? e_ids[ent.div_id] : "0");
+                                                        	next_webanno_id = (next_ent.length > 1 || !(single_token_id_style) ? e_ids[next_ent.div_id] : "0");
+                                                        	id_part = "[" + next_webanno_id.toString() + "_" + this_webanno_id.toString()+"]";
+                                                        	if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
+                                                        	edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
+                                                        	gtype_subtype = gtype
+                                                        	if (gtype == "bridge" && "bridgetype" in next_ent.annos) {
+                                                                	gtype_subtype = gtype + ":" + next_ent.annos["bridgetype"]
+                                                        	}
+                                                        	if (gtype_subtype in ent.next) {
+                                                                	ent.next[gtype_subtype] += "|" + edge
+                                                        	} else {
+                                                                	ent.next[gtype_subtype] = edge
+                                                        	}
+                                                        } else {
+								// normal reverse fountain
+								next_start = tokens[ent.start].sentnum + "-" + tokens[ent.start].toknum_in_sent;
+								this_webanno_id = (ent.length > 1 || !(single_token_id_style) ? e_ids[ent.div_id] : "0");
+								next_webanno_id = (next_ent.length > 1 || !(single_token_id_style) ? e_ids[next_ent.div_id] : "0");
+								id_part = "[" + this_webanno_id.toString() + "_" + next_webanno_id.toString()+"]";
+								if (id_part == "[0_0]"){id_part = "";}  // edges between single token entities are implicit in webanno, with only the source token number indicating edge source
+								edge = next_start + id_part;  // e.g. 3-15[20_18]  meaning an edge from entity 20 which starts at token 3-15, to current entity 18
+								//fountain_edges.push(edge);
+								next_ent.next[gtype]  = edge;
+							}
+
 						}
 					}
 					else{  // this is a default fountain-style link anno: a <- b, a <- c, a <- d ...
@@ -3201,12 +3329,14 @@ function propagate_salience(){
 			let first = true;
 			for (eid of Object.entries(groups[gtype][g_id]).sort((a, b) => parseInt(a[1].split("-")[0]) - parseInt(b[1].split("-")[0]))){
 				this_ent = entities[eid[1]];
+
 				if ("salience" in this_ent.annos && this_ent.annos["salience"].length == 5){
 					if (g_id != "0"){
 						this_ent.annos["salience"] = final_val.join("");
 					}
 					$('#icon' + eid[1]).find(".salience").css("display","none");
-					if ((first || g_id == "0") && this_ent.annos["salience"].includes("s")){
+					this_ent_coref_id = this_ent.groups["coref"]
+					if ((first || this_ent_coref_id == "0") && this_ent.annos["salience"].includes("s")){ //g_id -> this_ent.groups["coref"]
 						for (tok of this_ent.toks){
 							$("#t" + tok).addClass("saltok");
 							toggle_salience(eid[1]);
