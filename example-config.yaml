@@ -1,0 +1,81 @@
+instance:
+  project: example
+  display_name: First Example Project
+  # display_image: [img/example.png, 100, 50px]  # You can add this image in src/public/img/
+  # You can set up a link to your annotation guidelines like this:
+  help_message: <span style="color:black">For help getting started see the</span> <a href="https://gucorpling.org/gitdox/">website</a>
+
+
+# Tools live in backend/nlp_modules/
+tools:
+  tokenize: {editor: xml, caption: "Tokenize", level: 0, return: "xml", color: "teal"}
+  tabulate: {editor: xml, caption: "Tabulate", level: 3, return: "spreadsheet", color: "indigo"}
+  #ssplit: {editor: xml, caption: "Split sentences", level: 3, return: "xml", color: "olive"}
+  #stype: {editor: xml, caption: "Sentence types", level: 3, return: "xml", color: "olive"}
+  reindent: {editor: xml, caption: "Indent XML", level: 2, return: "xml", color: "olive"}
+
+
+ui:
+  font: 'Roboto, "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", "DejaVu Sans", Verdana, sans-serif'
+  nav_background_color: "#174274"
+  panel_background_color: "#dddddd"
+  max_validator_warn_per_rule: 8
+  table_header_background_color: "darkgray"
+  background_color: "#174274"
+  #background_image: "img/parchment.jpg"
+  # Optional embedded web fonts loaded at runtime via @font-face.
+  # Place files under gitdox/public/fonts/ and reference them as /fonts/...
+  embedded_fonts:
+    - family: "Roboto"
+      style: normal
+      weight: "400"
+      display: swap
+      sources:
+        - path: "/fonts/Roboto-VariableFont_wdth,wght.ttf"
+          format: "truetype"
+
+# Spannotator UI configuration
+entities:  
+  annotations:
+    entity: # Name and values for the spreadsheet column for entity types and entity identities (linked open data IDs)
+      entity: [abstract, animal, event, object, organization, person, place, plant, substance, time]
+      identity: identity
+      ner_pos: 
+        pos: [NNP, NNPS, NP, NPS, NPROP]
+    keys:  # Key - value annotations expected on every entity, default value first. Use "" for any string
+      infstat:
+        values: [auto, new, acc, giv, split]  # possible values
+        stars:  # values triggering star icon
+          acc: "yellow"  # star color
+          split: "green"
+    checks:  # Annotation keys that create n checkboxes and their internal concatenated char values, false then true
+      salience: [5, 'n', 's']
+  carousel:
+    keys: [Summary1, Summary2, Summary3, Summary4, Summary5] # Metadata string keys to cycle at top of UI carousel
+    sync: "salience"
+  colors:
+    groups: {coref: [chain, sametype], split: [star, anytype]}
+    edges:
+      bridge:
+        bridgetype: [nobridge, comparison-relative, comparison-sense, comparison-time, entity-associative, entity-meronymy, entity-property, entity-resultative, set-member, set-subset, set-span-interval, other]
+        show_coarse: true
+        coarse_separator: '-'
+  first_mentions: true  # Whether to show the "Highlight First Mentions" button for bridging and anaphora resolution in the entities view (only makes sense if you have coreference annotations)
+  font: "Times New Roman"
+  guess_identities: true  # Whether to show the "Guess Identities" button in the Named Entity Linking interface
+  require_identities: true  # Whether to show a validation error for documents with unidentified named entities
+  sentences: sent  # Column name for sentence spans, should cover all tokens in the document
+  sentence_tooltip: translation
+  show_entity_linking: true
+  tokens: tok # Column name for underlying word forms
+  webanno_order: [entity, infstat, salience, identity]
+
+xml:
+  font: "Antinoou"
+  tags: gum.json  # Name of .json file in schemas/xml_tags/ with tags specification for XML tag auto-suggest
+  auto_indent: false
+  line_wrapping: true
+
+spreadsheet:
+  column_order: [tok, pos, lemma, s_type, entity, infstat, salience, identity]
+  font: "Times New Roman"
