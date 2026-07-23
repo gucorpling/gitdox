@@ -1,19 +1,20 @@
-# GitDox
-GitDox is an online editor for version controlled collaborative XML and spreadsheet editing used for linguistic corpus annotation.
+# GitDOX
 
-The editor interface is based on [CodeMirror](https://codemirror.net). GitHub is used as a remote backend, and SQLite is used for local storage. 
+GitDOX is an online editor for version controlled collaborative XML, spreadsheet and specialized annotation layer editing used for building linguistic corpora.
 
-GitDox is used by [Coptic SCRIPTORIUM](http://copticscriptorium.org/) as an xml editor/transcription tool for Coptic texts, and by the
-[GUM corpus](https://gucorpling.org/gum/) to build a multilayer corpus of English Web genres.
+The user interface is built using React, integrating an XML editor based on [CodeMirror](https://codemirror.net) and a spreadsheet interface derived from [x-data-spreadsheet](https://github.com/myliang/x-spreadsheet). A Python Pydantic API controls the backend, with Redis as a database and GitHub for remote storage. 
 
-Some scenarios when GitDox is helpful:
+GitDOX is developed by the [Corpling lab](https://gucorpling.org/corpling/) at Georgetown University. It is in active use by [Coptic SCRIPTORIUM](https://copticscriptorium.org/) as an xml editor/transcription tool/annotation environment for Coptic texts, and by the [GUM corpus](https://gucorpling.org/gum/) to build a multilayer corpus of English Web genres.
+
+Some scenarios when GitDOX is helpful:
 
   * Many annotators, limited training
     * You want to just give annotators a login (browser based)
     * You use complex **XML** validation schemas and update them for all users
     * You use **spreadsheets** to annotate and have annotators already familiar with tools like Excel
+    * You're doing named entity, coreference or entity linking annotation
   * You need version control and like GitHub
-    * Use commit history from GitDox directly on GitHub
+    * Use commit history from GitDOX directly on GitHub
     * Link annotator accounts to GitHub accounts
     * Make conflicts impossible for inexperienced Git users (each committed version overwrites previous doc, but remains diffable)
   * Using a dashboard to coordinate annotation
@@ -21,173 +22,88 @@ Some scenarios when GitDox is helpful:
     * Built in metadata and export functions to manage data releases
     * Combined with version control, you can track annotator progress towards data release
  
-For more information see http://gucorpling.org/gitdox/
+For more information see https://gucorpling.org/gitdox/
 
-# Installation
-You have three choices:
+## Installation
 
-1. Pull the latest GitDox Docker image
-2. Build and run a GitDox Docker image
-3. Manually install GitDox on your machine 
+The main app configuration can be adjusted in the main project based on the project name as in `<NAME>-config.yaml`.
 
-Unless you have a good reason to do (2) or (3), we recommend you do (1).
+### Local testing
 
-# Pull the latest Docker image
+  * Backend
+    * Install redis and ensure the service is running (by default on port :6379)
+    * Ensure Python is installed with all requirements in `requirements.txt`
+    * (optional) Edit api.py to set your own master password in `MASTER_INIT_SECRET` for initializing a new project (default: "my_super_secret_master_password")
+    * In backend/, Run `python api.py`
+    * Your backend service will now be running at port :8008
+  * Frontend
+    * Ensure npm/vite is installed
+    * Set a project name for your instance in `FRONTEND_PROJECT_NAME` within App.jsx
+    * Run npm run dev
+    * Open http://localhost:5173 in your browser
+    * Initialize the project by clicking "Need to initialize first run?", then filling in the user name, password and master password and clicking "Bootstrap DB"
 
-First, [install Docker](https://docs.docker.com/install/). You may be able to
-install it using your platform's package manager.
+### Server installation
 
-(**Note: if your machine has Apache running, you should stop it first by running `sudo service apache2 stop`.**)
+  * Ensure Python and all requirements in `requirements.txt` are installed
+  * Install and run redis (by default on port :6379)
+  * Edit api.py to set your own master password in `MASTER_INIT_SECRET` for initializing a new project
+  * Copy the files in backend/ to your server into a separate folder, which is not publicly accessible
+  * Setup a service to run and automatically restart `python api.py`
+  * (optional) If you want to run GitDOX in a subfolder (like `server.com/gitdox/myproject/` instead of directly as `server.com`):
+    * Modify `FRONTEND_BASE_PATH_FALLBACK` in App.jsx to match your folder name WITHOUT leading or trailing slashes (e.g. "gitdox/myproject")
+    * Modify `base` in `vite.config.js` to match your folder name WITH leading and traling slashes (e.g. `base: '/gitdox2/scriptorium/'`)
+  * Run `npm run build`
+  * Copy the files in `dist/` to your server folder
+  * Setup a proxy pass on your webserver to route all traffix to /gdapi/ into port :8008 and back (see example below)
+  * Setup webserver access to the public path of your app folder (see example below)
 
-```bash
-sudo git clone https://github.com/gucorpling/gitdox /var/www/gitdox
-sudo chown -R www-data:www-data /var/www/gitdox
-docker run -dit --restart unless-stopped --name gitdox -v /var/www/gitdox:/var/www/html -p 80:80 gucorpling/gitdox gitdox
-```
+### Example server files using apache
 
-These commands install GitDox under `/var/www` in your host machine and allows you to modify them just as you would modify any other file on your machine. But in the Docker command, with the `-v` flag we tell it to mount this folder as `/var/www/html` in the container's filesystem. The files are shared bidirectionally: changes made in the container will flow to the host, and vice versa.
+#### Front end config
+```conf
+<Directory "/var/www/html/gitdox/scriptorium/">
+  AllowOverride None
+  Require all granted
+  Options +FollowSymLinks
 
-# Build and run a Docker image
-First, [install Docker](https://docs.docker.com/install/). You may be able to
-install it using your platform's package manager.
+  DirectoryIndex index.html
+  RewriteEngine On
+  RewriteBase /gitdox/scriptorium/
 
-Run the following code:
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
 
-```bash
-git clone https://github.com/gucorpling/gitdox ~/gitdox
-# compile the docker image
-docker build -t gitdox .
-# launch the image on your machine, mapping the image's port 80 to your machine's 80
-docker run -dit --restart unless-stopped --name gitdox -p 5000:80 gitdox
-```
-
-GitDox should now be running the docker container you've set up, and you may
-visit `http://localhost:5000` on your machine to verify that it works. GitDox should
-now always be running on your machine, even if you reboot it. If for some reason
-you need to stop it manually, you may do so:
-
-```bash
-docker stop gitdox
-# since you stopped it manually, it will no longer start automatically, even on
-# reboot. to start again:
-docker start gitdox
-```
-
-If for whatever reason you need to manually edit GitDox files, you may start a
-bash session inside of the Docker container:
-
-```bash
-docker exec -it gitdox-instance bash
-# now you are inside--install vim so you can edit files
-apt install vim 
-cd /var/www/html
-vim user/admin.ini # or whatever you need to edit
-```
-
-# Manual Installation
-The following instructions assume you are installing on a recent (16.04-18.04) version of Ubuntu.
-
-## Install Redis
-Ethercalc has an optional dependency on Redis. We assume you will be using Redis
-for these instructions.
-
-```bash
-sudo apt update
-sudo apt install redis-server
-redis-cli ping #=> "PONG", if all has gone well
-```
- 
-## Install Ethercalc
-
-```bash
-# install deps
-sudo apt install gzip git curl python libssl-dev pkg-config build-essential npm
-# install ethercalc
-sudo npm install -g ethercalc
-# start ethercalc in background and continue using terminal
-ethercalc &
-```
-
-By default, Ethercalc runs on port 8000.
-
-## Install and Configure Apache2
-
-Install, and enable CGI module
-
-```bash
-sudo apt install apache2
-# enable CGI module and reload
-sudo a2enmod cgi
-```
-
-Add these lines to `/etc/apache2/apache2.conf`. This tells Apache to execute
-Python files that the client requests, and to serve `index.py` by default. (Note that we're assuming you're installing GitDox under `/var/www/html`--you should replace this path with the one you're going to install under.)
-
-```xml
-<Directory "/var/www/html">
-	Options +ExecCGI
-	AddHandler cgi-script .py
-	DirectoryIndex index.py
+  RewriteRule ^ index.html [L]
 </Directory>
 ```
 
-Restart Apache:
+#### Proxypass config
+```conf
+<VirtualHost *:80>
+  ServerName tools.copticscriptorium.org
 
-```
-sudo service apache2 restart
-```
+  ProxyPass /gdapi/ http://127.0.0.1:8008/
+  ProxyPassReverse /gdapi/ http://127.0.0.1:8008/
 
-## Install GitDox
-Decide where you want GitDox to live under your Apache directories. In these
-instructions we'll assume it's `/var/www/html`
-
-1. Install xmllint for xml validation:
-
-```bash
-sudo apt install libxml2-utils
+</VirtualHost>
 ```
 
-2. Execute the following to set up GitDox's files:
+## Running multiple instances
 
-```bash
-# clear /var/www/html and clone gitdox to it, changing ownership to www-data
-sudo rm -rf /var/www/html
-sudo git clone https://github.com/gucorpling/gitdox.git /var/www/html
-sudo chown -R www-data:www-data /var/www/html
+Option 1 (No Rebuilding): If you build this React app once, you can host it in multiple server directories. For each directory, just open the static public/index.html file and add:
+HTML
 
-# allow apache to execute python files
-sudo chmod +x /var/www/html/*.py
-sudo chmod +x /var/www/html/modules/*.py
+<script>
+  window.GITDOX_PROJECT = "your_project_name";
+</script>
+   The React app will detect this at runtime and pass it to the backend to get the right `.yaml` config file.
 
-# install dependencies--use pip
-sudo apt install python-pip
-sudo pip install -r /var/www/html/requirements.txt
-```
-
-3. Edit the contents of `users/config.ini` to your liking. In particular, pay
-   attention to `xml_nlp_api` and `spreadsheet_nlp_api` if you plan to make use
-   of those features.
-
-4. Modify the value of `ether_url` in `users/config.ini` so that it reflects where
-   GitDox can find your Ethercalc service over HTTP. It defaults to assuming
-   that you will serve Ethercalc via reverse proxy into a subdirectory of your
-   website, /ethercalc/. If you want to serve it over its original port, you
-   should change it to something like `yourdomain.com:8000`, and if you want to
-   serve it over a subdomain, change it to something like
-   `your.subdomain.yourdomain.com`.
-
-# Logging in
-The default user is `admin`. You will need to set the password using a script:
-
-```bash
-python init_admin_password.py
-```
-
-Now, navigate to `http://localhost`. Enter the username `admin`, and the
-password you just entered.
+Option 2 (Hardcoded): If you are running multiple isolated deployments with different codebases anyway, you can just change FRONTEND_PROJECT_NAME = '...'; directly in `App.jsx`.
 
 # Credits
 
-(c) 2016-2019 Shuo Zhang (@zangsir), Amir Zeldes (@amir-zeldes), and Luke Gessler (@lukegessler)
+(c) 2016-2026 Shuo Zhang (@zangsir), Amir Zeldes (@amir-zeldes), and Luke Gessler (@lukegessler)
 
-This work was supported by the [KELLIA](http://kellia.uni-goettingen.de/) project, [NEH](https://www.neh.gov/) grant #HG-229371, co-sponsored by the German [DFG](http://www.dfg.de/) and NEH grant #HAA-261271-18.
+This work was originally supported by the [KELLIA](http://kellia.uni-goettingen.de/) project, [NEH](https://www.neh.gov/) grant #HG-229371, co-sponsored by the German [DFG](http://www.dfg.de/) and NEH grant #HAA-261271-18.
