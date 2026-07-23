@@ -2,6 +2,8 @@
 
 GitDOX is an online editor for version controlled collaborative XML, spreadsheet and specialized annotation layer editing used for building linguistic corpora.
 
+*The main branch currently tracks the React based GitDOX v2.X - for older versions using EtherCalc see the legacy branch*
+
 The user interface is built using React, integrating an XML editor based on [CodeMirror](https://codemirror.net) and a spreadsheet interface derived from [x-data-spreadsheet](https://github.com/myliang/x-spreadsheet). A Python Pydantic API controls the backend, with Redis as a database and GitHub for remote storage. 
 
 GitDOX is developed by the [Corpling lab](https://gucorpling.org/corpling/) at Georgetown University. It is in active use by [Coptic SCRIPTORIUM](https://copticscriptorium.org/) as an xml editor/transcription tool/annotation environment for Coptic texts, and by the [GUM corpus](https://gucorpling.org/gum/) to build a multilayer corpus of English Web genres.
