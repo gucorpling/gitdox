@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annotation Interface: X-Spreadsheet Prototype</title>
+    
+    <!-- X-Spreadsheet Canvas Grid -->
+    <link rel="stylesheet" href="https://unpkg.com/x-data-spreadsheet@1.1.9/dist/xspreadsheet.css">
+    <script src="https://unpkg.com/x-data-spreadsheet@1.1.9/dist/xspreadsheet.js"></script>
+    
+    <!-- Tailwind CSS for layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+        /* Force the canvas to cleanly fill our flex container */
+        .x-spreadsheet-sheet { width: 100% !important; height: 100% !important; outline: none; }
+
+        /* --- EXTREME TOOLBAR CUSTOMIZATION --- */
+        
+        .x-spreadsheet-toolbar { 
+            height: auto !important; 
+            min-height: 41px; 
+            display: none !important;
+            flex-wrap: wrap !important;
+            align-items: center;
+        }
+
+        /* Hide ALL native buttons and dividers by default */
+        .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn,
+        .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-divider {
+            display: none !important;
+        }
+
+        /* SHOW ONLY ALLOWED (PURE CSS): Target specific native buttons. */
+        .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn[data-tooltip*="bold" i],
+        .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn[data-tooltip*="merge" i] {
+            display: inline-flex !important;
+        }
+
+        /* Styling for our custom injected SVG buttons */
+        .custom-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 3px;
+            width: 28px;
+            height: 28px;
+            margin: 0 2px;
+            transition: background-color 0.2s;
+        }
+        .custom-btn:hover {
+            background-color: rgba(0, 0, 0, 0.08);
+        }
+
+        .custom-color-dropdown {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .custom-color-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            margin-left: 3px;
+            box-sizing: border-box;
+        }
+
+        .custom-color-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            display: none;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 8px;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+            z-index: 80;
+            min-width: 126px;
+        }
+
+        .custom-color-menu.open {
+            display: grid;
+        }
+
+        .custom-color-swatch {
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+        }
+
+        .custom-color-swatch:hover {
+            transform: scale(1.06);
+        }
+
+        /* Completely remove the "..." More menu trap */
+        .x-spreadsheet-toolbar-more {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-white h-screen font-sans text-sm overflow-hidden">
+
+    <div class="w-full h-full flex flex-col bg-white">
+        <div id="custom-toolbar-host" class="px-3 py-2 border-b border-gray-200 bg-white"></div>
+        <div class="flex-1 w-full h-full overflow-hidden relative">
+            <div id="spreadsheet-container" class="absolute inset-0"></div>
+        </div>
+    </div>
+
+    <!-- Find & Replace Dialog -->
+    <div id="find-replace-dialog" class="hidden fixed top-24 right-6 z-50 bg-white border border-gray-300 rounded-lg shadow-xl" style="width:320px;">
+        <div class="flex items-center justify-between px-4 py-2 bg-gray-100 rounded-t-lg border-b border-gray-200 cursor-move select-none">
+            <span class="font-semibold text-gray-700 text-sm">Find &amp; Replace</span>
+            <button onclick="closeFindReplace()" class="text-gray-400 hover:text-gray-700 text-lg leading-none">&times;</button>
+        </div>
+        <div class="p-3 flex flex-col gap-2">
+            <div class="flex gap-1 items-center">
+                <input id="find-input" type="text" placeholder="Find…" autocomplete="off"
+                    class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    oninput="runFindSearch()"
+                    onkeydown="if(event.key==='Enter'){event.shiftKey?findPrev():findNext();event.preventDefault();} else if(event.key==='Escape'){closeFindReplace();}">
+                <button onclick="findPrev()" title="Previous (Shift+Enter)" class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300">▲</button>
+                <button onclick="findNext()" title="Next (Enter)" class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300">▼</button>
+            </div>
+            <div class="flex gap-1 items-center">
+                <input id="replace-input" type="text" placeholder="Replace with…" autocomplete="off"
+                    class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    onkeydown="if(event.key==='Escape'){closeFindReplace();}">
+                <button onclick="replaceOne()" class="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 rounded border border-blue-300 text-blue-700">Replace</button>
+                <button onclick="replaceAll()" class="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 rounded border border-blue-300 text-blue-700">All</button>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-gray-500">
+                <label class="flex items-center gap-1 cursor-pointer">
+                    <input id="find-case-sensitive" type="checkbox" onchange="runFindSearch()">
+                    Case-sensitive
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer">
+                    <input id="find-use-regex" type="checkbox" onchange="runFindSearch()">
+                    Regex
+                </label>
+                <span id="find-match-info" class="ml-auto font-mono"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Transfer Modal -->
+    <div id="data-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl flex flex-col h-[85vh]">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-lg">
+                <h2 id="modal-title" class="font-bold text-lg text-gray-800">Transfer Data</h2>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 transition-colors">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="p-4 flex-1 flex flex-col min-h-0">
+                <p id="modal-desc" class="text-sm text-gray-600 mb-3"></p>
+                <textarea id="modal-textarea" class="w-full flex-1 p-4 bg-gray-50 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs whitespace-pre resize-none shadow-inner" spellcheck="false"></textarea>
+            </div>
+            <div class="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
+                <button onclick="closeModal()" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded transition-colors">Cancel</button>
+                <button id="modal-action-btn" onclick="executeModalAction()" class="px-5 py-2 bg-blue-600 font-medium text-white rounded hover:bg-blue-700 transition shadow-sm">Execute</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- MODAL LOGIC ---
+    let modalMode = ''; // 'import' or 'export'
+
+    function openModal(mode) {
+        modalMode = mode;
+        const modal = document.getElementById('data-modal');
+        const title = document.getElementById('modal-title');
+        const desc = document.getElementById('modal-desc');
+        const textarea = document.getElementById('modal-textarea');
+        const actionBtn = document.getElementById('modal-action-btn');
+        
+        modal.classList.remove('hidden');
+        
+        if (mode === 'import') {
+            title.textContent = 'Import SocialCalc Data';
+            desc.textContent = 'Paste your raw SocialCalc backend data below and click "Load Data" to import it into the grid.';
+            actionBtn.textContent = 'Load Data';
+            actionBtn.className = 'px-5 py-2 bg-blue-600 font-medium text-white rounded hover:bg-blue-700 transition shadow-sm';
+            textarea.value = '';
+            textarea.readOnly = false;
+            setTimeout(() => textarea.focus(), 50);
+        } else {
+            title.textContent = 'Export SocialCalc Data';
+            desc.textContent = 'Copy the serialized output below to save your annotations.';
+            actionBtn.textContent = 'Copy to Clipboard';
+            actionBtn.className = 'px-5 py-2 bg-green-600 font-medium text-white rounded hover:bg-green-700 transition shadow-sm';
+            textarea.value = exportSocialCalc(); 
+            textarea.readOnly = true;
+            setTimeout(() => textarea.select(), 50);
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('data-modal').classList.add('hidden');
+        scheduleRestoreFocus();
+    }
+
+    function executeModalAction() {
+        if (modalMode === 'import') {
+            const rawData = document.getElementById('modal-textarea').value;
+            if (rawData.trim()) {
+                importSocialCalc(rawData);
+                closeModal();
+            }
+        } else {
+            const textarea = document.getElementById('modal-textarea');
+            textarea.select();
+            document.execCommand('copy');
+            const btn = document.getElementById('modal-action-btn');
+            const origText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = origText; }, 2000);
+        }
+    }
+
+    // --- UTILITIES ---
+    function colToInt(colStr) {
+        let num = 0;
+        for (let i = 0; i < colStr.length; i++) {
+            num = num * 26 + (colStr.charCodeAt(i) - 64);
+        }
+        return num - 1;
+    }
+
+    function intToCol(num) {
+        let str = '';
+        while (num >= 0) {
+            str = String.fromCharCode((num % 26) + 65) + str;
+            num = Math.floor(num / 26) - 1;
+        }
+        return str;
+    }
+
+    function coordToXY(coord) {
+        const match = coord.match(/^([A-Z]+)(\d+)$/);
+        if (!match) return null;
+        return { x: colToInt(match[1]), y: parseInt(match[2], 10) - 1 };
+    }
+
+    function xyToCoord(x, y) {
+        return intToCol(x) + (y + 1);
+    }
+
+    function getMaxBounds(data) {
+        let rows = data.rows || {};
+        let maxC = 0;
+        let maxR = 0;
+        Object.keys(rows).forEach(yStr => {
+            if (yStr === 'len') return;
+            let y = parseInt(yStr);
+            if (rows[y] && rows[y].cells) {
+                Object.keys(rows[y].cells).forEach(xStr => {
+                    let x = parseInt(xStr);
+                    let cell = rows[y].cells[x];
+                    if (cell && (cell.text || cell.merge || cell.style !== undefined)) {
+                        maxR = Math.max(maxR, y);
+                        maxC = Math.max(maxC, x);
+                    }
+                });
+            }
+        });
+        return { maxR, maxC };
+    }
+
+    const restoreFocus = (selectionOverride = null) => {
+     
+        // Don't steal focus if the find/replace dialog is open and focused
+        const findDialog = document.getElementById('find-replace-dialog');
+        if (findDialog && !findDialog.classList.contains('hidden') && findDialog.contains(document.activeElement)) {
+            return;
+        }
+
+        if (document.activeElement && document.activeElement !== document.body) {
+            document.activeElement.blur();
+        }
+
+        const toolbarFocused = document.querySelector('.x-spreadsheet-toolbar :focus');
+        if (toolbarFocused && typeof toolbarFocused.blur === 'function') {
+            toolbarFocused.blur();
+        }
+
+        const spreadsheetHost = document.querySelector('#spreadsheet-container .x-spreadsheet');
+        if (spreadsheetHost) {
+            if (!spreadsheetHost.hasAttribute('tabindex')) {
+                spreadsheetHost.setAttribute('tabindex', '-1');
+            }
+            spreadsheetHost.focus({ preventScroll: true });
+        }
+
+        const keyInput = document.querySelector('#spreadsheet-container .x-spreadsheet-selector .hide-input input');
+        if (keyInput) {
+            keyInput.focus({ preventScroll: true });
+        }
+        
+        const selectionRange = selectionOverride || getActiveSelectionRange();
+
+        // RADICAL FIX: Synthetic mouseclicks to wake up the canvas event engine
+        const canvas = document.querySelector('.x-spreadsheet-sheet canvas');
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = rect.left + 10;
+            const clickY = rect.top + 10;
+            
+            canvas.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true, clientX: clickX, clientY: clickY }));
+            canvas.dispatchEvent(new MouseEvent('mouseup', { view: window, bubbles: true, cancelable: true, clientX: clickX, clientY: clickY }));
+        }
+        
+        if (mySpreadsheet && mySpreadsheet.sheet) {
+            mySpreadsheet.sheet.focusing = true;
+            mySpreadsheet.sheet.isFocus = true; 
+            restoreSelectorRange(selectionRange);
+        }
+    };
+
+    function scheduleRestoreFocus(selectionOverride = null) {
+        setTimeout(() => {
+            restoreFocus(selectionOverride);
+            requestAnimationFrame(() => restoreFocus(selectionOverride));
+        }, 0);
+    }
+
+    function syncViewportFromSheetData() {
+        if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
+        const sheet = mySpreadsheet.sheet;
+        const data = sheet.data;
+
+        const applyViewport = () => {
+            if (sheet.selector && typeof sheet.selector.resetBRTAreaOffset === 'function') {
+                sheet.selector.resetBRTAreaOffset();
+            }
+            if (sheet.selector && typeof sheet.selector.resetBRLAreaOffset === 'function') {
+                sheet.selector.resetBRLAreaOffset();
+            }
+            if (typeof sheet.render === 'function') {
+                sheet.render();
+            } else if (sheet.table && typeof sheet.table.render === 'function') {
+                sheet.table.render();
+            }
+            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : 0 }); } catch (e) {}
+            }
+            if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : 0 }); } catch (e) {}
+            }
+        };
+
+        // Mirror the library's own arrow-key logic so jump navigation scrolls to reveal selection.
+        const selectedRect = typeof data.getSelectedRect === 'function' ? data.getSelectedRect() : null;
+        const tableOffset = typeof sheet.getTableOffset === 'function' ? sheet.getTableOffset() : null;
+        if (selectedRect && tableOffset) {
+            const contentLeft = selectedRect.l || 0;
+            const contentTop = selectedRect.t || 0;
+            const viewLeft = selectedRect.left || 0;
+            const viewTop = selectedRect.top || 0;
+            const width = selectedRect.width || 0;
+            const height = selectedRect.height || 0;
+
+            if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                let targetLeft = null;
+                if (Math.abs(viewLeft) + width > tableOffset.width) {
+                    targetLeft = contentLeft + width - tableOffset.width;
+                } else {
+                    const freezeW = typeof data.freezeTotalWidth === 'function' ? data.freezeTotalWidth() : 0;
+                    if (viewLeft < freezeW) {
+                        targetLeft = contentLeft - 1 - freezeW;
+                    }
+                }
+
+                if (targetLeft !== null && typeof data.scrollx === 'function') {
+                    try { data.scrollx(targetLeft, applyViewport); } catch (e) {}
+                }
+            }
+
+            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                let targetTop = null;
+                if (Math.abs(viewTop) + height > tableOffset.height) {
+                    targetTop = contentTop + height - tableOffset.height - 1;
+                } else {
+                    const freezeH = typeof data.freezeTotalHeight === 'function' ? data.freezeTotalHeight() : 0;
+                    if (viewTop < freezeH) {
+                        targetTop = contentTop - 1 - freezeH;
+                    }
+                }
+
+                if (targetTop !== null && typeof data.scrolly === 'function') {
+                    try { data.scrolly(targetTop, applyViewport); } catch (e) {}
+                }
+            }
+
+            applyViewport();
+        } else {
+            // Fallback path: map x/y model scroll into DOM scrollbar top/left fields.
+            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : 0 }); } catch (e) {}
+            }
+            if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : 0 }); } catch (e) {}
+            }
+
+            applyViewport();
+        }
+    }
+
+    function scheduleViewportSync() {
+        setTimeout(() => {
+            syncViewportFromSheetData();
+            requestAnimationFrame(() => syncViewportFromSheetData());
+        }, 0);
+    }
+
+    function jumpSelectionTo(ri, ci, skipFocusRestore = false) {
+        if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector) return;
+        isProgrammaticJump = true;
+        try {
+            mySpreadsheet.sheet.selector.set(ri, ci, true);
+        } finally {
+            isProgrammaticJump = false;
+        }
+        syncViewportFromSheetData();
+        scheduleViewportSync();
+        if (!skipFocusRestore) {
+            scheduleRestoreFocus();
+        }
+    }
+
+    // --- GLOBAL STATE & CUSTOM HISTORY ENGINE ---
+    let mySpreadsheet = null;
+    let preSheetLines = [];
+    let postSheetLines = [];
+    let parsedFonts = [];
+    let parsedValueFormats = [];
+
+    let appHistory = [];
+    let appHistoryIndex = -1;
+    let lastRi = 0;
+    let lastCi = 0;
+    let isProgrammaticJump = false;
+    let activeToolbarSelectionSnapshot = null;
+    let lastSerializedValue = '';
+    let suppressParentChangeEvent = false;
+    const BG_COLOR_OPTIONS = ['#ffffff', '#fef3c7', '#fee2e2', '#dcfce7', '#dbeafe', '#ede9fe', '#fce7f3', '#e5e7eb'];
+
+    const MSG_READY = 'gitdox-spreadsheet-ready';
+    const MSG_CHANGE = 'gitdox-spreadsheet-change';
+    const MSG_SET_VALUE = 'gitdox-spreadsheet-set-value';
+    const MSG_REQUEST_VALUE = 'gitdox-spreadsheet-request-value';
+    const MSG_VALUE_RESPONSE = 'gitdox-spreadsheet-value-response';
+
+    function postToParent(type, value) {
+        if (!window.parent || window.parent === window) return;
+        window.parent.postMessage({ type, value }, '*');
+    }
+
+    function emitEditorChange() {
+        if (!mySpreadsheet || suppressParentChangeEvent) return;
+        const serialized = exportSocialCalc();
+        lastSerializedValue = serialized;
+        postToParent(MSG_CHANGE, serialized);
+    }
+
+    function normalizeHexColor(color) {
+        if (!color) return null;
+        const val = String(color).trim().toLowerCase();
+        if (/^#[0-9a-f]{6}$/.test(val)) return val;
+        return null;
+    }
+
+    function isDefaultBackgroundColor(color) {
+        return normalizeHexColor(color) === '#ffffff';
+    }
+
+    function compactStyleObject(styleObj) {
+        if (!styleObj || typeof styleObj !== 'object') return {};
+
+        const normalizedStyle = JSON.parse(JSON.stringify(styleObj));
+        if (normalizedStyle.font && Object.keys(normalizedStyle.font).length === 0) {
+            delete normalizedStyle.font;
+        }
+        if (isDefaultBackgroundColor(normalizedStyle.bgcolor)) {
+            delete normalizedStyle.bgcolor;
+        }
+
+        return normalizedStyle;
+    }
+
+    function isStyleEquivalent(a, b) {
+        return JSON.stringify(a || {}) === JSON.stringify(b || {});
+    }
+
+    function getOrCreateStyleIndex(styles, styleObj) {
+        for (let i = 0; i < styles.length; i++) {
+            if (isStyleEquivalent(styles[i], styleObj)) return i;
+        }
+        styles.push(styleObj);
+        return styles.length - 1;
+    }
+
+    function getActiveSelectionRange() {
+        const sel = mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.data ? mySpreadsheet.sheet.data.selector : null;
+        if (!sel) return { sri: 0, sci: 0, eri: 0, eci: 0 };
+
+        const sri = Number.isInteger(sel.ri) ? sel.ri : 0;
+        const sci = Number.isInteger(sel.ci) ? sel.ci : 0;
+        const eriCandidate = Number.isInteger(sel.eri) ? sel.eri : (sel.range && Number.isInteger(sel.range.eri) ? sel.range.eri : sri);
+        const eciCandidate = Number.isInteger(sel.eci) ? sel.eci : (sel.range && Number.isInteger(sel.range.eci) ? sel.range.eci : sci);
+
+        return {
+            sri: Math.min(sri, eriCandidate),
+            sci: Math.min(sci, eciCandidate),
+            eri: Math.max(sri, eriCandidate),
+            eci: Math.max(sci, eciCandidate)
+        };
+    }
+
+    function restoreSelectorRange(selectionRange) {
+        if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector || !selectionRange) return;
+        const sheet = mySpreadsheet.sheet;
+        const dataSelector = sheet.data && sheet.data.selector;
+        if (dataSelector && dataSelector.range && typeof dataSelector.range.set === 'function') {
+            dataSelector.ri = selectionRange.sri;
+            dataSelector.ci = selectionRange.sci;
+            dataSelector.range.set(selectionRange.sri, selectionRange.sci, selectionRange.eri, selectionRange.eci);
+            if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
+                sheet.selector.resetAreaOffset();
+            }
+            if (sheet.selector && typeof sheet.selector.resetBRTAreaOffset === 'function') {
+                sheet.selector.resetBRTAreaOffset();
+            }
+            if (sheet.selector && typeof sheet.selector.resetBRLAreaOffset === 'function') {
+                sheet.selector.resetBRLAreaOffset();
+            }
+            if (typeof sheet.render === 'function') {
+                sheet.render();
+            } else if (sheet.table && typeof sheet.table.render === 'function') {
+                sheet.table.render();
+            }
+            return;
+        }
+
+        const sel = sheet.selector;
+        sel.set(selectionRange.sri, selectionRange.sci);
+        if (selectionRange.eri !== selectionRange.sri || selectionRange.eci !== selectionRange.sci) {
+            sel.setEnd(selectionRange.eri, selectionRange.eci);
+        }
+    }
+
+    function applyBackgroundColorToSelection(color) {
+        const selectedColor = normalizeHexColor(color);
+        if (!selectedColor || !mySpreadsheet) return;
+
+        const targetRange = activeToolbarSelectionSnapshot || getActiveSelectionRange();
+        executeStateChange((d) => {
+            if (!d.rows) d.rows = { len: 100 };
+            if (!Array.isArray(d.styles)) d.styles = [];
+
+            for (let y = targetRange.sri; y <= targetRange.eri; y++) {
+                if (!d.rows[y]) d.rows[y] = { cells: {} };
+                if (!d.rows[y].cells) d.rows[y].cells = {};
+                for (let x = targetRange.sci; x <= targetRange.eci; x++) {
+                    const existingCell = d.rows[y].cells[x] || {};
+                    const baseStyle = (existingCell.style !== undefined && d.styles[existingCell.style])
+                        ? JSON.parse(JSON.stringify(d.styles[existingCell.style]))
+                        : {};
+
+                    if (isDefaultBackgroundColor(selectedColor)) {
+                        delete baseStyle.bgcolor;
+                    } else {
+                        baseStyle.bgcolor = selectedColor;
+                    }
+
+                    const nextStyle = compactStyleObject(baseStyle);
+                    if (Object.keys(nextStyle).length > 0) {
+                        existingCell.style = getOrCreateStyleIndex(d.styles, nextStyle);
+                    } else {
+                        delete existingCell.style;
+                    }
+                    d.rows[y].cells[x] = existingCell;
+                }
+            }
+        });
+    }
+
+    function toggleBoldForSelection() {
+        if (!mySpreadsheet) return;
+
+        const targetRange = activeToolbarSelectionSnapshot || getActiveSelectionRange();
+        const data = mySpreadsheet.getData()[0];
+        const styles = data.styles || [];
+        let allBold = true;
+
+        for (let y = targetRange.sri; y <= targetRange.eri; y++) {
+            for (let x = targetRange.sci; x <= targetRange.eci; x++) {
+                const cell = data.rows?.[y]?.cells?.[x];
+                const style = cell && cell.style !== undefined ? styles[cell.style] : null;
+                if (!(style && style.font && style.font.bold)) {
+                    allBold = false;
+                    y = targetRange.eri + 1;
+                    break;
+                }
+            }
+        }
+
+        const shouldBold = !allBold;
+        executeStateChange((d) => {
+            if (!d.rows) d.rows = { len: 100 };
+            if (!Array.isArray(d.styles)) d.styles = [];
+
+            for (let y = targetRange.sri; y <= targetRange.eri; y++) {
+                if (!d.rows[y]) d.rows[y] = { cells: {} };
+                if (!d.rows[y].cells) d.rows[y].cells = {};
+
+                for (let x = targetRange.sci; x <= targetRange.eci; x++) {
+                    const existingCell = d.rows[y].cells[x] || {};
+                    const baseStyle = (existingCell.style !== undefined && d.styles[existingCell.style])
+                        ? JSON.parse(JSON.stringify(d.styles[existingCell.style]))
+                        : {};
+
+                    if (shouldBold) {
+                        baseStyle.font = { ...(baseStyle.font || {}), bold: true };
+                    } else if (baseStyle.font) {
+                        delete baseStyle.font.bold;
+                        if (Object.keys(baseStyle.font).length === 0) {
+                            delete baseStyle.font;
+                        }
+                    }
+
+                    existingCell.style = getOrCreateStyleIndex(d.styles, baseStyle);
+                    d.rows[y].cells[x] = existingCell;
+                }
+            }
+        });
+    }
+
+    function saveHistoryState() {
+        if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
+        
+        let dataSnapshot = mySpreadsheet.getData()[0];
+        let ri = mySpreadsheet.sheet.data.selector ? mySpreadsheet.sheet.data.selector.ri : 0;
+        let ci = mySpreadsheet.sheet.data.selector ? mySpreadsheet.sheet.data.selector.ci : 0;
+        
+        let currentState = JSON.stringify({
+            data: dataSnapshot,
+            sel: { ri, ci }
+        });
+        
+        if (appHistoryIndex >= 0) {
+            let prev = JSON.parse(appHistory[appHistoryIndex]);
+            if (JSON.stringify(prev.data) === JSON.stringify(dataSnapshot)) {
+                return; // Prevent duplicate identical data states
+            }
+        }
+        
+        appHistory.length = appHistoryIndex + 1; 
+        appHistory.push(currentState);
+        appHistoryIndex++;
+    }
+
+    function clickNativeToolbarButton(tooltipPattern) {
+        const buttons = Array.from(document.querySelectorAll('.x-spreadsheet-toolbar-btn'));
+        const target = buttons.find((btn) => tooltipPattern.test(btn.getAttribute('data-tooltip') || ''));
+        if (target) {
+            target.click();
+            return true;
+        }
+        return false;
+    }
+
+    function parseMergeEntry(mergeEntry) {
+        if (typeof mergeEntry === 'string') {
+            const parts = mergeEntry.split(':');
+            if (parts.length !== 2) return null;
+            const start = coordToXY(parts[0]);
+            const end = coordToXY(parts[1]);
+            if (!start || !end) return null;
+            return {
+                sri: Math.min(start.y, end.y),
+                sci: Math.min(start.x, end.x),
+                eri: Math.max(start.y, end.y),
+                eci: Math.max(start.x, end.x)
+            };
+        }
+
+        if (mergeEntry && Number.isInteger(mergeEntry.sri) && Number.isInteger(mergeEntry.sci) && Number.isInteger(mergeEntry.eri) && Number.isInteger(mergeEntry.eci)) {
+            return {
+                sri: Math.min(mergeEntry.sri, mergeEntry.eri),
+                sci: Math.min(mergeEntry.sci, mergeEntry.eci),
+                eri: Math.max(mergeEntry.sri, mergeEntry.eri),
+                eci: Math.max(mergeEntry.sci, mergeEntry.eci)
+            };
+        }
+
+        return null;
+    }
+
+    function findMergeCoveringCell(mergeEntries, rowIndex, colIndex) {
+        for (let i = 0; i < mergeEntries.length; i++) {
+            const merge = mergeEntries[i];
+            if (rowIndex >= merge.sri && rowIndex <= merge.eri && colIndex >= merge.sci && colIndex <= merge.eci) {
+                return { index: i, merge };
+            }
+        }
+        return null;
+    }
+
+    function cellHasTextValue(cell) {
+        return !!(cell && cell.text !== undefined && cell.text !== null && String(cell.text) !== '');
+    }
+
+    function mergeDownSelection() {
+        if (!mySpreadsheet) return;
+
+        const targetRange = activeToolbarSelectionSnapshot || getActiveSelectionRange();
+        executeStateChange((d) => {
+            if (!d.rows) d.rows = { len: 100 };
+            if (!Array.isArray(d.merges)) d.merges = [];
+
+            const parsedMerges = d.merges.map(parseMergeEntry);
+
+            for (let col = targetRange.sci; col <= targetRange.eci; col++) {
+                const startRow = targetRange.sri;
+                let effectiveBottom = startRow;
+
+                let containingMergeRef = findMergeCoveringCell(parsedMerges, startRow, col);
+                if (containingMergeRef) {
+                    const containing = containingMergeRef.merge;
+
+                    // Only reshape an existing merge when the selected cell is the merge anchor.
+                    if (containing.sri !== startRow || containing.sci !== col || containing.eci !== col) {
+                        continue;
+                    }
+
+                    effectiveBottom = containing.eri;
+                }
+
+                let nextFilledRow = null;
+                for (let row = effectiveBottom + 1; row < (d.rows.len || 100); row++) {
+                    const cell = d.rows[row] && d.rows[row].cells ? d.rows[row].cells[col] : null;
+                    if (cellHasTextValue(cell)) {
+                        nextFilledRow = row;
+                        break;
+                    }
+                }
+
+                if (nextFilledRow === null || nextFilledRow === effectiveBottom + 1) {
+                    continue;
+                }
+
+                if (!d.rows[startRow]) d.rows[startRow] = { cells: {} };
+                if (!d.rows[startRow].cells) d.rows[startRow].cells = {};
+                const anchorCell = d.rows[startRow].cells[col] || {};
+
+                if (containingMergeRef) {
+                    d.merges.splice(containingMergeRef.index, 1);
+                    parsedMerges.splice(containingMergeRef.index, 1);
+                }
+
+                const newEndRow = nextFilledRow - 1;
+                anchorCell.merge = [newEndRow - startRow, 0];
+                d.rows[startRow].cells[col] = anchorCell;
+
+                const mergeString = `${xyToCoord(col, startRow)}:${xyToCoord(col, newEndRow)}`;
+                d.merges.push(mergeString);
+                parsedMerges.push({ sri: startRow, sci: col, eri: newEndRow, eci: col });
+            }
+        });
+    }
+
+    function insertRowAtSelection() {
+        if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data || !mySpreadsheet.sheet.data.selector) return;
+
+        executeStateChange((d) => {
+            let targetRow = mySpreadsheet.sheet.data.selector.ri;
+            let newRows = {};
+            let maxRow = 0;
+            Object.keys(d.rows).forEach(rStr => {
+                if (rStr === 'len') return;
+                let r = parseInt(rStr);
+                if (r < targetRow) { newRows[r] = d.rows[r]; maxRow = Math.max(maxRow, r); }
+                else if (r >= targetRow) { newRows[r + 1] = d.rows[r]; maxRow = Math.max(maxRow, r + 1); }
+            });
+            newRows[targetRow] = { cells: {} };
+            newRows.len = Math.max(d.rows.len || 100, maxRow + 20);
+            d.rows = newRows;
+
+            let newMerges = [];
+            (d.merges || []).forEach(mergeStr => {
+                let parts = mergeStr.split(':');
+                let start = coordToXY(parts[0]); let end = coordToXY(parts[1]);
+                if (start.y < targetRow && end.y >= targetRow) {
+                    end.y += 1;
+                    newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                    if (newRows[start.y] && newRows[start.y].cells && newRows[start.y].cells[start.x] && newRows[start.y].cells[start.x].merge) {
+                        newRows[start.y].cells[start.x].merge[0] += 1;
+                    }
+                } else if (start.y >= targetRow) {
+                    start.y += 1; end.y += 1;
+                    newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                } else { newMerges.push(mergeStr); }
+            });
+            d.merges = newMerges;
+        });
+    }
+
+    function deleteRowAtSelection() {
+        if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data || !mySpreadsheet.sheet.data.selector) return;
+
+        executeStateChange((d) => {
+            let targetRow = mySpreadsheet.sheet.data.selector.ri;
+            let newRows = {};
+            let maxRow = 0;
+            Object.keys(d.rows).forEach(rStr => {
+                if (rStr === 'len') return;
+                let r = parseInt(rStr);
+                if (r < targetRow) { newRows[r] = d.rows[r]; maxRow = Math.max(maxRow, r); }
+                else if (r > targetRow) { newRows[r - 1] = d.rows[r]; maxRow = Math.max(maxRow, r - 1); }
+            });
+            newRows.len = Math.max(d.rows.len || 100, maxRow + 20);
+            d.rows = newRows;
+
+            let newMerges = [];
+            (d.merges || []).forEach(mergeStr => {
+                let parts = mergeStr.split(':');
+                let start = coordToXY(parts[0]); let end = coordToXY(parts[1]);
+                if (start.y === targetRow) {
+                    // Drops merge
+                } else if (start.y < targetRow && end.y >= targetRow) {
+                    end.y -= 1;
+                    if (end.y > start.y || end.x > start.x) {
+                        newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                        if (newRows[start.y] && newRows[start.y].cells && newRows[start.y].cells[start.x] && newRows[start.y].cells[start.x].merge) {
+                            newRows[start.y].cells[start.x].merge[0] -= 1;
+                        }
+                    } else {
+                        if (newRows[start.y] && newRows[start.y].cells && newRows[start.y].cells[start.x]) {
+                            delete newRows[start.y].cells[start.x].merge;
+                        }
+                    }
+                } else if (start.y > targetRow) {
+                    start.y -= 1; end.y -= 1;
+                    newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                } else { newMerges.push(mergeStr); }
+            });
+            d.merges = newMerges;
+        });
+    }
+
+    function performUndo() {
+        if (appHistoryIndex > 0) {
+            appHistoryIndex--;
+            let state = JSON.parse(appHistory[appHistoryIndex]);
+            mySpreadsheet.loadData([state.data]);
+            patchSelector();
+            if (state.sel && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
+                mySpreadsheet.sheet.selector.set(state.sel.ri, state.sel.ci);
+            }
+            emitEditorChange();
+        }
+    }
+
+    function performRedo() {
+        if (appHistoryIndex < appHistory.length - 1) {
+            appHistoryIndex++;
+            let state = JSON.parse(appHistory[appHistoryIndex]);
+            mySpreadsheet.loadData([state.data]);
+            patchSelector();
+            if (state.sel && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
+                mySpreadsheet.sheet.selector.set(state.sel.ri, state.sel.ci);
+            }
+            emitEditorChange();
+        }
+    }
+
+    // Intercept hardware keyboard shortcuts (Overpowering library defaults)
+    window.addEventListener('keydown', (e) => {
+        // If find dialog is open, don't let keyboard events reach the spreadsheet
+        const findDialog = document.getElementById('find-replace-dialog');
+        if (findDialog && !findDialog.classList.contains('hidden')) {
+            if (findDialog.contains(e.target)) {
+                e.stopPropagation();
+                return;  // Let find dialog handle it
+            }
+        }
+        
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key.toLowerCase() === 'z') {
+                e.preventDefault(); e.stopPropagation();
+                if (e.shiftKey) performRedo(); else performUndo();
+                scheduleRestoreFocus();
+            } else if (e.key.toLowerCase() === 'y') {
+                e.preventDefault(); e.stopPropagation();
+                performRedo();
+                scheduleRestoreFocus();
+            } else if (e.key.toLowerCase() === 'm') {
+                e.preventDefault(); e.stopPropagation();
+                // Synthetically click the native toolbar merge button
+                clickNativeToolbarButton(/merge/i);
+            } else if (e.key.toLowerCase() === 'b') {
+                e.preventDefault(); e.stopPropagation();
+                toggleBoldForSelection();
+            } else if (e.key.toLowerCase() === 'd') {
+                e.preventDefault(); e.stopPropagation();
+                mergeDownSelection();
+                scheduleRestoreFocus();
+            } else if (e.key.toLowerCase() === 'l') {
+                e.preventDefault(); e.stopPropagation();
+                insertRowAtSelection();
+                scheduleRestoreFocus();
+            } else if (e.key.toLowerCase() === 'k') {
+                e.preventDefault(); e.stopPropagation();
+                deleteRowAtSelection();
+                scheduleRestoreFocus();
+            } else if (e.key === 'Home') {
+                e.preventDefault(); e.stopPropagation();
+                if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
+                    jumpSelectionTo(0, 0);
+                }
+            } else if (e.key === 'End') {
+                e.preventDefault(); e.stopPropagation();
+                if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
+                    let maxBounds = getMaxBounds(mySpreadsheet.getData()[0]);
+                    jumpSelectionTo(maxBounds.maxR, maxBounds.maxC);
+                }
+            } else if (e.key.toLowerCase() === 'f') {
+                e.preventDefault(); e.stopPropagation();
+                openFindReplace();
+            }
+        } else {
+            // Non-Modifier Custom Shortcuts (PageUp / PageDown)
+            if (e.key === 'PageUp') {
+                e.preventDefault(); e.stopPropagation();
+                if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.data && mySpreadsheet.sheet.data.selector) {
+                    let ri = Math.max(0, mySpreadsheet.sheet.data.selector.ri - 15);
+                    let ci = mySpreadsheet.sheet.data.selector.ci;
+                    jumpSelectionTo(ri, ci);
+                }
+            } else if (e.key === 'PageDown') {
+                e.preventDefault(); e.stopPropagation();
+                if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.data && mySpreadsheet.sheet.data.selector) {
+                    let d = mySpreadsheet.getData()[0];
+                    let maxBounds = getMaxBounds(d);
+                    let len = d.rows.len || Math.max(100, maxBounds.maxR + 20);
+                    let ri = Math.min(len - 1, mySpreadsheet.sheet.data.selector.ri + 15);
+                    let ci = mySpreadsheet.sheet.data.selector.ci;
+                    jumpSelectionTo(ri, ci);
+                }
+            }
+        }
+    }, true);
+
+    // --- MONKEY-PATCH THE SELECTION ENGINE (Fixes Navigation & Auto-Scrolling) ---
+    function patchSelector() {
+        if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector) return;
+        if (mySpreadsheet.sheet.selector._isPatched) return;
+        
+        let sel = mySpreadsheet.sheet.selector;
+        const origSet = sel.set.bind(sel);
+        
+        sel.set = function(ri, ci, autoScroll = true) {
+            let data = mySpreadsheet.sheet.data;
+            const toolbarSnapshot = activeToolbarSelectionSnapshot;
+            
+            let mergesArray = [];
+            if (data.merges) {
+                if (Array.isArray(data.merges)) mergesArray = data.merges;
+                else if (Array.isArray(data.merges.merges)) mergesArray = data.merges.merges;
+                else if (Array.isArray(data.merges._)) mergesArray = data.merges._;
+            }
+            
+            // Mathematically verify if the target coordinate lands inside a merge
+            let targetBox = null;
+            for (let i = 0; i < mergesArray.length; i++) {
+                let m = mergesArray[i];
+                if (typeof m === 'string') {
+                    let parts = m.split(':');
+                    let start = coordToXY(parts[0]);
+                    let end = coordToXY(parts[1]);
+                    if (start && end && ri >= start.y && ri <= end.y && ci >= start.x && ci <= end.x) {
+                        targetBox = { sri: start.y, sci: start.x, eri: end.y, eci: end.x };
+                        break;
+                    }
+                } else if (m && m.sri !== undefined) {
+                    if (ri >= m.sri && ri <= m.eri && ci >= m.sci && ci <= m.eci) {
+                        targetBox = { sri: m.sri, sci: m.sci, eri: m.eri, eci: m.eci };
+                        break;
+                    }
+                }
+            }
+            
+            if (targetBox) {
+                // Determine if we leaped into a merge or if we are actively trying to arrow-key OUT of it
+                let lRi = typeof lastRi !== 'undefined' ? lastRi : 0;
+                let lCi = typeof lastCi !== 'undefined' ? lastCi : 0;
+                
+                let isLastInside = (lRi >= targetBox.sri && lRi <= targetBox.eri && lCi >= targetBox.sci && lCi <= targetBox.eci);
+                
+                if (!isLastInside) {
+                    ri = targetBox.sri;
+                    ci = targetBox.sci;
+                } else {
+                    let dRi = ri - lRi;
+                    let dCi = ci - lCi;
+                    
+                    if (dRi > 0) ri = targetBox.eri + 1;
+                    else if (dRi < 0) ri = targetBox.sri - 1;
+                    if (dCi > 0) ci = targetBox.eci + 1;
+                    else if (dCi < 0) ci = targetBox.sci - 1;
+                }
+                
+                if (ri < 0) ri = 0;
+                if (ci < 0) ci = 0;
+            }
+            
+            lastRi = ri;
+            lastCi = ci;
+            
+            let ret = origSet(ri, ci, autoScroll);
+
+            if (
+                toolbarSnapshot &&
+                ri === toolbarSnapshot.sri &&
+                ci === toolbarSnapshot.sci &&
+                (toolbarSnapshot.eri !== toolbarSnapshot.sri || toolbarSnapshot.eci !== toolbarSnapshot.sci)
+            ) {
+                sel.setEnd(toolbarSnapshot.eri, toolbarSnapshot.eci);
+            }
+            
+            // Force redraw only for explicit jump helpers.
+            // Native arrow navigation already manages viewport scroll correctly.
+            if (isProgrammaticJump && !sel._isRendering) {
+                sel._isRendering = true;
+                if (mySpreadsheet && mySpreadsheet.sheet) {
+                    let sheet = mySpreadsheet.sheet;
+                    
+                    // Force the actual scrollbar thumb objects to adopt the calculated data.scroll parameters
+                    if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                        try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : 0 }); } catch(e) {}
+                    }
+                    if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                        try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : 0 }); } catch(e) {}
+                    }
+
+                    // Physically redraw the grid lines to match the new viewport
+                    if (typeof sheet.render === 'function') {
+                        sheet.render();
+                    } else if (sheet.table && typeof sheet.table.render === 'function') {
+                        sheet.table.render();
+                    }
+                }
+                sel._isRendering = false;
+            }
+            
+            return ret;
+        };
+        sel._isPatched = true;
+    }
+
+    // --- TOOLBAR ISOLATION LOGIC ---
+    function customizeToolbar() {
+        const toolbarHost = document.getElementById('custom-toolbar-host');
+        if (!toolbarHost) return;
+        
+        if (!toolbarHost._focusPatched) {
+            toolbarHost.addEventListener('mousedown', (e) => {
+                if (e.target.tagName !== 'INPUT') e.preventDefault();
+            }, true);
+            toolbarHost._focusPatched = true;
+        }
+
+        if (toolbarHost.querySelector('.custom-toolbar-group')) return;
+
+        const customGroup = document.createElement('div');
+        customGroup.className = 'custom-toolbar-group';
+        customGroup.style.display = 'flex';
+        customGroup.style.alignItems = 'center';
+        customGroup.style.flexWrap = 'wrap';
+        customGroup.style.gap = '2px';
+
+        const createSvgBtn = (svgHTML, tooltip, onClick) => {
+            const btn = document.createElement('div');
+            btn.className = 'custom-btn';
+            btn.title = tooltip; 
+            btn.innerHTML = svgHTML;
+            btn.addEventListener('mousedown', (e) => {
+                btn._selectionSnapshot = getActiveSelectionRange();
+                activeToolbarSelectionSnapshot = btn._selectionSnapshot;
+                e.preventDefault();
+            });
+            btn.onclick = (e) => {
+                const selectionSnapshot = btn._selectionSnapshot || getActiveSelectionRange();
+                activeToolbarSelectionSnapshot = selectionSnapshot;
+                onClick();
+                restoreSelectorRange(selectionSnapshot);
+                scheduleRestoreFocus(selectionSnapshot);
+                setTimeout(() => {
+                    if (activeToolbarSelectionSnapshot === selectionSnapshot) {
+                        activeToolbarSelectionSnapshot = null;
+                    }
+                }, 100);
+            };
+            customGroup.appendChild(btn);
+        };
+
+        const createBgColorDropdown = () => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'custom-color-dropdown';
+
+            const trigger = document.createElement('div');
+            trigger.className = 'custom-btn';
+            trigger.title = 'Background Color';
+            const defaultColor = BG_COLOR_OPTIONS[0];
+            trigger.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 16l6-12 6 12"/></svg><span class="custom-color-indicator" style="background:${defaultColor}"></span>`;
+            trigger.addEventListener('mousedown', (e) => {
+                wrapper._selectionSnapshot = getActiveSelectionRange();
+                activeToolbarSelectionSnapshot = wrapper._selectionSnapshot;
+                e.preventDefault();
+            });
+
+            const menu = document.createElement('div');
+            menu.className = 'custom-color-menu';
+
+            BG_COLOR_OPTIONS.forEach((hexColor) => {
+                const swatch = document.createElement('button');
+                swatch.type = 'button';
+                swatch.className = 'custom-color-swatch';
+                swatch.title = hexColor;
+                swatch.style.background = hexColor;
+                swatch.addEventListener('mousedown', (e) => {
+                    activeToolbarSelectionSnapshot = wrapper._selectionSnapshot || getActiveSelectionRange();
+                    e.preventDefault();
+                });
+                swatch.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    activeToolbarSelectionSnapshot = wrapper._selectionSnapshot || getActiveSelectionRange();
+                    applyBackgroundColorToSelection(hexColor);
+                    const indicator = trigger.querySelector('.custom-color-indicator');
+                    if (indicator) indicator.style.background = hexColor;
+                    menu.classList.remove('open');
+                    restoreSelectorRange(activeToolbarSelectionSnapshot);
+                    scheduleRestoreFocus(activeToolbarSelectionSnapshot);
+                    setTimeout(() => {
+                        activeToolbarSelectionSnapshot = null;
+                    }, 100);
+                });
+                menu.appendChild(swatch);
+            });
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.classList.toggle('open');
+                const selectionSnapshot = wrapper._selectionSnapshot || getActiveSelectionRange();
+                activeToolbarSelectionSnapshot = selectionSnapshot;
+                restoreSelectorRange(selectionSnapshot);
+                scheduleRestoreFocus(selectionSnapshot);
+                setTimeout(() => {
+                    if (activeToolbarSelectionSnapshot === selectionSnapshot) {
+                        activeToolbarSelectionSnapshot = null;
+                    }
+                }, 100);
+            });
+
+            if (!document._bgColorMenuBound) {
+                document.addEventListener('click', () => {
+                    document.querySelectorAll('.custom-color-menu.open').forEach((openMenu) => {
+                        openMenu.classList.remove('open');
+                    });
+                });
+                document._bgColorMenuBound = true;
+            }
+
+            wrapper.appendChild(trigger);
+            wrapper.appendChild(menu);
+            customGroup.appendChild(wrapper);
+        };
+
+        // --- Custom SVG Icons ---
+        // Import: Document with arrow pointing IN
+        const iconImport = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>`;
+        // Export: Document with arrow pointing OUT
+        const iconExport = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 12 15 15"></polyline></svg>`;
+
+        const iconUndo = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>`;
+        const iconRedo = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>`;
+        const iconBold = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5h7a4 4 0 0 1 0 8H7z"/><path d="M7 13h8a4 4 0 0 1 0 8H7z"/></svg>`;
+        const iconMerge = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7" height="6"/><rect x="14" y="5" width="7" height="6"/><rect x="3" y="13" width="18" height="6"/><path d="M10 8h4"/><path d="M12 8v5"/></svg>`;
+        const iconMergeDown = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6"/><rect x="9" y="15" width="6" height="6"/><path d="M12 9v5"/><path d="M9.5 12.5 12 15l2.5-2.5"/></svg>`;
+        const iconFreeze = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><rect x="3" y="3" width="18" height="6" fill="#cbd5e1" stroke="none"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>`;
+        
+        // Red Delete Icons
+        const iconDelRow = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><rect x="3" y="9" width="18" height="6" fill="#ef4444" stroke="none"/></svg>`;
+        const iconDelCol = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><rect x="9" y="3" width="6" height="18" fill="#ef4444" stroke="none"/></svg>`;
+        
+        // Green Insert Icons with Plus Overlay
+        const iconAddRow = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="4" y="4" width="18" height="18" rx="2" ry="2"/><line x1="4" y1="10" x2="22" y2="10"/><line x1="4" y1="16" x2="22" y2="16"/><rect x="4" y="10" width="18" height="6" fill="#22c55e" stroke="none"/><circle cx="4" cy="4" r="5" fill="#22c55e" stroke="none"/><line x1="4" y1="2" x2="4" y2="6" stroke="white" stroke-width="2"/><line x1="2" y1="4" x2="6" y2="4" stroke="white" stroke-width="2"/></svg>`;
+        const iconAddCol = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="4" y="4" width="18" height="18" rx="2" ry="2"/><line x1="10" y1="4" x2="10" y2="22"/><line x1="16" y1="4" x2="16" y2="22"/><rect x="10" y="4" width="6" height="18" fill="#22c55e" stroke="none"/><circle cx="4" cy="4" r="5" fill="#22c55e" stroke="none"/><line x1="4" y1="2" x2="4" y2="6" stroke="white" stroke-width="2"/><line x1="2" y1="4" x2="6" y2="4" stroke="white" stroke-width="2"/></svg>`;
+
+        // Modal triggers
+        createSvgBtn(iconImport, 'Import Data', () => openModal('import'));
+        createSvgBtn(iconExport, 'Export Data', () => openModal('export'));
+
+        const divider0 = document.createElement('div');
+        divider0.className = 'x-spreadsheet-toolbar-divider';
+        divider0.style.display = 'inline-block';
+        customGroup.appendChild(divider0);
+
+        createSvgBtn(iconUndo, 'Undo (Ctrl+Z)', performUndo);
+        createSvgBtn(iconRedo, 'Redo (Ctrl+Y)', performRedo);
+        createSvgBtn(iconBold, 'Bold (Ctrl+B)', () => toggleBoldForSelection());
+        createSvgBtn(iconMerge, 'Merge (Ctrl+M)', () => clickNativeToolbarButton(/merge/i));
+        createSvgBtn(iconMergeDown, 'Merge Down', () => mergeDownSelection());
+
+        const divider1 = document.createElement('div');
+        divider1.className = 'x-spreadsheet-toolbar-divider';
+        divider1.style.display = 'inline-block';
+        customGroup.appendChild(divider1);
+
+        const iconSearch = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+        createSvgBtn(iconSearch, 'Find & Replace (Ctrl+F)', () => openFindReplace());
+
+        createSvgBtn(iconFreeze, 'Toggle Freeze Header', () => { 
+            executeStateChange((d) => {
+                if (d.freeze === 'A2') delete d.freeze;
+                else d.freeze = 'A2'; 
+            });
+        });
+
+        createBgColorDropdown();
+
+        const divider2 = document.createElement('div');
+        divider2.className = 'x-spreadsheet-toolbar-divider';
+        divider2.style.display = 'inline-block';
+        customGroup.appendChild(divider2);
+
+        createSvgBtn(iconAddRow, 'Insert Row (Ctrl+L)', () => insertRowAtSelection());
+
+        createSvgBtn(iconDelRow, 'Delete Row (Ctrl+K)', () => deleteRowAtSelection());
+
+        createSvgBtn(iconAddCol, 'Insert Column', () => { 
+            executeStateChange((d) => {
+                let targetCol = mySpreadsheet.sheet.data.selector.ci;
+                Object.keys(d.rows).forEach(rStr => {
+                    if (rStr === 'len') return;
+                    let row = d.rows[rStr];
+                    if (row && row.cells) {
+                        let newCells = {};
+                        Object.keys(row.cells).forEach(cStr => {
+                            let c = parseInt(cStr);
+                            if (c < targetCol) { newCells[c] = row.cells[c]; } 
+                            else if (c >= targetCol) { newCells[c + 1] = row.cells[c]; }
+                        });
+                        row.cells = newCells;
+                    }
+                });
+
+                let newMerges = [];
+                (d.merges || []).forEach(mergeStr => {
+                    let parts = mergeStr.split(':');
+                    let start = coordToXY(parts[0]); let end = coordToXY(parts[1]);
+                    if (start.x < targetCol && end.x >= targetCol) {
+                        end.x += 1;
+                        newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                        let row = d.rows[start.y];
+                        if (row && row.cells && row.cells[start.x] && row.cells[start.x].merge) {
+                            row.cells[start.x].merge[1] += 1;
+                        }
+                    } else if (start.x >= targetCol) {
+                        start.x += 1; end.x += 1;
+                        newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                    } else { newMerges.push(mergeStr); }
+                });
+                d.merges = newMerges;
+            });
+        });
+
+        createSvgBtn(iconDelCol, 'Delete Column', () => { 
+            executeStateChange((d) => {
+                let targetCol = mySpreadsheet.sheet.data.selector.ci;
+                Object.keys(d.rows).forEach(rStr => {
+                    if (rStr === 'len') return;
+                    let row = d.rows[rStr];
+                    if (row && row.cells) {
+                        let newCells = {};
+                        Object.keys(row.cells).forEach(cStr => {
+                            let c = parseInt(cStr);
+                            if (c < targetCol) { newCells[c] = row.cells[c]; } 
+                            else if (c > targetCol) { newCells[c - 1] = row.cells[c]; }
+                        });
+                        row.cells = newCells;
+                    }
+                });
+
+                let newMerges = [];
+                (d.merges || []).forEach(mergeStr => {
+                    let parts = mergeStr.split(':');
+                    let start = coordToXY(parts[0]); let end = coordToXY(parts[1]);
+                    if (start.x === targetCol) {
+                        // Drops merge
+                    } else if (start.x < targetCol && end.x >= targetCol) {
+                        end.x -= 1;
+                        if (end.x > start.x || end.y > start.y) {
+                            newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                            let row = d.rows[start.y];
+                            if (row && row.cells && row.cells[start.x] && row.cells[start.x].merge) {
+                                row.cells[start.x].merge[1] -= 1;
+                            }
+                        } else {
+                            let row = d.rows[start.y];
+                            if (row && row.cells && row.cells[start.x]) {
+                                delete row.cells[start.x].merge;
+                            }
+                        }
+                    } else if (start.x > targetCol) {
+                        start.x -= 1; end.x -= 1;
+                        newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
+                    } else { newMerges.push(mergeStr); }
+                });
+                d.merges = newMerges;
+            });
+        });
+
+        toolbarHost.appendChild(customGroup);
+    }
+
+    function executeStateChange(mutationCallback) {
+        applyDataMutation(mutationCallback);
+    }
+
+    // --- 1. IMPORT LOGIC (SocialCalc -> X-Spreadsheet) ---
+    function importSocialCalc(rawData, emitChange = true) {
+        const raw = rawData;
+        const lines = raw.split('\n');
+
+        let cellData = {};
+        let sheetMerges = []; 
+        let maxCol = 0;
+        let maxRow = 0;
+        
+        let stylesList = [
+            { font: { bold: true }, bgcolor: '#f3f4f6', valign: 'top' }
+        ];
+
+        preSheetLines = [];
+        postSheetLines = [];
+        parsedFonts = [];
+        parsedValueFormats = [];
+        let state = 'PRE';
+
+        lines.forEach(line => {
+            let cleanLine = line.replace(/\r$/, '');
+
+            if (state === 'PRE') {
+                preSheetLines.push(cleanLine);
+                if (cleanLine.startsWith('version:1.5')) state = 'SHEET';
+            } 
+            else if (state === 'SHEET') {
+                if (cleanLine.startsWith('--SocialCalcSpreadsheetControlSave')) {
+                    state = 'POST';
+                    postSheetLines.push(cleanLine);
+                } else {
+                    if (cleanLine.startsWith('font:')) parsedFonts.push(cleanLine);
+                    if (cleanLine.startsWith('valueformat:')) parsedValueFormats.push(cleanLine);
+
+                    if (cleanLine.startsWith('cell:')) {
+                        const parts = cleanLine.split(':');
+                        const coord = parts[1];
+                        const pos = coordToXY(coord);
+                        if (!pos) return;
+
+                        maxCol = Math.max(maxCol, pos.x);
+                        maxRow = Math.max(maxRow, pos.y);
+
+                        if (!cellData[pos.y]) cellData[pos.y] = { cells: {} };
+                        let cellObj = {};
+
+                        const tIdx = parts.indexOf('t');
+                        if (tIdx !== -1) {
+                            let val = parts[tIdx + 1];
+                            cellObj.text = val.replace(/\\c/g, ':').replace(/\\n/g, '\n');
+                        }
+
+                        const rIdx = parts.indexOf('rowspan');
+                        const cIdx = parts.indexOf('colspan');
+                        let rSpan = rIdx !== -1 ? parseInt(parts[rIdx + 1], 10) : 1;
+                        let cSpan = cIdx !== -1 ? parseInt(parts[cIdx + 1], 10) : 1;
+                        
+                        if (rSpan > 1 || cSpan > 1) {
+                            cellObj.merge = [rSpan - 1, cSpan - 1]; 
+                            let startCell = coord;
+                            let endCell = xyToCoord(pos.x + cSpan - 1, pos.y + rSpan - 1);
+                            sheetMerges.push(`${startCell}:${endCell}`);
+                        }
+
+                        const styleObj = {};
+                        const fIdx = parts.indexOf('f');
+                        if (fIdx !== -1 && parts[fIdx + 1] === '2') {
+                            styleObj.font = { bold: true };
+                            styleObj.bgcolor = '#f3f4f6';
+                            styleObj.valign = 'top';
+                        }
+
+                        const bgIdx = parts.indexOf('bgcolor');
+                        if (bgIdx !== -1) {
+                            const importedColor = normalizeHexColor(parts[bgIdx + 1]);
+                            if (importedColor && !isDefaultBackgroundColor(importedColor)) {
+                                styleObj.bgcolor = importedColor;
+                            }
+                        }
+
+                        if (Object.keys(styleObj).length > 0) {
+                            cellObj.style = getOrCreateStyleIndex(stylesList, styleObj);
+                        }
+
+                        cellData[pos.y].cells[pos.x] = cellObj;
+                    }
+                }
+            } 
+            else if (state === 'POST') {
+                postSheetLines.push(cleanLine);
+            }
+        });
+
+        cellData.len = Math.max(100, maxRow + 20);
+
+        const container = document.getElementById('spreadsheet-container');
+        container.innerHTML = ''; 
+        
+        mySpreadsheet = new x_spreadsheet('#spreadsheet-container', {
+            showBottomBar: false, 
+            style: {
+                valign: 'top', 
+                align: 'left',
+                textwrap: true
+            },
+            view: {
+                height: () => container.clientHeight,
+                width: () => container.clientWidth,
+            }
+        });
+
+        mySpreadsheet.loadData([{
+            name: 'Sheet1',
+            styles: stylesList,
+            rows: cellData,
+            merges: sheetMerges,
+            freeze: 'A2'
+        }]);
+
+        customizeToolbar();
+        patchSelector();
+        
+        appHistory = [];
+        appHistoryIndex = -1;
+        saveHistoryState();
+        
+        mySpreadsheet.change(() => {
+            saveHistoryState();
+            emitEditorChange();
+        });
+
+        lastSerializedValue = exportSocialCalc();
+        if (emitChange) {
+            postToParent(MSG_CHANGE, lastSerializedValue);
+        }
+    }
+
+    // --- 2. EXPORT LOGIC (X-Spreadsheet -> SocialCalc) ---
+    function exportSocialCalc() {
+        if (!mySpreadsheet) return "";
+
+        const data = mySpreadsheet.getData()[0];
+        const rows = data.rows || {};
+        const stylesList = data.styles || [];
+
+        let output = preSheetLines.join('\n') + '\n';
+
+        let maxC = 0;
+        let maxR = 0;
+
+        let bounds = getMaxBounds(data);
+        maxC = bounds.maxC;
+        maxR = bounds.maxR;
+
+        for (let y = 0; y <= maxR; y++) {
+            if (!rows[y] || !rows[y].cells) continue;
+            for (let x = 0; x <= maxC; x++) {
+                let cell = rows[y].cells[x];
+                if (!cell) continue;
+
+                let coord = xyToCoord(x, y);
+                let cellParts = [];
+
+                if (cell.text !== undefined && cell.text !== null && cell.text !== '') {
+                    let escapedVal = String(cell.text).replace(/:/g, '\\c').replace(/\n/g, '\\n');
+                    cellParts.push(`t:${escapedVal}`);
+                }
+
+                let isBold = false;
+                if (cell.style !== undefined && stylesList[cell.style]) {
+                    let s = stylesList[cell.style];
+                    if (s.font && s.font.bold) isBold = true;
+                }
+
+                if (isBold) {
+                    cellParts.push('f:2'); 
+                } else if (cell.text !== undefined && cell.text !== null && cell.text !== '') {
+                    cellParts.push('f:1:tvf:1'); 
+                }
+
+                let bgColor = null;
+                if (cell.style !== undefined && stylesList[cell.style]) {
+                    bgColor = normalizeHexColor(stylesList[cell.style].bgcolor);
+                }
+                if (bgColor && !isDefaultBackgroundColor(bgColor)) {
+                    cellParts.push(`bgcolor:${bgColor}`);
+                }
+
+                if (cell.merge) {
+                    let rSpan = cell.merge[0] + 1;
+                    let cSpan = cell.merge[1] + 1;
+                    if (cSpan > 1) cellParts.push(`colspan:${cSpan}`);
+                    if (rSpan > 1) cellParts.push(`rowspan:${rSpan}`);
+                }
+
+                if (cellParts.length > 0) {
+                    output += `cell:${coord}:${cellParts.join(':')}\n`;
+                }
+            }
+        }
+
+        output += `sheet:c:${maxC + 1}:r:${maxR + 1}:tvf:2\n`;
+        if (parsedFonts.length) output += parsedFonts.join('\n') + '\n';
+        if (parsedValueFormats.length) output += parsedValueFormats.join('\n') + '\n';
+
+        if (postSheetLines.length > 0) {
+            output += postSheetLines.join('\n');
+        } else {
+            output += `--SocialCalcSpreadsheetControlSave\nContent-type: text/plain; charset=UTF-8\n--SocialCalcSpreadsheetControlSave--`;
+        }
+
+        return output;
+    }
+
+    // --- FIND & REPLACE ---
+    let findMatches = [];
+    let findMatchIndex = -1;
+
+    function openFindReplace() {
+        const dialog = document.getElementById('find-replace-dialog');
+        dialog.classList.remove('hidden');
+        const input = document.getElementById('find-input');
+        input.focus();
+        input.select();
+        runFindSearch();
+    }
+
+    document.getElementById('find-input').addEventListener('blur', (e) => {
+        const findDialog = document.getElementById('find-replace-dialog');
+        // If the dialog is still open and focus went outside it, claw it back
+        if (!findDialog.classList.contains('hidden') && !findDialog.contains(e.relatedTarget)) {
+            // Double-rAF ensures we run after *any* library-scheduled focus work
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                if (!findDialog.classList.contains('hidden') && !findDialog.contains(document.activeElement)) {
+                    document.getElementById('find-input').focus();
+                }
+            }));
+        }
+    });
+
+    function closeFindReplace() {
+        document.getElementById('find-replace-dialog').classList.add('hidden');
+        findMatches = [];
+        findMatchIndex = -1;
+        scheduleRestoreFocus();
+    }
+
+    function getAllCellsForSearch() {
+        if (!mySpreadsheet) return [];
+        const data = mySpreadsheet.getData()[0];
+        const rows = data.rows || {};
+        const cells = [];
+        Object.keys(rows).forEach(rStr => {
+            if (rStr === 'len') return;
+            const y = parseInt(rStr);
+            const row = rows[y];
+            if (row && row.cells) {
+                Object.keys(row.cells).forEach(cStr => {
+                    const x = parseInt(cStr);
+                    const cell = row.cells[x];
+                    if (cell && cell.text !== undefined && cell.text !== null && cell.text !== '') {
+                        cells.push({ ri: y, ci: x, text: String(cell.text) });
+                    }
+                });
+            }
+        });
+        cells.sort((a, b) => a.ri !== b.ri ? a.ri - b.ri : a.ci - b.ci);
+        return cells;
+    }
+
+    function buildSearchRegex(query, caseSensitive, useRegex, global = false) {
+        const flags = (caseSensitive ? '' : 'i') + (global ? 'g' : '');
+        const pattern = useRegex ? query : escapeRegex(query);
+        return new RegExp(pattern, flags);
+    }
+
+    function runFindSearch() {
+        const query = document.getElementById('find-input').value;
+        const caseSensitive = document.getElementById('find-case-sensitive').checked;
+        const useRegex = document.getElementById('find-use-regex').checked;
+        const findInput = document.getElementById('find-input');
+        findMatches = [];
+        findMatchIndex = -1;
+        const info = document.getElementById('find-match-info');
+        if (!query) { info.textContent = ''; findInput.style.borderColor = ''; return; }
+
+        let regex;
+        try {
+            regex = buildSearchRegex(query, caseSensitive, useRegex);
+            findInput.style.borderColor = '';
+            findInput.title = '';
+        } catch (e) {
+            info.textContent = 'Invalid regex';
+            info.style.color = '#ef4444';
+            findInput.style.borderColor = '#ef4444';
+            findInput.title = e.message;
+            return;
+        }
+
+        getAllCellsForSearch().forEach(({ ri, ci, text }) => {
+            if (regex.test(text)) findMatches.push({ ri, ci });
+        });
+        if (findMatches.length === 0) {
+            info.textContent = 'No matches';
+            info.style.color = '#ef4444';
+        } else {
+            navigateToMatch(0);
+        }
+    }
+
+    function navigateToMatch(idx) {
+        if (findMatches.length === 0) return;
+        idx = ((idx % findMatches.length) + findMatches.length) % findMatches.length;
+        findMatchIndex = idx;
+        const match = findMatches[idx];
+        jumpSelectionTo(match.ri, match.ci, true);
+        const info = document.getElementById('find-match-info');
+        info.textContent = `${idx + 1} / ${findMatches.length}`;
+        info.style.color = '#6b7280';
+
+        // Re-focus find input if the dialog is open (library's selector.set steals focus)
+        const findDialog = document.getElementById('find-replace-dialog');
+        if (findDialog && !findDialog.classList.contains('hidden')) {
+            setTimeout(() => document.getElementById('find-input').focus(), 0);
+        }
+    }
+
+    function findNext() {
+        if (findMatches.length === 0) { runFindSearch(); return; }
+        navigateToMatch(findMatchIndex + 1);
+    }
+
+    function findPrev() {
+        if (findMatches.length === 0) { runFindSearch(); return; }
+        navigateToMatch(findMatchIndex - 1);
+    }
+
+    function escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function applyDataMutation(mutationCallback) {
+        let d = JSON.parse(JSON.stringify(mySpreadsheet.getData()[0]));
+        const selectionRange = getActiveSelectionRange();
+        mutationCallback(d);
+        mySpreadsheet.loadData([d]);
+        patchSelector();
+        restoreSelectorRange(selectionRange);
+        saveHistoryState();
+        emitEditorChange();
+    }
+
+    function replaceOne() {
+        if (findMatches.length === 0 || findMatchIndex < 0) return;
+        const match = findMatches[findMatchIndex];
+        const query = document.getElementById('find-input').value;
+        const replaceVal = document.getElementById('replace-input').value;
+        const caseSensitive = document.getElementById('find-case-sensitive').checked;
+        const useRegex = document.getElementById('find-use-regex').checked;
+        let regex;
+        try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { return; }
+        applyDataMutation((d) => {
+            const row = d.rows[match.ri];
+            if (row && row.cells && row.cells[match.ci]) {
+                const cell = row.cells[match.ci];
+                cell.text = String(cell.text || '').replace(regex, replaceVal);
+            }
+        });
+        runFindSearch();
+    }
+
+    function replaceAll() {
+        const query = document.getElementById('find-input').value;
+        if (!query) return;
+        const replaceVal = document.getElementById('replace-input').value;
+        const caseSensitive = document.getElementById('find-case-sensitive').checked;
+        const useRegex = document.getElementById('find-use-regex').checked;
+        let regex;
+        try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { return; }
+        applyDataMutation((d) => {
+            const rows = d.rows;
+            Object.keys(rows).forEach(rStr => {
+                if (rStr === 'len') return;
+                const row = rows[rStr];
+                if (row && row.cells) {
+                    Object.keys(row.cells).forEach(cStr => {
+                        const cell = row.cells[cStr];
+                        if (cell && cell.text !== undefined && cell.text !== null && cell.text !== '') {
+                            cell.text = String(cell.text).replace(regex, replaceVal);
+                        }
+                    });
+                }
+            });
+        });
+        runFindSearch();
+    }
+
+    // --- INITIALIZATION ---
+    function getDefaultSocialCalcData() {
+        return `socialcalc:version:1.0
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=SocialCalcSpreadsheetControlSave
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+# SocialCalc Spreadsheet Control Save
+version:1.0
+part:sheet
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+version:1.5
+cell:A1:t:tok:f:2
+cell:B1:t:text_id:f:2
+cell:C1:t:head:f:2
+cell:D1:t:s_type:f:2
+cell:Q1:t:entity:f:2
+cell:V1:t:group\\ccoref:f:2
+cell:A2:t:You:f:1:tvf:1
+cell:B2:t:GUM_essay_merit:f:1:tvf:1:rowspan:9
+cell:C2:t:head:f:1:tvf:1:rowspan:9
+cell:D2:t:decl:f:1:tvf:1:rowspan:9
+cell:Q2:t:person:f:1:tvf:1
+cell:V2:t:1:f:1:tvf:1
+cell:A3:t:’re:f:1:tvf:1
+cell:A4:t:Not:f:1:tvf:1
+cell:A5:t:Going:f:1:tvf:1
+cell:A6:t:to:f:1:tvf:1
+cell:A7:t:Get:f:1:tvf:1
+cell:A8:t:Accepted:f:1:tvf:1
+cell:A9:t:into:f:1:tvf:1
+cell:A10:t:a:f:1:tvf:1
+cell:Q10:t:organization:f:1:tvf:1:rowspan:3
+sheet:c:22:r:10:tvf:2
+font:1:* * Antinoou
+font:2:normal bold * *
+valueformat:1:text-plain
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+--SocialCalcSpreadsheetControlSave--`;
+    }
+
+    function setEmbeddedValue(nextValue) {
+        const rawValue = typeof nextValue === 'string' ? nextValue : '';
+        const effectiveValue = rawValue.trim() ? rawValue : getDefaultSocialCalcData();
+        suppressParentChangeEvent = true;
+        importSocialCalc(effectiveValue, false);
+        suppressParentChangeEvent = false;
+    }
+
+    window.SpreadsheetEmbed = {
+        setValue(value) {
+            setEmbeddedValue(value);
+        },
+        getValue() {
+            return exportSocialCalc();
+        },
+        focus() {
+            scheduleRestoreFocus();
+        }
+    };
+
+    window.addEventListener('message', (event) => {
+        const payload = event.data || {};
+        if (payload.type === MSG_SET_VALUE) {
+            const incoming = typeof payload.value === 'string' ? payload.value : '';
+            if (incoming === lastSerializedValue) return;
+            setEmbeddedValue(incoming);
+            return;
+        }
+
+        if (payload.type === MSG_REQUEST_VALUE) {
+            const serialized = exportSocialCalc();
+            lastSerializedValue = serialized;
+            postToParent(MSG_VALUE_RESPONSE, serialized);
+        }
+    });
+
+    window.onload = function() {
+        setEmbeddedValue('');
+        postToParent(MSG_READY, lastSerializedValue);
+    }
+</script>
+</body>
+</html>

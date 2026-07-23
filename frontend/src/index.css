@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.xml-editor-host {
+	--xml-editor-font-family: inherit;
+}
+
+.xml-editor-host .cm-editor,
+.xml-editor-host .cm-scroller,
+.xml-editor-host .cm-content,
+.xml-editor-host .cm-line,
+.xml-editor-host .cm-gutters,
+.xml-editor-host .cm-gutterElement {
+	font-family: var(--xml-editor-font-family) !important;
+}
+
+.p-4{padding: 0.8rem !important}
