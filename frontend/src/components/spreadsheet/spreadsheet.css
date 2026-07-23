@@ -1,0 +1,210 @@
+/* Editor font is configurable from app config via CSS variable on #spreadsheet-editor-root. */
+#spreadsheet-editor-root {
+    --spreadsheet-editor-font-family: inherit;
+}
+
+#spreadsheet-editor-root,
+#spreadsheet-editor-root .spreadsheet-formula-input,
+#spreadsheet-editor-root .x-spreadsheet,
+#spreadsheet-editor-root .x-spreadsheet-sheet,
+#spreadsheet-editor-root .x-spreadsheet-editor-area,
+#spreadsheet-editor-root .x-spreadsheet textarea,
+#spreadsheet-editor-root .x-spreadsheet-editor textarea,
+#spreadsheet-editor-root .x-spreadsheet-textline,
+#spreadsheet-editor-root .x-spreadsheet-table,
+#spreadsheet-editor-root .x-spreadsheet-table table,
+#spreadsheet-editor-root .x-spreadsheet-table td,
+#spreadsheet-editor-root .x-spreadsheet-table th,
+#spreadsheet-editor-root #modal-textarea {
+    font-family: var(--spreadsheet-editor-font-family) !important;
+}
+
+/* Force the canvas to cleanly fill our flex container */
+.x-spreadsheet-sheet { width: 100% !important; height: 100% !important; outline: none; }
+
+/* --- EXTREME TOOLBAR CUSTOMIZATION --- */
+
+.x-spreadsheet-toolbar { 
+    height: auto !important; 
+    min-height: 41px; 
+    display: none !important;
+    flex-wrap: wrap !important;
+    align-items: center;
+}
+
+/* Hide ALL native buttons and dividers by default */
+.x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn,
+.x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-divider {
+    display: none !important;
+}
+
+/* SHOW ONLY ALLOWED (PURE CSS): Target specific native buttons. */
+.x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn[data-tooltip*="bold" i],
+.x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn[data-tooltip*="merge" i] {
+    display: inline-flex !important;
+}
+
+/* Styling for our custom injected SVG buttons */
+.custom-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 3px;
+    width: 28px;
+    height: 28px;
+    margin: 0 2px;
+    transition: background-color 0.2s;
+}
+.custom-btn:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.custom-btn.custom-btn-active {
+    background-color: rgba(148, 163, 184, 0.22);
+    box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.35);
+}
+
+.custom-color-dropdown {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.custom-color-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    margin-left: 3px;
+    box-sizing: border-box;
+}
+
+.custom-color-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    display: none;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 8px;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    z-index: 80;
+    min-width: 126px;
+}
+
+.custom-color-menu.open {
+    display: grid;
+}
+
+.custom-color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+.custom-color-swatch:hover {
+    transform: scale(1.06);
+}
+
+/* Completely remove the "..." More menu trap */
+.x-spreadsheet-toolbar-more {
+    display: none !important;
+}
+
+.spreadsheet-formula-host {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.spreadsheet-formula-label {
+    flex: 0 0 auto;
+    width: 30px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 13px;
+    font-style: italic;
+    font-weight: 600;
+}
+
+.spreadsheet-formula-input {
+    width: 100%;
+    min-height: 34px;
+    max-height: 34px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 13px;
+    line-height: 1.35;
+    padding: 7px 10px;
+    resize: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: pre;
+}
+
+.spreadsheet-formula-input:focus {
+    outline: none;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 1px #60a5fa;
+}
+
+    /* Improve grab area for the spreadsheet's vertical scrollbar. */
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.vertical {
+        width: 12px;
+        right: 0;
+        scrollbar-width: auto;
+        scrollbar-color: #9ca3af #f3f4f6;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.vertical::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.vertical::-webkit-scrollbar-track {
+        background: #f3f4f6;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.vertical::-webkit-scrollbar-thumb {
+        background: #9ca3af;
+        border-radius: 999px;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.vertical::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
+    }
+
+    /* Same for the horizontal scrollbar */
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.horizontal {
+        height: 12px;
+        bottom: 0;
+        scrollbar-width: auto;
+        scrollbar-color: #9ca3af #f3f4f6;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.horizontal::-webkit-scrollbar {
+        height: 10px;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.horizontal::-webkit-scrollbar-track {
+        background: #f3f4f6;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.horizontal::-webkit-scrollbar-thumb {
+        background: #9ca3af;
+        border-radius: 999px;
+    }
+
+    #spreadsheet-editor-root .x-spreadsheet-scrollbar.horizontal::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
+    }

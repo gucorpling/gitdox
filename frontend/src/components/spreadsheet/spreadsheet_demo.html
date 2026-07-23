@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annotation Interface: X-Spreadsheet Prototype</title>
+    
+    <!-- X-Spreadsheet Canvas Grid -->
+    <link rel="stylesheet" href="https://unpkg.com/x-data-spreadsheet@1.1.9/dist/xspreadsheet.css">
+    <link rel="stylesheet" href="spreadsheet.css">
+    <script src="https://unpkg.com/x-data-spreadsheet@1.1.9/dist/xspreadsheet.js"></script>
+    
+    <!-- Tailwind CSS for layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col p-4 font-sans text-sm">
+
+    <div class="mb-4 flex justify-between items-end">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Annotation Grid Interface</h1>
+            <p class="text-gray-600">Powered by X-Spreadsheet (Canvas-based, highly stable merging).</p>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="flex flex-1 gap-4 overflow-hidden">
+        
+        <!-- Center Panel: The JS Component (Now Full Width) -->
+        <div class="w-full flex flex-col bg-white border border-gray-300 rounded-lg shadow-sm">
+            <div class="p-3 border-b border-gray-200 bg-gray-100 flex justify-between items-center">
+                <h2 class="font-semibold text-gray-700">X-Spreadsheet UI</h2>
+                <div class="text-xs text-gray-500">Custom restricted toolbar</div>
+            </div>
+            <div id="custom-toolbar-host" class="px-3 py-2 border-b border-gray-200 bg-white"></div>
+            <div class="flex-1 w-full h-full overflow-hidden relative">
+                <div id="spreadsheet-container" class="absolute inset-0"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Find & Replace Dialog -->
+    <div id="find-replace-dialog" class="hidden fixed top-24 right-6 z-50 bg-white border border-gray-300 rounded-lg shadow-xl" style="width:320px;">
+        <div class="flex items-center justify-between px-4 py-2 bg-gray-100 rounded-t-lg border-b border-gray-200 cursor-move select-none">
+            <span class="font-semibold text-gray-700 text-sm">Find &amp; Replace</span>
+            <button onclick="closeFindReplace()" class="text-gray-400 hover:text-gray-700 text-lg leading-none">&times;</button>
+        </div>
+        <div class="p-3 flex flex-col gap-2">
+            <div class="flex gap-1 items-center">
+                <input id="find-input" type="text" placeholder="Find…" autocomplete="off"
+                    class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    oninput="runFindSearch()"
+                    onkeydown="if(event.key==='Enter'){event.shiftKey?findPrev():findNext();event.preventDefault();} else if(event.key==='Escape'){closeFindReplace();}">
+                <button onclick="findPrev()" title="Previous (Shift+Enter)" class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300">▲</button>
+                <button onclick="findNext()" title="Next (Enter)" class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300">▼</button>
+            </div>
+            <div class="flex gap-1 items-center">
+                <input id="replace-input" type="text" placeholder="Replace with…" autocomplete="off"
+                    class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    onkeydown="if(event.key==='Escape'){closeFindReplace();}">
+                <button onclick="replaceOne()" class="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 rounded border border-blue-300 text-blue-700">Replace</button>
+                <button onclick="replaceAll()" class="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 rounded border border-blue-300 text-blue-700">All</button>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-gray-500">
+                <label class="flex items-center gap-1 cursor-pointer">
+                    <input id="find-case-sensitive" type="checkbox" onchange="runFindSearch()">
+                    Case-sensitive
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer">
+                    <input id="find-use-regex" type="checkbox" onchange="runFindSearch()">
+                    Regex
+                </label>
+                <span id="find-match-info" class="ml-auto font-mono"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Transfer Modal -->
+    <div id="data-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl flex flex-col h-[85vh]">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-lg">
+                <h2 id="modal-title" class="font-bold text-lg text-gray-800">Transfer Data</h2>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 transition-colors">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="p-4 flex-1 flex flex-col min-h-0">
+                <p id="modal-desc" class="text-sm text-gray-600 mb-3"></p>
+                <textarea id="modal-textarea" class="w-full flex-1 p-4 bg-gray-50 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs whitespace-pre resize-none shadow-inner" spellcheck="false"></textarea>
+            </div>
+            <div class="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 rounded-b-lg">
+                <button onclick="closeModal()" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded transition-colors">Cancel</button>
+                <button id="modal-action-btn" onclick="executeModalAction()" class="px-5 py-2 bg-blue-600 font-medium text-white rounded hover:bg-blue-700 transition shadow-sm">Execute</button>
+            </div>
+        </div>
+    </div>
+
+<script src="core.js"></script>
+
+</body>
+</html>
