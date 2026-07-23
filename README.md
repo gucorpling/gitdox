@@ -26,7 +26,7 @@ For more information see https://gucorpling.org/gitdox/
 
 ## Installation
 
-The main app configuration can be adjusted in the main project based on the project name as in `<NAME>-config.yaml`.
+The main app configuration can be adjusted in the main project based on the project name as in `<NAME>-config.yaml`. An example configuration called example-config.yaml is provided.
 
 ### Local testing
 
