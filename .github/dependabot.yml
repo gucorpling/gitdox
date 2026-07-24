@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # --- Frontend (React / Vite) ---
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    target-branch: "dev"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 0 # Only security PRs
+
+  # --- Backend (Python) ---
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    target-branch: "dev"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 0 # Only security PRs
