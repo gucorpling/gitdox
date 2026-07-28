@@ -93,6 +93,7 @@ export default function DocumentEditor({ apiCall, docId, goBack, goBackToCorpus,
   // Metadata Modal State
   const [metaModalOpen, setMetaModalOpen] = useState(false);
   const [metaForm, setMetaForm] = useState({ k: '', v: '', originalKey: null });
+  const canEditAssignee = (user?.adminlevel ?? 0) > 0;
   const statusOptions = useMemo(() => {
     const options = Array.isArray(statusCategories) && statusCategories.length > 0
       ? statusCategories
@@ -102,6 +103,19 @@ export default function DocumentEditor({ apiCall, docId, goBack, goBackToCorpus,
     }
     return options;
   }, [statusCategories, doc?.status]);
+
+  const assigneeOptions = useMemo(() => {
+    const usernames = usersList
+      .map((u) => String(u?.username || '').trim())
+      .filter((name) => name.length > 0);
+
+    const currentAssignee = String(doc?.assigned || '').trim();
+    if (currentAssignee && !usernames.includes(currentAssignee)) {
+      usernames.unshift(currentAssignee);
+    }
+
+    return usernames;
+  }, [usersList, doc?.assigned]);
 
 useEffect(() => {
     const init = async () => {
@@ -666,11 +680,13 @@ const runSpannotatorToolMutation = async (toolKey) => {
 
     setIsCommittingToGithub(true);
     try {
+      const metadataPayload = buildMetadataObject(metadata);
       await apiCall(`/documents/${docId}/github/contents`, 'PUT', {
         file_path: filePath,
         commit_message: trimmedCommitMessage,
         content,
-        format
+        format,
+        metadata: metadataPayload
       });
       setCommitMessage('');
       await fetchLatestGithubCommitMessage({ modeOverride: doc.mode });
@@ -1228,8 +1244,14 @@ const runSpannotatorToolMutation = async (toolKey) => {
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Assignee</label>
-          <select className="w-full border rounded p-1 text-sm bg-slate-50" value={doc.assigned} onChange={e => autoSaveDocField('assigned', e.target.value)}>
-             {usersList.map(u => <option key={u.username} value={u.username}>{u.username}</option>)}
+          <select
+            className="w-full border rounded p-1 text-sm bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+            value={doc.assigned || ''}
+            onChange={e => autoSaveDocField('assigned', e.target.value)}
+            disabled={!canEditAssignee}
+            title={!canEditAssignee ? 'Only admins can reassign documents.' : undefined}
+          >
+             {assigneeOptions.map((username) => <option key={username} value={username}>{username}</option>)}
           </select>
         </div>
       </div>
