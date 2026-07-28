@@ -421,21 +421,25 @@ class SpreadsheetValidator(BaseValidator):
         return violations
 
     def validate_entity_linking(
-            self,
-            pos_header: str = "pos",
-            entity_header: str = "entity",
-            identity_header: str = "identity",
-            named_pos: Optional[Iterable[str]] = None,
-    ) -> Dict[str, Union[bool, int, str, List[str]]]:
+                self,
+                pos_header: str = "pos",
+                entity_header: str = "entity",
+                identity_header: str = "identity",
+                named_pos: Optional[Iterable[str]] = None,
+        ) -> Dict[str, Union[bool, int, str, List[str]]]:
         """
-        Validate that named entity spans are linked by non-empty identity spans.
+        Validate that named entity spans in a spreadsheet, where tokens are in consecutive rows,
+        are linked by non-empty identity spans. Evaluates at the distinct string type level.
 
         Rules:
         - Named rows are rows where any POS column matching `pos_header` has a value in `named_pos`.
         - For each named row, choose the smallest filled entity span containing that row
-          (tie-breaker: earliest start row).
-        - Expected spans are the deduplicated set of these minimal spans.
-        - Resolved spans are filled identity spans (value != "") matched by exact (start, end).
+        (tie-breaker: earliest start row).
+        - Expected entity types are the deduplicated set of text strings from these minimal spans.
+        - Resolved entity types are those where ALL instances of that text string have a filled 
+        identity span matched by exact (start, end). If ANY instance of a string type lacks
+        an identity link, the entire type fails validation.
+        - If the identity column is missing entirely, all found entity types will fail validation.
         - Named rows with no containing entity span are ignored.
 
         Returns a summary payload usable by callers/UI.
@@ -450,14 +454,15 @@ class SpreadsheetValidator(BaseValidator):
         entity_cols = _header_cols(entity_header)
         identity_cols = _header_cols(identity_header)
 
-        # If required columns are absent, treat as no expected identities.
-        if not pos_cols or not entity_cols or not identity_cols:
+        # If we lack pos or entity columns, we cannot find any named entities,
+        # so treat as 0 expected identities. 
+        if not pos_cols or not entity_cols:
             return {
                 "is_valid": True,
                 "message": "No entity identities",
                 "resolved": 0,
                 "expected": 0,
-                "missing_spans": [],
+                "missing_types": [],
             }
 
         # 1) Find named rows (any POS col marks the row as named).
@@ -469,9 +474,9 @@ class SpreadsheetValidator(BaseValidator):
                     named_rows.add(r)
                     break
 
-        # 2) Collect all filled entity spans.
-        # Span key = (start_row, end_row)
-        entity_spans: List[Tuple[int, int]] = []
+        # 2) Collect all filled entity spans along with their string values.
+        # Span key = (start_row, end_row, text_value)
+        entity_spans: List[Tuple[int, int, str]] = []
         seen_entity_coords: Set[str] = set()
 
         for col in entity_cols:
@@ -484,16 +489,19 @@ class SpreadsheetValidator(BaseValidator):
                     continue
                 if cell.coord in seen_entity_coords:
                     continue
+                
                 seen_entity_coords.add(cell.coord)
+                
                 if cell.value == "":
                     continue
 
                 start = cell.row
                 end = cell.row + max(1, cell.rowspan) - 1
-                entity_spans.append((start, end))
+                val = str(cell.value).strip()
+                entity_spans.append((start, end, val))
 
         # 3) For each named row, choose minimal containing entity span.
-        expected_spans: Set[Tuple[int, int]] = set()
+        expected_span_instances: Set[Tuple[int, int, str]] = set()
         for r in named_rows:
             containing = [sp for sp in entity_spans if sp[0] <= r <= sp[1]]
             if not containing:
@@ -501,9 +509,10 @@ class SpreadsheetValidator(BaseValidator):
                 continue
 
             containing.sort(key=lambda sp: ((sp[1] - sp[0] + 1), sp[0]))
-            expected_spans.add(containing[0])
+            expected_span_instances.add(containing[0])
 
-        # 4) Collect filled identity spans.
+        # 4) Collect filled identity spans (we only need coordinates here).
+        # If identity_cols is empty, this simply results in an empty set.
         identity_spans: Set[Tuple[int, int]] = set()
         seen_identity_coords: Set[str] = set()
 
@@ -517,7 +526,9 @@ class SpreadsheetValidator(BaseValidator):
                     continue
                 if cell.coord in seen_identity_coords:
                     continue
+                
                 seen_identity_coords.add(cell.coord)
+                
                 if cell.value == "":
                     continue
 
@@ -525,26 +536,36 @@ class SpreadsheetValidator(BaseValidator):
                 end = cell.row + max(1, cell.rowspan) - 1
                 identity_spans.add((start, end))
 
-        expected = len(expected_spans)
+        # 5) Aggregate instances into distinct string types
+        expected_types: Set[str] = set()
+        unresolved_types: Set[str] = set()
+
+        for start, end, val in expected_span_instances:
+            expected_types.add(val)
+            # If ANY specific instance lacks a linked identity, the whole string type counts as unresolved
+            if (start, end) not in identity_spans:
+                unresolved_types.add(val)
+
+        expected = len(expected_types)
         if expected == 0:
             return {
                 "is_valid": True,
                 "message": "No entity identities",
                 "resolved": 0,
                 "expected": 0,
-                "missing_spans": [],
+                "missing_types": [],
             }
 
-        resolved_spans = expected_spans.intersection(identity_spans)
-        resolved = len(resolved_spans)
-        missing_spans = sorted(expected_spans - identity_spans)
+        resolved_types = expected_types - unresolved_types
+        resolved = len(resolved_types)
+        missing_types = sorted(unresolved_types)
 
         return {
             "is_valid": resolved == expected,
-            "message": f"{resolved}/{expected} identities resolved",
+            "message": f"{resolved}/{expected} entity types resolved",
             "resolved": resolved,
             "expected": expected,
-            "missing_spans": [f"{s}-{e}" for s, e in missing_spans],
+            "missing_types": missing_types,
         }
 
 class SGMLValidator(BaseValidator):
