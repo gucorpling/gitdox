@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2 } from 'lucide-react';
-import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue } from '../appShared';
+import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath } from '../appShared';
 import { EMPTY_DASHBOARD_FILTERS, normalizeDashboardViewState, areColumnFiltersEqual, getValidationSummary, isNavDark } from '../App';
 
 const getDocumentFieldValue = (doc, field) => {
@@ -10,12 +10,15 @@ const getDocumentFieldValue = (doc, field) => {
   return doc?.[field] ?? '';
 };
 
-export default function DashboardView({ apiCall, user, openDoc, projectName, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [] }) {
+export default function DashboardView({ apiCall, user, openDoc, projectName, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [], frontendBasePath = ''}) {
   const [documents, setDocuments] = useState([]);
+  const [usersList, setUsersList] = useState([]);
+  const [savingFieldKeys, setSavingFieldKeys] = useState([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [columnFilters, setColumnFilters] = useState(() => normalizeDashboardViewState(dashboardViewState).columnFilters);
   const [primarySort, setPrimarySort] = useState({ key: 'corpus', direction: 'asc' });
+  const canEditAssignee = (user?.adminlevel ?? 0) > 0;
   
   // New document form state
   const [newDoc, setNewDoc] = useState({ corpus: '', docname: '', mode: 'spreadsheet', status: DEFAULT_STATUS_CATEGORIES[0], assigned: user.username });
@@ -32,6 +35,8 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
   };
 
   useEffect(() => { fetchDocs(); }, []);
+
+
 
   useEffect(() => {
     if (!statusCategories.length) return;
@@ -55,25 +60,45 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
   }, [dashboardRestoreRequestId]);
 
   useEffect(() => {
-    if (typeof onDashboardViewStateChange !== 'function') return;
-    onDashboardViewStateChange({
-      columnFilters,
-      scrollY: typeof window !== 'undefined' ? window.scrollY : 0
-    });
-  }, [columnFilters, onDashboardViewStateChange]);
+    // Prevent non-admins from hitting the forbidden endpoint and getting 403s
+    if (!canEditAssignee) {
+      setUsersList([]);
+      return;
+    }
+
+    const fetchUsers = async () => {
+      try {
+        const users = await apiCall(`/projects/${projectName}/users`);
+        setUsersList(Array.isArray(users) ? users : []);
+      } catch (err) {
+        setUsersList([]);
+      }
+    };
+
+    fetchUsers();
+    
+    // Omit apiCall from dependencies to prevent infinite re-fetching during scrolling
+  }, [projectName, canEditAssignee]);
 
   useEffect(() => {
     if (typeof onDashboardViewStateChange !== 'function') return;
 
+    let timeoutId;
     const handleScroll = () => {
-      onDashboardViewStateChange({
-        columnFilters,
-        scrollY: window.scrollY
-      });
+      clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        onDashboardViewStateChange({
+          columnFilters,
+          scrollY: window.scrollY
+        });
+      }, 150); // 150ms debounce
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTimeout(timeoutId);
+    };
   }, [columnFilters, onDashboardViewStateChange]);
 
   const handleDelete = async (id) => {
@@ -187,6 +212,74 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
     setColumnFilters((prev) => ({ ...prev, [field]: value }));
   };
 
+  const getStatusOptionsForDoc = (doc) => {
+    const baseOptions = Array.isArray(statusCategories) && statusCategories.length > 0
+      ? statusCategories
+      : DEFAULT_STATUS_CATEGORIES;
+    if (doc?.status && !baseOptions.includes(doc.status)) {
+      return [...baseOptions, doc.status];
+    }
+    return baseOptions;
+  };
+
+  const getAssigneeOptionsForDoc = (doc) => {
+    const usernames = usersList
+      .map((u) => String(u?.username || '').trim())
+      .filter((name) => name.length > 0);
+
+    const assigned = String(doc?.assigned || '').trim();
+    if (assigned && !usernames.includes(assigned)) {
+      usernames.unshift(assigned);
+    }
+
+    return usernames;
+  };
+
+  const parseMetadataForUpdate = (metadata) => {
+    if (!metadata) return {};
+    if (typeof metadata === 'string') {
+      try {
+        const parsed = JSON.parse(metadata);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (err) {
+        return {};
+      }
+    }
+    return typeof metadata === 'object' ? metadata : {};
+  };
+
+  const handleInlineDocumentFieldUpdate = async (doc, field, value) => {
+    if (!doc || doc[field] === value) return;
+
+    const previousDoc = doc;
+    const optimisticDoc = { ...doc, [field]: value };
+    const savingFieldKey = `${doc.id}:${field}`;
+    setDocuments((prev) => prev.map((item) => (item.id === doc.id ? optimisticDoc : item)));
+    setSavingFieldKeys((prev) => (prev.includes(savingFieldKey) ? prev : [...prev, savingFieldKey]));
+
+    try {
+      const response = await apiCall(`/documents/${doc.id}`, 'PUT', {
+        corpus: optimisticDoc.corpus,
+        docname: optimisticDoc.docname,
+        repo: optimisticDoc.repo || '',
+        mode: optimisticDoc.mode,
+        status: optimisticDoc.status,
+        assigned: optimisticDoc.assigned,
+        metadata: parseMetadataForUpdate(optimisticDoc.metadata)
+      });
+
+      const persistedDoc = response?.validation
+        ? { ...optimisticDoc, validation: response.validation }
+        : optimisticDoc;
+      setDocuments((prev) => prev.map((item) => (item.id === doc.id ? persistedDoc : item)));
+    } catch (err) {
+      setDocuments((prev) => prev.map((item) => (item.id === doc.id ? previousDoc : item)));
+      alert(`Failed to update ${field}: ${err.message}`);
+    } finally {
+      setSavingFieldKeys((prev) => prev.filter((key) => key !== savingFieldKey));
+    }
+  };
+
   const panelBackgroundColor = normalizeCssStyleValue(uiConfig?.panel_background_color);
   const tableHeaderBackgroundColor = normalizeCssStyleValue(uiConfig?.table_header_background_color);
   const panelStyle = panelBackgroundColor ? { backgroundColor: panelBackgroundColor } : undefined;
@@ -291,13 +384,47 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
             )}
             {filteredAndSortedDocuments.map(doc => {
               const validationSummary = getValidationSummary(doc.validation);
+              const isSavingStatus = savingFieldKeys.includes(`${doc.id}:status`);
+              const isSavingAssigned = savingFieldKeys.includes(`${doc.id}:assigned`);
               return (
                 <tr key={doc.id} className="border-b last:border-0 hover:bg-slate-50">
                   <td className="p-4 font-mono text-sm text-indigo-600">{doc.id}</td>
                   <td className="p-4">{doc.corpus}</td>
                   <td className="p-4 font-medium">{doc.docname}</td>
-                  <td className="p-4"><span className="bg-slate-100 px-2 py-1 rounded text-xs">{doc.status}</span></td>
-                  <td className="p-4">{doc.assigned}</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="w-full min-w-32 border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50"
+                        value={doc.status || ''}
+                        onChange={(e) => handleInlineDocumentFieldUpdate(doc, 'status', e.target.value)}
+                      >
+                        {getStatusOptionsForDoc(doc).map((status) => (
+                          <option key={status} value={status}>{formatStatusCategoryLabel(status)}</option>
+                        ))}
+                      </select>
+                      <span className="inline-flex h-4 w-4 items-center justify-center text-slate-400" title={isSavingStatus ? 'Saving status update' : undefined}>
+                        {isSavingStatus ? <Loader2 size={12} className="animate-spin" /> : null}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="w-full min-w-32 border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+                        value={doc.assigned || ''}
+                        onChange={(e) => handleInlineDocumentFieldUpdate(doc, 'assigned', e.target.value)}
+                        disabled={!canEditAssignee}
+                        title={!canEditAssignee ? 'Only admins can reassign documents.' : undefined}
+                      >
+                        {getAssigneeOptionsForDoc(doc).map((username) => (
+                          <option key={username} value={username}>{username}</option>
+                        ))}
+                      </select>
+                      <span className="inline-flex h-4 w-4 items-center justify-center text-slate-400" title={isSavingAssigned ? 'Saving assignee update' : undefined}>
+                        {isSavingAssigned ? <Loader2 size={12} className="animate-spin" /> : null}
+                      </span>
+                    </div>
+                  </td>
                   <td className="p-4 text-sm text-slate-500">
                     {doc.mode === 'spreadsheet' ? (
                       <span className="inline-flex items-center" title="spreadsheet" aria-label="spreadsheet">
@@ -340,9 +467,9 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <div className="inline-flex items-center gap-2 whitespace-nowrap">
                       <a
-                        href={`/docs/${encodeURIComponent(String(doc.id))}`}
+                        href={buildFrontendPath(`/docs/${encodeURIComponent(String(doc.id))}`, frontendBasePath)}
                         onClick={(e) => {
                           if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                             e.preventDefault();
