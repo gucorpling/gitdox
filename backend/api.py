@@ -1394,7 +1394,7 @@ def list_documents(project_name: str, current_user: dict = Depends(require_admin
     if not doc_ids:
         return []
 
-    fields = ["id", "validation", "mode", "status", "docname", "corpus", "assigned", "last_modified_at", "last_modified_by"] 
+    fields = ["id", "metadata", "validation", "mode", "status", "docname", "corpus", "repo", "assigned", "last_modified_at", "last_modified_by"] 
     
     pipe = r.pipeline()
     for doc_id in doc_ids:
@@ -1691,7 +1691,8 @@ async def import_documents_zip(
         default_status: str = Form(""),
         default_repo: str = Form(""),
         zip_file: UploadFile = File(...),
-        current_user: dict = Depends(require_admin(1))
+        current_user: dict = Depends(require_admin(1)),
+        excluded_meta: list = Form([])
 ):
     """
     Batch-import documents from a ZIP archive.
@@ -1711,9 +1712,11 @@ async def import_documents_zip(
       - assigned default: 'admin', similarly overridden by metadata['user'|'assignee'|'assigned'] or XML meta attrib
       - status default: 'default_status' form value (or 'init' when missing), similarly overridden by metadata['status'] or XML meta attrib
     - overwrite_existing_corpus: if true (AdminLevel >= 2), existing project documents in each imported corpus are deleted before the first import into that corpus
-      - status default: 'init', similarly overridden by metadata['status'] or XML meta attrib
+    - excluded_meta: optional list of metadata keys to ignore when importing documents or corpora
     """
-    if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
+    if current_user.get('project_name') != project_name:
+        raise HTTPException(status_code=403, detail="Access denied to this project")
+
     fmt = (file_type or "").strip().lower()
     if fmt not in {"xml", "sgml"}:
         raise HTTPException(status_code=400, detail="file_type must be 'xml' or 'sgml'")
@@ -1748,6 +1751,9 @@ async def import_documents_zip(
 
     if not payload:
         raise HTTPException(status_code=400, detail="Uploaded ZIP is empty")
+
+    # Sanitize and prepare the excluded keys for fast lookups
+    excluded_keys = set(k.strip() for k in excluded_meta if k and k.strip())
 
     results = []
     created_count = 0
@@ -1791,6 +1797,10 @@ async def import_documents_zip(
                 if basename == "corpus-meta.tab" or (basename.startswith("_meta") and basename.endswith(".tab")):
                     try:
                         corpus_metadata = _parse_corpus_metadata_tab(_decode_zip_text(zf.read(entry)))
+                        # Remove excluded keys from corpus metadata
+                        if isinstance(corpus_metadata, dict):
+                            for key in excluded_keys:
+                                corpus_metadata.pop(key, None)
                     except Exception:
                         corpus_metadata = {}
                         skipped_count += 1
@@ -1854,6 +1864,10 @@ async def import_documents_zip(
                         content_spreadsheet = converted_spreadsheet
                         metadata = meta_dict if isinstance(meta_dict, dict) else {}
 
+                        # Remove excluded keys from document metadata
+                        for key in excluded_keys:
+                            metadata.pop(key, None)
+
                         overrides = _extract_import_overrides(metadata, xml_text=None)
                         if overrides["corpus"]:
                             corpus = overrides["corpus"]
@@ -1894,7 +1908,7 @@ async def import_documents_zip(
                         "metadata": _dump_json_field(metadata),
                         "last_modified_at": time.time(),
                         "last_modified_by": current_user.get("username", "system")
-                        }
+                    }
 
                     r.hset(doc_key, mapping=doc_dict)
                     r.sadd(f"project:{project_name}:docs", doc_id)
@@ -1947,10 +1961,11 @@ async def import_documents_zip(
         "skipped_count": skipped_count,
         "error_count": error_count,
         "error_filenames": error_filenames,
+        "overwrite_existing_corpus": overwrite_existing_corpus,
+        "overwritten_corpora": sorted(overwritten_corpora),
         "results": results,
         **queue_result
     }
-
 
 @app.post("/documents/mutate", response_model=NlpMutationResponse)
 def mutate_document_contents(

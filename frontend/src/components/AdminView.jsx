@@ -640,6 +640,15 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       formData.append('default_repo', corpusUploadDefaultRepo.trim());
       formData.append('zip_file', corpusZipFile);
 
+      const excludedMeta = uiConfig?.instance?.excluded_metadata;
+      if (Array.isArray(excludedMeta)) {
+        excludedMeta.forEach(metaKey => {
+          if (metaKey && typeof metaKey === 'string') {
+            formData.append('excluded_meta', metaKey.trim());
+          }
+        });
+      }
+
       const result = await apiCall(
         `/projects/${projectName}/documents/import-zip`,
         'POST',
