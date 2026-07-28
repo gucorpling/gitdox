@@ -4,7 +4,7 @@ instance:
   # display_image: [img/example.png, 100, 50px]  # You can add this image in src/public/img/
   # You can set up a link to your annotation guidelines like this:
   help_message: <span style="color:black">For help getting started see the</span> <a href="https://gucorpling.org/gitdox/">website</a>
-
+  excluded_metadata: []  # Document and corpus metadata keys to always exclude on corpus import
 
 # Tools live in backend/nlp_modules/
 tools:
