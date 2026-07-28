@@ -39,6 +39,9 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
   const [showValidationForm, setShowValidationForm] = useState(false);
   const [corpusUploadType, setCorpusUploadType] = useState('xml');
   const [corpusZipFile, setCorpusZipFile] = useState(null);
+  const [overwriteExistingCorpus, setOverwriteExistingCorpus] = useState(false);
+  const [corpusUploadDefaultStatus, setCorpusUploadDefaultStatus] = useState('');
+  const [corpusUploadDefaultRepo, setCorpusUploadDefaultRepo] = useState('');
   const [isUploadingCorpus, setIsUploadingCorpus] = useState(false);
   const [corpusUploadResult, setCorpusUploadResult] = useState(null);
   const [corpora, setCorpora] = useState([]);
@@ -109,6 +112,18 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       }
 
       return { fromStatus: nextFrom, toStatus: nextTo };
+    });
+  }, [availableStatusCategories]);
+
+  useEffect(() => {
+    setCorpusUploadDefaultStatus((prev) => {
+      if (!availableStatusCategories.length) {
+        return prev || DEFAULT_STATUS_CATEGORIES[0] || 'init';
+      }
+      if (availableStatusCategories.includes(prev)) {
+        return prev;
+      }
+      return availableStatusCategories[0];
     });
   }, [availableStatusCategories]);
 
@@ -475,7 +490,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     return result.results.filter((entry) => {
       if (entry?.error) return true;
       const status = String(entry?.status || '').toLowerCase();
-      return status && !['created', 'ok', 'success'].includes(status);
+      return status && !['created', 'ok', 'success', 'overwrote_corpus'].includes(status);
     });
   };
 
@@ -620,6 +635,9 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     try {
       const formData = new FormData();
       formData.append('file_type', corpusUploadType);
+      formData.append('overwrite_existing_corpus', String(overwriteExistingCorpus));
+      formData.append('default_status', corpusUploadDefaultStatus || DEFAULT_STATUS_CATEGORIES[0] || 'init');
+      formData.append('default_repo', corpusUploadDefaultRepo.trim());
       formData.append('zip_file', corpusZipFile);
 
       const result = await apiCall(
@@ -630,6 +648,8 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       );
       setCorpusUploadResult({ ok: true, payload: result });
       setCorpusZipFile(null);
+      setOverwriteExistingCorpus(false);
+      await fetchCorpora();
     } catch (err) {
       setCorpusUploadResult({
         ok: false,
@@ -1793,6 +1813,27 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
                     </select>
                   </div>
                   <div>
+                    <label className="block text-slate-600 mb-1">Default status</label>
+                    <select
+                      className="w-full border p-2 rounded bg-white"
+                      value={corpusUploadDefaultStatus}
+                      onChange={(e) => setCorpusUploadDefaultStatus(e.target.value)}
+                    >
+                      {(availableStatusCategories.length ? availableStatusCategories : DEFAULT_STATUS_CATEGORIES).map((category) => (
+                        <option key={category} value={category}>{formatStatusCategoryLabel(category)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 mb-1">Default repo</label>
+                    <input
+                      className="w-full border p-2 rounded"
+                      value={corpusUploadDefaultRepo}
+                      onChange={(e) => setCorpusUploadDefaultRepo(e.target.value)}
+                      placeholder="Used if imported data has no repo"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-slate-600 mb-1">ZIP File</label>
                     <input
                       type="file"
@@ -1802,6 +1843,17 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
                       required
                     />
                   </div>
+                  {adminLevel >= 2 && (
+                    <label className="flex items-center gap-2 text-slate-700 md:col-span-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={overwriteExistingCorpus}
+                        onChange={(e) => setOverwriteExistingCorpus(e.target.checked)}
+                      />
+                      <span>Overwrite existing corpus documents before import</span>
+                    </label>
+                  )}
                 </div>
 
                 <button

@@ -1642,6 +1642,9 @@ async def import_documents_zip(
         project_name: str,
         background_tasks: BackgroundTasks,
         file_type: str = Form(...),
+        overwrite_existing_corpus: bool = Form(False),
+        default_status: str = Form(""),
+        default_repo: str = Form(""),
         zip_file: UploadFile = File(...),
         current_user: dict = Depends(require_admin(1))
 ):
@@ -1659,8 +1662,10 @@ async def import_documents_zip(
       - corpus default: 'untitled', overridden by:
           - metadata['corpus']
           - XML <meta/text corpus="..."> (if present and metadata corpus missing)
-      - repo default: '', similarly overridden by metadata['repo'] or XML meta attrib
+      - repo default: 'default_repo' form value, similarly overridden by metadata['repo'] or XML meta attrib
       - assigned default: 'admin', similarly overridden by metadata['user'|'assignee'|'assigned'] or XML meta attrib
+      - status default: 'default_status' form value (or 'init' when missing), similarly overridden by metadata['status'] or XML meta attrib
+    - overwrite_existing_corpus: if true (AdminLevel >= 2), existing project documents in each imported corpus are deleted before the first import into that corpus
       - status default: 'init', similarly overridden by metadata['status'] or XML meta attrib
     """
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
@@ -1685,8 +1690,17 @@ async def import_documents_zip(
     error_count = 0
     error_filenames = []
     imported_corpora = set()
+    overwritten_corpora = set()
     created_doc_ids = []
     corpus_metadata = None
+    existing_corpora = set()
+
+    if overwrite_existing_corpus:
+        for doc_id in r.smembers(f"project:{project_name}:docs"):
+            existing_corpus = _safe_text(r.hget(f"doc:{doc_id}", "corpus"))
+            if existing_corpus:
+                existing_corpora.add(existing_corpus)
+
     try:
         with zipfile.ZipFile(BytesIO(payload), "r") as zf:
             entries = zf.infolist()
@@ -1714,12 +1728,12 @@ async def import_documents_zip(
                         corpus_metadata = _parse_corpus_metadata_tab(_decode_zip_text(zf.read(entry)))
                     except Exception:
                         corpus_metadata = {}
-                    skipped_count += 1
-                    results.append({
-                        "filename": filename,
-                        "status": "skipped",
-                        "detail": "Corpus metadata file"
-                    })
+                        skipped_count += 1
+                        results.append({
+                            "filename": filename,
+                            "status": "skipped",
+                            "detail": "Invalid corpus metadata file"
+                        })
                     continue
 
                 if not basename or basename.startswith(".") or filename.startswith("__MACOSX/"):
@@ -1742,9 +1756,9 @@ async def import_documents_zip(
 
                     # Defaults
                     corpus = "untitled"
-                    repo = ""
+                    repo = default_repo_value
                     assigned = "admin"
-                    status = "init"
+                    status = default_status_value
                     mode = "xml" if fmt == "xml" else "spreadsheet"
 
                     # Content + metadata resolution
@@ -1758,7 +1772,12 @@ async def import_documents_zip(
                         overrides = _extract_import_overrides({}, xml_text=text)
                         if overrides["corpus"]:
                             corpus = overrides["corpus"]
-                        # repo/assigned/status generally from metadata; keep defaults for XML unless expanded later
+                        if overrides["repo"]:
+                            repo = overrides["repo"]
+                        if overrides["assigned"]:
+                            assigned = overrides["assigned"]
+                        if overrides["status"]:
+                            status = overrides["status"]
 
                     else:
                         # SGML -> SocialCalc + meta_dict
@@ -1779,6 +1798,18 @@ async def import_documents_zip(
                             assigned = overrides["assigned"]
                         if overrides["status"]:
                             status = overrides["status"]
+
+                    if overwrite_existing_corpus and corpus in existing_corpora and corpus not in overwritten_corpora:
+                        deleted_doc_ids = _delete_project_corpus_documents(project_name, corpus, delete_metadata=True)
+                        overwritten_corpora.add(corpus)
+                        if deleted_doc_ids:
+                            results.append({
+                                "filename": filename,
+                                "status": "overwrote_corpus",
+                                "corpus": corpus,
+                                "deleted_count": len(deleted_doc_ids),
+                                "deleted_doc_ids": deleted_doc_ids
+                            })
 
                     # Allocate ID server-side to avoid race conditions across tabs/clients.
                     doc_id = _allocate_project_doc_id(project_name)
