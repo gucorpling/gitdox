@@ -402,10 +402,6 @@ def _allocate_project_doc_id(project_name: str) -> str:
             return candidate
 
 
-def _project_status_categories_key(project_name: str) -> str:
-    return f"project:{project_name}:status_categories"
-
-
 def _normalize_status(value: str) -> str:
     return (value or "").strip().lower()
 
@@ -1245,7 +1241,7 @@ def update_status_categories(
                 },
             )
 
-    r.set(_project_status_categories_key(project_name), json.dumps(new_categories))
+    r.set(_status_categories_key(project_name), json.dumps(new_categories))
     return {
         "message": "Status categories updated successfully",
         "categories": new_categories,
