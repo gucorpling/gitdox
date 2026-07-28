@@ -136,7 +136,7 @@ def get_project_config(project_name: Optional[str] = None) -> dict:
 # --- Pydantic Models for Data Validation ---
 ALLOWED_VALIDATION_DOMAINS = {"xml", "spreadsheet", "metadata"}
 COMMON_IMPORT_EXTENSIONS = (".xml", ".sgml", ".tt")
-OVERRIDE_KEYS_REPO = ("repo")
+OVERRIDE_KEYS_REPO = ("repo",)
 OVERRIDE_KEYS_ASSIGNED = ("user", "assignee", "assigned")
 
 
@@ -323,6 +323,7 @@ class GitHubCommitRequest(BaseModel):
     commit_message: str
     content: str
     format: Optional[str] = "xml"
+    metadata: Optional[dict] = None
 
 
 # --- Helper Functions ---
@@ -430,6 +431,68 @@ def _collect_project_status_usage(project_name: str) -> dict[str, list[str]]:
         usage.setdefault(normalized, []).append(str(doc_id))
 
     return usage
+
+
+def _get_project_status_categories(project_name: str) -> list[str]:
+    """
+    Returns project status categories, ensuring a non-empty persisted list.
+    """
+    key = _status_categories_key(project_name)
+    raw = r.get(key)
+
+    if raw is None:
+        categories = _default_status_categories()
+        r.set(key, json.dumps(categories))
+        return categories
+
+    try:
+        categories = json.loads(raw)
+    except Exception:
+        categories = _default_status_categories()
+        r.set(key, json.dumps(categories))
+        return categories
+
+    if not isinstance(categories, list) or len(categories) == 0:
+        categories = _default_status_categories()
+        r.set(key, json.dumps(categories))
+        return categories
+
+    cleaned = [
+        c.strip() for c in categories
+        if isinstance(c, str) and c.strip()
+    ]
+
+    if not cleaned:
+        cleaned = _default_status_categories()
+        r.set(key, json.dumps(cleaned))
+
+    return cleaned
+
+
+def _delete_project_corpus_documents(project_name: str, corpus_name: str, delete_metadata: bool = True) -> list[str]:
+    """
+    Deletes all documents in a project that belong to a specific corpus.
+    Returns sorted deleted document ids.
+    """
+    doc_ids = r.smembers(f"project:{project_name}:docs")
+    deleted_doc_ids: list[str] = []
+
+    for doc_id in doc_ids:
+        doc_key = f"doc:{doc_id}"
+        doc_data = r.hgetall(doc_key)
+        if not doc_data:
+            # stale id in set; ignore
+            continue
+
+        if doc_data.get("corpus") == corpus_name:
+            r.delete(doc_key)
+            r.srem(f"project:{project_name}:docs", doc_id)
+            deleted_doc_ids.append(str(doc_id))
+
+    if delete_metadata:
+        r.delete(f"corpus:{corpus_name}:metadata")
+
+    return sorted(deleted_doc_ids)
 
 
 def _strip_common_extensions(filename: str) -> str:
@@ -1127,34 +1190,7 @@ def get_status_categories(project_name: str, current_user: dict = Depends(requir
     If none exist yet, initializes them to ["init"].
     """
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
-    key = _status_categories_key(project_name)
-    raw = r.get(key)
-
-    if raw is None:
-        categories = _default_status_categories()
-        r.set(key, json.dumps(categories))
-        return {"categories": categories}
-
-    try:
-        categories = json.loads(raw)
-    except Exception:
-        categories = _default_status_categories()
-        r.set(key, json.dumps(categories))
-        return {"categories": categories}
-
-    if not isinstance(categories, list) or len(categories) == 0:
-        categories = _default_status_categories()
-        r.set(key, json.dumps(categories))
-
-    categories = [
-        c.strip() for c in categories
-        if isinstance(c, str) and c.strip()
-    ]
-
-    if not categories:
-        categories = _default_status_categories()
-        r.set(key, json.dumps(categories))
-
+    categories = _get_project_status_categories(project_name)
     return {"categories": categories}
 
 
@@ -1173,7 +1209,7 @@ def update_status_categories(
         raise HTTPException(status_code=400, detail="At least one status category is required")
 
     # Current categories (for delta check)
-    raw_existing = r.get(_project_status_categories_key(project_name))
+    raw_existing = r.get(_status_categories_key(project_name))
     if raw_existing:
         try:
             existing_categories = json.loads(raw_existing)
@@ -1248,23 +1284,7 @@ def delete_corpus(
     Requires AdminLevel > 1.
     """
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
-    doc_ids = r.smembers(f"project:{project_name}:docs")
-    deleted_doc_ids = []
-
-    for doc_id in doc_ids:
-        doc_key = f"doc:{doc_id}"
-        doc_data = r.hgetall(doc_key)
-        if not doc_data:
-            # stale id in set; ignore
-            continue
-
-        if doc_data.get("corpus") == corpus_name:
-            r.delete(doc_key)
-            r.srem(f"project:{project_name}:docs", doc_id)
-            deleted_doc_ids.append(doc_id)
-
-    # Remove corpus metadata key now that corpus docs are gone
-    r.delete(f"corpus:{corpus_name}:metadata")
+    deleted_doc_ids = _delete_project_corpus_documents(project_name, corpus_name, delete_metadata=True)
 
     return {
         "message": f"Corpus '{corpus_name}' deleted",
@@ -1428,9 +1448,12 @@ def update_document(
         doc_id: str,
         data: DocumentUpdate,
         background_tasks: BackgroundTasks,
-        current_user: dict = Depends(require_admin(1))
+        current_user: dict = Depends(require_admin(0))
 ):
-    """Updates document metadata and queues validation refresh."""
+    """Updates document metadata and queues validation refresh.
+
+    Admin level 0 users may update only `status`.
+    """
     doc_key = f"doc:{doc_id}"
     old_doc_data = r.hgetall(doc_key)
 
@@ -1439,6 +1462,32 @@ def update_document(
 
     old_corpus = old_doc_data.get("corpus")
     project = old_doc_data.get("project")
+
+    # Level-0 users can update status only.
+    if int(current_user.get("adminlevel", 0)) < 1:
+        protected_field_checks = [
+            ("corpus", old_doc_data.get("corpus", "")),
+            ("docname", old_doc_data.get("docname", "")),
+            ("repo", old_doc_data.get("repo", "")),
+            ("mode", old_doc_data.get("mode", "")),
+            ("assigned", old_doc_data.get("assigned", "")),
+        ]
+
+        for field_name, old_value in protected_field_checks:
+            new_value = getattr(data, field_name)
+            if str(new_value or "") != str(old_value or ""):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Admin level 0 can only update status (field '{field_name}' is restricted)."
+                )
+
+        old_metadata = _load_json_field(old_doc_data.get("metadata"), {})
+        new_metadata = data.metadata if isinstance(data.metadata, dict) else {}
+        if old_metadata != new_metadata:
+            raise HTTPException(
+                status_code=403,
+                detail="Admin level 0 can only update status (metadata is restricted)."
+            )
 
     data_dict = data.model_dump()
     data_dict["metadata"] = _dump_json_field(data_dict.get("metadata", {}))
@@ -1672,6 +1721,26 @@ async def import_documents_zip(
     fmt = (file_type or "").strip().lower()
     if fmt not in {"xml", "sgml"}:
         raise HTTPException(status_code=400, detail="file_type must be 'xml' or 'sgml'")
+
+    try:
+        current_admin_level = int(current_user.get("adminlevel", 0))
+    except Exception:
+        current_admin_level = 0
+
+    if overwrite_existing_corpus and current_admin_level < 2:
+        raise HTTPException(status_code=403, detail="overwrite_existing_corpus requires admin level 2 or higher")
+
+    default_repo_value = _safe_text(default_repo)
+    default_status_value = _safe_text(default_status)
+    if not default_status_value:
+        default_status_value = _default_status_categories()[0]
+
+    project_statuses = _get_project_status_categories(project_name)
+    if default_status_value not in project_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"default_status '{default_status_value}' is not a valid project status"
+        )
 
     if not zip_file.filename or not zip_file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Upload must be a .zip file")
@@ -2346,11 +2415,14 @@ def push_github_file_contents(
         if data.format == "xml":
             gh.push_new_version(data.file_path, data.content, data.commit_message)
         elif data.format == "spreadsheet":
-            meta_dict = None
-            if 'metadata' in data and isinstance(doc_data['metadata'], str):
+            meta_dict = data.metadata if isinstance(data.metadata, dict) else None
+
+            # Backward compatibility: if clients do not send metadata yet,
+            # fall back to persisted document metadata.
+            if meta_dict is None and isinstance(doc_data.get('metadata'), str):
                 try:
                     meta_dict = json.loads(doc_data['metadata'])
-                except:
+                except Exception:
                     meta_dict = None
             sgml_content = social_to_sgml(data.content, meta_dict=meta_dict)
             gh.push_new_version(data.file_path, sgml_content, data.commit_message)
