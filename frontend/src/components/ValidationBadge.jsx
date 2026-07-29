@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Check, AlertCircle, ChevronDown, Loader2 } from 'lucide-react';
 
 const DEFAULT_MAX_COORDS_PER_RULE = 8;
+const VALIDATION_COORDINATE_LIST_PATTERN = /^(.+?:)\s*([A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)$/;
 
 const truncateValidationLine = (line, maxCoordsPerRule) => {
   if (typeof line !== 'string') return '';
@@ -35,7 +36,31 @@ const truncateValidationLine = (line, maxCoordsPerRule) => {
   return `${ruleSpec}${truncatedCoordinates}, ... (${totalCoordinates} total)`;
 };
 
-export default function ValidationBadge({ validationSummary, maxCoordsPerRule = DEFAULT_MAX_COORDS_PER_RULE }) {
+const parseValidationCoordinateLine = (line) => {
+  if (typeof line !== 'string') return null;
+
+  const match = line.match(VALIDATION_COORDINATE_LIST_PATTERN);
+  if (!match) return null;
+
+  const [, ruleLabel, coordinateList] = match;
+  const coordinates = coordinateList
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (coordinates.length === 0) return null;
+
+  return {
+    ruleLabel,
+    coordinates,
+  };
+};
+
+export default function ValidationBadge({
+  validationSummary,
+  maxCoordsPerRule = DEFAULT_MAX_COORDS_PER_RULE,
+  onCellReferenceClick = null,
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!validationSummary) return null;
@@ -50,6 +75,8 @@ export default function ValidationBadge({ validationSummary, maxCoordsPerRule = 
     .split('\n')
     .filter(line => line.trim())
     .map((line) => truncateValidationLine(line, effectiveMaxCoordsPerRule));
+
+  const canLinkCellReferences = typeof onCellReferenceClick === 'function';
 
   return (
     <div className="relative">
@@ -82,7 +109,31 @@ export default function ValidationBadge({ validationSummary, maxCoordsPerRule = 
           <div className="space-y-1">
             {errorLines.map((line, idx) => (
               <div key={idx} className="whitespace-pre-wrap font-mono">
-                {line}
+                {(() => {
+                  const parsedLine = canLinkCellReferences ? parseValidationCoordinateLine(line) : null;
+                  if (!parsedLine) return line;
+
+                  return (
+                    <>
+                      {`${parsedLine.ruleLabel} `}
+                      {parsedLine.coordinates.map((coordinate, coordinateIndex) => (
+                        <React.Fragment key={`${line}-${coordinate}`}>
+                          {coordinateIndex > 0 ? ', ' : null}
+                          <a
+                            href="#"
+                            className="underline underline-offset-2 hover:no-underline focus:outline-none focus-visible:ring-1 focus-visible:ring-current rounded-sm"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              onCellReferenceClick(coordinate);
+                            }}
+                          >
+                            {coordinate}
+                          </a>
+                        </React.Fragment>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>

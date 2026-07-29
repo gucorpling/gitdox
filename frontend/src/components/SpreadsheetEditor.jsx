@@ -49,6 +49,11 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
     
   const rootStyle = fontFamily ? { '--spreadsheet-editor-font-family': fontFamily } : undefined;
 
+  useImperativeHandle(ref, () => ({
+    getSerializedValue: () => coreRef.current?.getSerializedValue?.() ?? '',
+    focusCell: (cellRef) => coreRef.current?.focusCell?.(cellRef) ?? false,
+  }), []);
+
   useEffect(() => {
     if (!isPreferredColumnOrderResolved) return;
 

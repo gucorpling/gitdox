@@ -1098,6 +1098,10 @@ const runSpannotatorToolMutation = async (toolKey) => {
     ? { ...doc.validation, results: lastReadyValidationRef.current.results }
     : doc?.validation;
 
+  const handleValidationCellReferenceClick = useCallback((cellRef) => {
+    spreadsheetEditorRef.current?.focusCell?.(cellRef);
+  }, []);
+
   const handleInsertXmlTag = (e) => {
     e.preventDefault();
     const { tag, attr, val } = xmlTagForm;
@@ -1178,6 +1182,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
           <ValidationBadge
             validationSummary={validationSummary}
             maxCoordsPerRule={maxValidatorWarnPerRule}
+            onCellReferenceClick={doc?.mode === 'spreadsheet' ? handleValidationCellReferenceClick : null}
           />
 
           <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold border ${

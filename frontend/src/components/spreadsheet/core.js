@@ -3724,6 +3724,15 @@ export function createSpreadsheetCore({ initialValue = '', fontFamily = null, pr
         getSerializedValue() {
             return exportSocialCalc();
         },
+        focusCell(cellRef) {
+            if (typeof cellRef !== 'string') return false;
+
+            const pos = coordToXY(cellRef.trim().toUpperCase());
+            if (!pos) return false;
+
+            jumpSelectionTo(pos.y, pos.x);
+            return true;
+        },
         focus() {
             scheduleRestoreFocus();
         },
