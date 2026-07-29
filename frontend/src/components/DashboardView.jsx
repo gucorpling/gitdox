@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown } from 'lucide-react';
 import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath } from '../appShared';
 import { EMPTY_DASHBOARD_FILTERS, normalizeDashboardViewState, areColumnFiltersEqual, getValidationSummary, isNavDark } from '../App';
 
@@ -10,14 +10,106 @@ const getDocumentFieldValue = (doc, field) => {
   return doc?.[field] ?? '';
 };
 
+const hashString = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = ((hash << 5) - hash + normalized.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+};
+
+const hslToRgb = (h, s, l) => {
+  const sat = s / 100;
+  const light = l / 100;
+  const c = (1 - Math.abs((2 * light) - 1)) * sat;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = light - (c / 2);
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (h < 60) {
+    r = c;
+    g = x;
+  } else if (h < 120) {
+    r = x;
+    g = c;
+  } else if (h < 180) {
+    g = c;
+    b = x;
+  } else if (h < 240) {
+    g = x;
+    b = c;
+  } else if (h < 300) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
+
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255)
+  };
+};
+
+const getContrastTextColor = (h, s, l) => {
+  const rgb = hslToRgb(h, s, l);
+  const luminance = ((0.2126 * rgb.r) + (0.7152 * rgb.g) + (0.0722 * rgb.b)) / 255;
+  return luminance > 0.55 ? '#0f172a' : '#ffffff';
+};
+
+const buildStatusPalette = (labels) => {
+  const uniqueLabels = Array.from(new Set((labels || []).filter(Boolean).map((label) => String(label))));
+  const sortedLabels = uniqueLabels.sort((a, b) => a.localeCompare(b));
+  const palette = {};
+  const usedHues = [];
+
+  const hueDistance = (a, b) => {
+    const distance = Math.abs(a - b);
+    return Math.min(distance, 360 - distance);
+  };
+
+  sortedLabels.forEach((label) => {
+    const seed = hashString(label);
+    let hue = Math.round((seed * 137.50776405) % 360);
+    let attempts = 0;
+    while (usedHues.some((existingHue) => hueDistance(existingHue, hue) < 24) && attempts < 24) {
+      hue = (hue + 29) % 360;
+      attempts += 1;
+    }
+    usedHues.push(hue);
+
+    const saturation = 68 + (seed % 12);
+    const lightness = 46 + (seed % 8);
+    const textColor = getContrastTextColor(hue, saturation, lightness);
+
+    palette[label] = {
+      backgroundColor: `hsl(${hue} ${saturation}% ${lightness}%)`,
+      borderColor: `hsl(${hue} ${Math.min(90, saturation + 8)}% ${Math.max(28, lightness - 14)}%)`,
+      textColor,
+      chipBackgroundColor: `hsl(${hue} ${Math.min(92, saturation + 6)}% ${Math.min(88, lightness + 32)}%)`,
+      chipTextColor: `hsl(${hue} ${Math.min(92, saturation + 8)}% ${Math.max(16, lightness - 24)}%)`
+    };
+  });
+
+  return palette;
+};
+
 export default function DashboardView({ apiCall, user, openDoc, projectName, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [], frontendBasePath = ''}) {
   const [documents, setDocuments] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [savingFieldKeys, setSavingFieldKeys] = useState([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [openStatusMenuDocId, setOpenStatusMenuDocId] = useState(null);
   const [columnFilters, setColumnFilters] = useState(() => normalizeDashboardViewState(dashboardViewState).columnFilters);
   const [primarySort, setPrimarySort] = useState({ key: 'corpus', direction: 'asc' });
+  const statusMenuRef = useRef(null);
   const canEditAssignee = (user?.adminlevel ?? 0) > 0;
   
   // New document form state
@@ -45,6 +137,28 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
       return { ...prev, status: statusCategories[0] };
     });
   }, [statusCategories]);
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event) => {
+      if (!statusMenuRef.current) return;
+      if (!statusMenuRef.current.contains(event.target)) {
+        setOpenStatusMenuDocId(null);
+      }
+    };
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpenStatusMenuDocId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
 
   useEffect(() => {
     if (dashboardRestoreRequestId <= 0) return;
@@ -222,6 +336,40 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
     return baseOptions;
   };
 
+  const allStatusLabels = useMemo(() => {
+    const labels = [
+      ...DEFAULT_STATUS_CATEGORIES,
+      ...(Array.isArray(statusCategories) ? statusCategories : []),
+      ...documents.map((doc) => doc?.status).filter(Boolean)
+    ];
+    return Array.from(new Set(labels.map((label) => String(label))));
+  }, [statusCategories, documents]);
+
+  const statusPalette = useMemo(() => buildStatusPalette(allStatusLabels), [allStatusLabels]);
+
+  const getStatusBadgeStyle = (status) => {
+    const safeStatus = String(status || '').trim();
+    const statusColors = statusPalette[safeStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
+    return {
+      backgroundColor: statusColors?.backgroundColor || '#475569',
+      borderColor: statusColors?.borderColor || '#334155',
+      color: statusColors?.textColor || '#ffffff'
+    };
+  };
+
+  const getStatusMenuItemStyle = (status, isSelected) => {
+    const safeStatus = String(status || '').trim();
+    const statusColors = statusPalette[safeStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
+    return {
+      backgroundColor: isSelected
+        ? (statusColors?.chipBackgroundColor || '#e2e8f0')
+        : 'transparent',
+      color: isSelected
+        ? (statusColors?.chipTextColor || '#0f172a')
+        : '#1e293b'
+    };
+  };
+
   const getAssigneeOptionsForDoc = (doc) => {
     const usernames = usersList
       .map((u) => String(u?.username || '').trim())
@@ -386,6 +534,9 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
               const validationSummary = getValidationSummary(doc.validation);
               const isSavingStatus = savingFieldKeys.includes(`${doc.id}:status`);
               const isSavingAssigned = savingFieldKeys.includes(`${doc.id}:assigned`);
+              const statusOptions = getStatusOptionsForDoc(doc);
+              const statusButtonStyle = getStatusBadgeStyle(doc.status);
+              const isStatusMenuOpen = openStatusMenuDocId === doc.id;
               return (
                 <tr key={doc.id} className="border-b last:border-0 hover:bg-slate-50">
                   <td className="p-4 font-mono text-sm text-indigo-600">{doc.id}</td>
@@ -393,15 +544,50 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
                   <td className="p-4 font-medium">{doc.docname}</td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <select
-                        className="w-full min-w-32 border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50"
-                        value={doc.status || ''}
-                        onChange={(e) => handleInlineDocumentFieldUpdate(doc, 'status', e.target.value)}
-                      >
-                        {getStatusOptionsForDoc(doc).map((status) => (
-                          <option key={status} value={status}>{formatStatusCategoryLabel(status)}</option>
-                        ))}
-                      </select>
+                      <div className="relative" ref={isStatusMenuOpen ? statusMenuRef : null}>
+                        <button
+                          type="button"
+                          className="inline-flex min-w-36 items-center justify-between gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:brightness-95"
+                          style={statusButtonStyle}
+                          onClick={() => setOpenStatusMenuDocId((prev) => (prev === doc.id ? null : doc.id))}
+                          aria-haspopup="menu"
+                          aria-expanded={isStatusMenuOpen}
+                          aria-label={`Change status for document ${doc.id}`}
+                        >
+                          <span className="truncate">{formatStatusCategoryLabel(doc.status || '')}</span>
+                          <ChevronDown size={14} />
+                        </button>
+
+                        {isStatusMenuOpen && (
+                          <div className="absolute left-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-lg" role="menu">
+                            {statusOptions.map((status) => {
+                              const isSelected = status === doc.status;
+                              return (
+                                <button
+                                  key={status}
+                                  type="button"
+                                  role="menuitemradio"
+                                  aria-checked={isSelected}
+                                  onClick={() => {
+                                    setOpenStatusMenuDocId(null);
+                                    handleInlineDocumentFieldUpdate(doc, 'status', status);
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                                  style={getStatusMenuItemStyle(status, isSelected)}
+                                >
+                                  <span
+                                    className="inline-block h-2.5 w-2.5 rounded-full"
+                                    style={{ backgroundColor: statusPalette[String(status)]?.backgroundColor || '#64748b' }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="truncate">{formatStatusCategoryLabel(status)}</span>
+                                  {isSelected ? <Check size={12} className="ml-auto" /> : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                       <span className="inline-flex h-4 w-4 items-center justify-center text-slate-400" title={isSavingStatus ? 'Saving status update' : undefined}>
                         {isSavingStatus ? <Loader2 size={12} className="animate-spin" /> : null}
                       </span>
