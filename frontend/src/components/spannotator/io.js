@@ -160,9 +160,14 @@ function getAnnotationSchema(config) {
   const bridgeSubtypeKey = resolveBridgeSubtypeKey(config);
   const sentenceKey = resolveSentenceColumnKey(config);
   const { keyBlock, checkBlock } = readAnnotationBlocks(config);
+  const hasExplicitEmptyAnnotationKeys = Boolean(
+    Array.isArray(config?.annotations?.keys)
+    && config.annotations.keys.length === 0
+    && Object.keys(config?.annotations?.checks || {}).length === 0
+  );
 
-  const keyValueKeys = uniqueNonEmpty(Object.keys(keyBlock).filter((key) => key !== entityKey && key !== sentenceKey));
-  const checkKeys = uniqueNonEmpty(Object.keys(checkBlock).filter((key) => key !== entityKey && key !== sentenceKey));
+  const keyValueKeys = uniqueNonEmpty(Object.keys(keyBlock).filter((key) => key !== entityKey && key !== sentenceKey && key !== 'char_offset'));
+  const checkKeys = uniqueNonEmpty(Object.keys(checkBlock).filter((key) => key !== entityKey && key !== sentenceKey && key !== 'char_offset'));
 
   const supplementalConfiguredKeys = uniqueNonEmpty([
     ...(Array.isArray(config?.ANNOTATION_KEYS) ? config.ANNOTATION_KEYS : []),
@@ -170,7 +175,7 @@ function getAnnotationSchema(config) {
     ...Object.keys(config?.CHECK_SETTINGS_BY_KEY || {}),
     ...Object.keys(config?.ANNO_VALUES || {}),
     ...Object.keys(config?.DEFAULT_ANNOS || {})
-  ].filter((key) => key !== entityKey && key !== sentenceKey));
+  ].filter((key) => key !== entityKey && key !== sentenceKey && key !== 'char_offset'));
 
   const supplementalCheckKeys = uniqueNonEmpty(
     supplementalConfiguredKeys.filter((key) => Boolean(config?.CHECK_SETTINGS_BY_KEY?.[key]))
@@ -183,7 +188,7 @@ function getAnnotationSchema(config) {
   ]);
 
   let annotationKeys = uniqueNonEmpty([...mergedKeyValueKeys, ...mergedCheckKeys]);
-  if (annotationKeys.length === 0) {
+  if (annotationKeys.length === 0 && !hasExplicitEmptyAnnotationKeys) {
     annotationKeys = uniqueNonEmpty(Object.keys(config?.DEFAULT_ANNOS || {}).filter((key) => key !== entityKey && key !== sentenceKey));
   }
 
@@ -211,6 +216,7 @@ function extendSchemaWithEntityAnnotationKeys(schema, entities = {}) {
     Object.entries(entity?.annos || {}).forEach(([key, value]) => {
       if (key === schema.entityKey) return;
       if (key === schema.sentenceKey) return;
+      if (key === 'char_offset') return;
       if (!isMeaningful(value)) return;
       observedKeySet.add(String(key || '').trim());
     });
@@ -866,6 +872,17 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
     annotationColsByKey[schema.bridgeSubtypeKey] = [...(mappingSource.bridgetypeCols || [])];
   }
 
+  const annotationKeysToWrite = schema.annotationKeys.filter((key) => {
+    const existingColumns = annotationColsByKey[key] || [];
+    if (existingColumns.length > 0) return true;
+
+    const defaultValue = config?.DEFAULT_ANNOS?.[key];
+    return Object.values(entities).some((entity) => {
+      const value = entity?.annos?.[key];
+      return isMeaningful(value) && String(value) !== String(defaultValue ?? '');
+    });
+  });
+
   const enabledGroupTypes = Array.isArray(resolvedConfig.GROUP_TYPES) ? resolvedConfig.GROUP_TYPES : ['coref'];
   const enabledEdgeTypes = Array.isArray(resolvedConfig.EDGE_TYPES) ? resolvedConfig.EDGE_TYPES : ['bridge'];
   const shouldWriteEdgeColumns = Boolean(resolvedConfig.ENABLE_EDGE_COLUMNS) && enabledEdgeTypes.length > 0;
@@ -948,7 +965,7 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
 
   const ensureAnnotationColumnsForSlot = (slotIdx) => {
     ensureSlotColumns(entityCols, 'entity', slotIdx);
-    schema.annotationKeys.forEach((key) => {
+    annotationKeysToWrite.forEach((key) => {
       ensureSlotColumns(annotationColsByKey[key], key, slotIdx);
     });
     
@@ -961,14 +978,15 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
     if (shouldWriteEdgeColumns) ensureSlotColumns(entIdCols, 'ent_id', slotIdx);
   };
 
-  if (charOffsetCols.length === 0) {
+  const shouldWriteCharOffsetColumn = charOffsetCols.length > 0 || tokens.some((tok) => isMeaningful(tok.char_offset));
+  if (shouldWriteCharOffsetColumn && charOffsetCols.length === 0) {
     charOffsetCols.push(createNewColumn('char_offset'));
   }
 
   deleteDataCellsInColumns([
     ...entityCols,
     ...charOffsetCols,
-    ...Object.values(annotationColsByKey).flat(),
+    ...annotationKeysToWrite.flatMap((key) => annotationColsByKey[key] || []),
     ...Object.values(groupColsByType).flat(),
     ...Object.values(antecColsByType).flat(),
     ...(shouldWriteEdgeColumns ? entIdCols : [])
@@ -1134,7 +1152,7 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
     const rowspan = (endRow - startRow) + 1;
 
     writeSlotValue(entityCols, slotIdx, startRow, entity.type || '', rowspan);
-    schema.annotationKeys.forEach((key) => {
+    annotationKeysToWrite.forEach((key) => {
       const value = normalizeAnnotationValueForSchema(key, entity.annos?.[key], schema, resolvedConfig, '');
       writeSlotValue(annotationColsByKey[key], slotIdx, startRow, value, rowspan);
     });
@@ -1179,9 +1197,11 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
     kept.forEach((col) => columns.push(col));
   };
 
-  markColumns(charOffsetCols, 1);
+  if (shouldWriteCharOffsetColumn) {
+    markColumns(charOffsetCols, 1);
+  }
   markColumns(entityCols, requiredSlotCount);
-  schema.annotationKeys.forEach((key) => {
+  annotationKeysToWrite.forEach((key) => {
     markColumns(annotationColsByKey[key], requiredSlotCount);
   });
   
@@ -1243,12 +1263,12 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
       next.forEach((col) => columns.push(col));
     };
 
-    remapColumnsArray(charOffsetCols);
+    if (shouldWriteCharOffsetColumn) remapColumnsArray(charOffsetCols);
     remapColumnsArray(wordCols);
     remapColumnsArray(tokCols);
     remapColumnsArray(sentCols);
     remapColumnsArray(entityCols);
-    schema.annotationKeys.forEach((key) => remapColumnsArray(annotationColsByKey[key]));
+    annotationKeysToWrite.forEach((key) => remapColumnsArray(annotationColsByKey[key]));
     
     Object.values(groupColsByType).forEach(cols => remapColumnsArray(cols));
     Object.values(antecColsByType).forEach(cols => remapColumnsArray(cols));

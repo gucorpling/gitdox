@@ -344,6 +344,11 @@ function normalizeEntitiesSchemaOverrides(overrides = {}) {
 
 export function buildSpannotatorConfig(overrides = {}) {
   const normalizedSchemaOverrides = normalizeEntitiesSchemaOverrides(overrides);
+  const hasExplicitEmptyAnnotationKeys = Boolean(
+    Array.isArray(overrides?.annotations?.keys)
+    && overrides.annotations.keys.length === 0
+    && Object.keys(overrides?.annotations?.checks || {}).length === 0
+  );
   const cfg = { ...DEFAULT_SPANNOTATOR_CONFIG, ...overrides, ...normalizedSchemaOverrides };
   return {
     ...cfg,
@@ -358,33 +363,35 @@ export function buildSpannotatorConfig(overrides = {}) {
       ...(normalizedSchemaOverrides.GLOBAL_DEFAULTS || {})
     },
     DEFAULT_ANNOS: {
-      ...DEFAULT_SPANNOTATOR_CONFIG.DEFAULT_ANNOS,
+      ...(hasExplicitEmptyAnnotationKeys ? {} : DEFAULT_SPANNOTATOR_CONFIG.DEFAULT_ANNOS),
       ...(overrides.DEFAULT_ANNOS || {}),
       ...(normalizedSchemaOverrides.DEFAULT_ANNOS || {})
     },
     SALIENCE_SETTINGS: {
-      ...DEFAULT_SPANNOTATOR_CONFIG.SALIENCE_SETTINGS,
+      ...(hasExplicitEmptyAnnotationKeys ? {} : DEFAULT_SPANNOTATOR_CONFIG.SALIENCE_SETTINGS),
       ...(overrides.SALIENCE_SETTINGS || {}),
       ...(normalizedSchemaOverrides.SALIENCE_SETTINGS || {})
     },
     ANNO_VALUES: {
-      ...DEFAULT_SPANNOTATOR_CONFIG.ANNO_VALUES,
+      ...(hasExplicitEmptyAnnotationKeys ? {} : DEFAULT_SPANNOTATOR_CONFIG.ANNO_VALUES),
       ...(overrides.ANNO_VALUES || {}),
       ...(normalizedSchemaOverrides.ANNO_VALUES || {})
     },
     ANNOTATION_KINDS: {
-      ...DEFAULT_SPANNOTATOR_CONFIG.ANNOTATION_KINDS,
+      ...(hasExplicitEmptyAnnotationKeys ? {} : DEFAULT_SPANNOTATOR_CONFIG.ANNOTATION_KINDS),
       ...(overrides.ANNOTATION_KINDS || {}),
       ...(normalizedSchemaOverrides.ANNOTATION_KINDS || {})
     },
-    ANNOTATION_KEYS: normalizedSchemaOverrides.ANNOTATION_KEYS || overrides.ANNOTATION_KEYS || DEFAULT_SPANNOTATOR_CONFIG.ANNOTATION_KEYS,
+    ANNOTATION_KEYS: hasExplicitEmptyAnnotationKeys
+      ? []
+      : (normalizedSchemaOverrides.ANNOTATION_KEYS || overrides.ANNOTATION_KEYS || DEFAULT_SPANNOTATOR_CONFIG.ANNOTATION_KEYS),
     ANNOTATION_STARS: {
       ...DEFAULT_SPANNOTATOR_CONFIG.ANNOTATION_STARS,
       ...(overrides.ANNOTATION_STARS || {}),
       ...(normalizedSchemaOverrides.ANNOTATION_STARS || {})
     },
     CHECK_SETTINGS_BY_KEY: {
-      ...DEFAULT_SPANNOTATOR_CONFIG.CHECK_SETTINGS_BY_KEY,
+      ...(hasExplicitEmptyAnnotationKeys ? {} : DEFAULT_SPANNOTATOR_CONFIG.CHECK_SETTINGS_BY_KEY),
       ...(overrides.CHECK_SETTINGS_BY_KEY || {}),
       ...(normalizedSchemaOverrides.CHECK_SETTINGS_BY_KEY || {})
     },
@@ -427,7 +434,7 @@ export function getAnnotationKeys(config = DEFAULT_SPANNOTATOR_CONFIG) {
 
   return [...new Set([...explicitOrder, ...fromKinds, ...fromChecks, ...fromValues, ...fromDefaults])]
     .map((key) => String(key || '').trim())
-    .filter((key) => key.length > 0 && key !== 'entity');
+    .filter((key) => key.length > 0 && key !== 'entity' && key !== 'char_offset');
 }
 
 export function enforceClusterSameType(entitiesById, memberIds) {

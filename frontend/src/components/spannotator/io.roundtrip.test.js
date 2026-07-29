@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { exportSpannotatorData, importSpannotatorData } from './io.js';
-import { DEFAULT_SPANNOTATOR_CONFIG, assertStateInvariants, buildSpannotatorConfig, getAnnotationCheckSettings, getAnnotationStarColor, parseTextToTokens } from './model.js';
+import { DEFAULT_SPANNOTATOR_CONFIG, assertStateInvariants, buildSpannotatorConfig, getAnnotationCheckSettings, getAnnotationKeys, getAnnotationStarColor, parseTextToTokens } from './model.js';
 
 function buildSeedData() {
   const tokens = parseTextToTokens('John saw Mary\nShe smiled');
@@ -396,6 +396,35 @@ test('buildSpannotatorConfig parses configurable star rules and carousel sync me
   assert.deepEqual(getAnnotationCheckSettings(config, 'highlight'), { count: 5, falseChar: 'n', trueChar: 's' });
   assert.deepEqual(config.CAROUSEL_KEYS, ['summary1', 'summary2']);
   assert.equal(config.CAROUSEL_SYNC_KEY, 'highlight');
+});
+
+test('buildSpannotatorConfig keeps explicit empty annotation schemas empty', () => {
+  const config = buildSpannotatorConfig({
+    annotations: {
+      entity: {
+        entity: ['person', 'place']
+      },
+      keys: [],
+      checks: {}
+    },
+    colors: {
+      groups: [],
+      edges: []
+    }
+  });
+
+  assert.deepEqual(config.DEFAULT_ANNOS, { entity: 'person' });
+  assert.deepEqual(config.ANNO_VALUES, { entity: ['person', 'place'] });
+  assert.deepEqual(config.ANNOTATION_KEYS, []);
+  assert.deepEqual(config.ANNOTATION_KINDS, {});
+  assert.deepEqual(config.CHECK_SETTINGS_BY_KEY, {});
+  assert.deepEqual(config.SALIENCE_SETTINGS, {});
+  assert.deepEqual(config.GROUP_TYPES, []);
+  assert.deepEqual(config.EDGE_TYPES, []);
+  assert.deepEqual(getAnnotationKeys(config), []);
+  assert.equal(config.ANNO_VALUES.infstat, undefined);
+  assert.equal(config.ANNO_VALUES.salience, undefined);
+  assert.equal(config.ANNO_VALUES.bridgetype, undefined);
 });
 
 test('WebAnno import preserves additional span key annotations such as food', () => {
@@ -891,6 +920,61 @@ test('SocialCalc export compacts redundant managed columns and updates sheet col
   assert.ok(exported.includes('cell:E2:t:9:f:1:tvf:1'));
 
   assert.ok(exported.includes('sheet:c:11:r:3:tvf:2'), 'Expected sheet:c to reflect compacted live columns');
+});
+
+test('SocialCalc export does not emit empty annotation columns when annotations stay at defaults', () => {
+  const raw = [
+    'cell:A1:t:tok:f:2',
+    'cell:B1:t:entity:f:2',
+    'cell:C1:t:identity:f:2',
+    'cell:A2:t:John:f:1:tvf:1',
+    'cell:B2:t:person:f:1:tvf:1',
+    'cell:C2:t:john_01:f:1:tvf:1',
+    'cell:A3:t:Mary:f:1:tvf:1',
+    'cell:B3:t:person:f:1:tvf:1',
+    'cell:C3:t:mary_01:f:1:tvf:1',
+    'sheet:c:3:r:3:tvf:2'
+  ].join('\n');
+
+  const bootstrapRaw = [
+    'socialcalc:version:1.0',
+    'MIME-Version: 1.0',
+    'Content-Type: multipart/mixed; boundary=SocialCalcSpreadsheetControlSave',
+    '--SocialCalcSpreadsheetControlSave',
+    'Content-type: text/plain; charset=UTF-8',
+    '',
+    '# SocialCalc Spreadsheet Control Save',
+    'version:1.0',
+    'part:sheet',
+    '--SocialCalcSpreadsheetControlSave',
+    'Content-type: text/plain; charset=UTF-8',
+    '',
+    'version:1.5',
+    'cell:A1:t:word:f:2',
+    'cell:A2:t:John:f:1:tvf:1',
+    'cell:A3:t:Mary:f:1:tvf:1',
+    'sheet:c:1:r:3:tvf:2',
+    '--SocialCalcSpreadsheetControlSave',
+    'Content-type: text/plain; charset=UTF-8',
+    '--SocialCalcSpreadsheetControlSave--'
+  ].join('\n');
+
+  const imported = importSpannotatorData(bootstrapRaw, { word: 'word', tok: 'word' });
+  const exported = exportSpannotatorData({
+    format: 'socialcalc',
+    tokens: imported.tokens,
+    tokensById: Object.fromEntries(imported.tokens.map((tok) => [tok.tid, tok])),
+    entities: imported.entities,
+    groups: imported.groups,
+    summaries: imported.summaries,
+    socialcalc: imported.socialcalc
+  });
+
+  const lines = exported.split('\n');
+  assert.equal(lines.some((line) => /cell:[A-Z]+1:t:char_offset:f:2/.test(line)), false, 'Did not expect a char_offset header');
+  assert.equal(lines.some((line) => /cell:[A-Z]+1:t:infstat:f:2/.test(line)), false, 'Did not expect an infstat header');
+  assert.equal(lines.some((line) => /cell:[A-Z]+1:t:salience:f:2/.test(line)), false, 'Did not expect a salience header');
+  assert.equal(lines.some((line) => /cell:[A-Z]+1:t:bridgetype:f:2/.test(line)), false, 'Did not expect a bridgetype header');
 });
 
 test('SocialCalc import does not bleed secondary group mode from merged parent into nested slot', () => {
