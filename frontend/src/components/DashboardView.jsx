@@ -457,11 +457,11 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
         </div>
       )}
 
-      <div className={`rounded-xl shadow-sm border border-slate-200 overflow-hidden ${panelBackgroundColor ? '' : 'bg-white'}`} style={panelStyle}>
+      <div className={`rounded-xl shadow-sm border border-slate-200 overflow-visible ${panelBackgroundColor ? '' : 'bg-white'}`} style={panelStyle}>
         <table className="w-full text-left">
           <thead className={`text-slate-600 border-b ${tableHeaderStyle ? '' : 'bg-slate-50'}`} style={tableHeaderStyle}>
             <tr>
-              <th className="p-4 font-medium">
+              <th className="p-4 font-medium first:rounded-tl-xl">
                 <button type="button" className="hover:text-indigo-700" onClick={() => togglePrimarySort('id')}>ID{sortIndicator('id')}</button>
               </th>
               <th className="p-4 font-medium">
@@ -482,7 +482,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
               <th className="p-4 font-medium">
                 <button type="button" className="hover:text-indigo-700" onClick={() => togglePrimarySort('validation')}>Validation{sortIndicator('validation')}</button>
               </th>
-              <th className="p-4 font-medium text-right">Actions</th>
+              <th className="p-4 font-medium text-right last:rounded-tr-xl">Actions</th>
             </tr>
             <tr className="border-t border-slate-200">
               <th className="p-2">
