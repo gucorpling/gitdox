@@ -572,7 +572,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
       const refreshed = await apiCall(`/documents/${docId}/contents`, 'PUT', {
         content_spreadsheet: sgmlContent,
         format: 'sgml',
-        last_modified_at: lastModifiedAt // <-- Add OCC tracking here
+        last_modified_at: lastModifiedAtRef.current, // OCC tracking
       });
 
       // Update our local OCC tracking with the newly generated timestamps
