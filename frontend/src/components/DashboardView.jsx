@@ -269,7 +269,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
     return direction === 'desc' ? -result : result;
   };
 
-  const filteredAndSortedDocuments = useMemo(() => {
+const filteredAndSortedDocuments = useMemo(() => {
     const filtered = documents.filter((doc) => {
       return Object.entries(columnFilters).every(([field, filterValue]) => {
         if (!filterValue) return true;
@@ -284,6 +284,10 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
       const corpusResult = compareField(a, b, 'corpus', 'asc');
       if (corpusResult !== 0) return corpusResult;
 
+      const docnameResult = compareField(a, b, 'docname', 'asc');
+      if (docnameResult !== 0) return docnameResult;
+
+      // Final fallback to ID to ensure React list stability if corpus and docname are identical
       return compareField(a, b, 'id', 'asc');
     });
   }, [documents, columnFilters, primarySort]);
