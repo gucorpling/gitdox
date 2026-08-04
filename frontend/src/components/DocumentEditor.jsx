@@ -1009,6 +1009,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
     ? editorSurfaceStyle
     : (panelStyle || undefined);
   const canShowGithubCommitControls = (user?.adminlevel ?? 0) >= 1;
+  const canUseDataTransferTools = (user?.adminlevel ?? 0) >= 2;
   const canCommitToGithub = typeof doc?.repo === 'string' && doc.repo.trim().length > 0;
   const hasGithubCommittedVersion = typeof latestGithubCommitMessage === 'string' && latestGithubCommitMessage.trim().length > 0;
   const canRestoreFromGithub = canShowGithubCommitControls
@@ -1385,6 +1386,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
                 config={spannotatorConfig}
                 fontFamily={entitiesFontFamily}
                 value={contentSpreadsheet}
+                canDataTransfer={canUseDataTransferTools}
                 externalControlsHostId="spannotator-entities-controls-host"
                 meta_dict={spannotatorMetaDict}
                 onMetadataChange={handleSpannotatorMetadataChange}
@@ -1404,6 +1406,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
                 fontFamily={spreadsheetFontFamily}
                 preferredColumnOrder={preferredColumnOrder}
                 value={contentSpreadsheet}
+                canDataTransfer={canUseDataTransferTools}
                 validation={effectiveSpreadsheetValidation}
                 onChange={handleSpreadsheetContentChange}
                 onCanonicalized={handleSpreadsheetCanonicalized}

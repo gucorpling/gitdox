@@ -293,6 +293,7 @@ export default function Spannotator({
   className = '',
   config = {},
   fontFamily = null,
+  canDataTransfer = true,
   value,
   onChange,
   onImportSgml,
@@ -305,6 +306,7 @@ export default function Spannotator({
   externalControlsHostId = ''
 }) {
   const modelConfig = useMemo(() => buildSpannotatorConfig(config), [config]);
+  const canAccessDataTransfer = Boolean(canDataTransfer);
   
   // -- Dynamic Configuration Extraction --
   const configuredGroups = useMemo(() => {
@@ -747,6 +749,12 @@ export default function Spannotator({
     if (showFirstMentionsButton) return;
     setShowBridgeTriggers(false);
   }, [showFirstMentionsButton]);
+
+  useEffect(() => {
+    if (canAccessDataTransfer) return;
+    setShowImportDialog(false);
+    setShowExportDialog(false);
+  }, [canAccessDataTransfer]);
 
   useEffect(() => {
     if (typeof value !== 'string') return;
@@ -1945,6 +1953,8 @@ const changeEntityType = (entityId, entityType) => {
   }, [showBridgeTriggers, groups, configuredGroups]);
 
   const runExport = (format) => {
+    if (!canAccessDataTransfer) return;
+
     const activeFormat = format || exportFormat;
     let nextText = exportSpannotatorData({
       format: activeFormat,
@@ -2027,6 +2037,8 @@ const changeEntityType = (entityId, entityType) => {
   }, [applyImportedData, config, meta_dict, modelConfig, onImportSgml]);
 
   const applyImport = async () => {
+    if (!canAccessDataTransfer) return;
+
     try {
       const rawText = String(importText ?? '').trim();
       if (!rawText) return;
@@ -2623,12 +2635,16 @@ const runDynamicTool = useCallback(async (toolKey) => {
           <button type="button" className="btn" onClick={() => setSentenceMode((m) => (m === 'text' ? 'sent' : 'text'))} title="Toggle sentence view">
             <Timeline size={14} className="sp-btn-icon" />
           </button>
-          <button type="button" className="btn" onClick={() => { setImportText(''); setShowImportDialog(true); }} title="Paste data">
-            <FileUp size={14} className="sp-btn-icon" />
-          </button>
-          <button type="button" className="btn" onClick={() => { setShowExportDialog(true); runExport(exportFormat); }} title="Export data">
-            <FileDown size={14} className="sp-btn-icon" />
-          </button>
+          {canAccessDataTransfer ? (
+            <>
+              <button type="button" className="btn" onClick={() => { setImportText(''); setShowImportDialog(true); }} title="Paste data">
+                <FileUp size={14} className="sp-btn-icon" />
+              </button>
+              <button type="button" className="btn" onClick={() => { setShowExportDialog(true); runExport(exportFormat); }} title="Export data">
+                <FileDown size={14} className="sp-btn-icon" />
+              </button>
+            </>
+          ) : null}
           
           {allColorModes.length > 0 ? (
             <>

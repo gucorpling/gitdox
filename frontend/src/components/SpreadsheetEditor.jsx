@@ -29,6 +29,7 @@ function getSpreadsheetValidationSignature(validation) {
 const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({ 
   value = '', 
   validation = null, 
+  canDataTransfer = true,
   onChange, 
   onCanonicalized,
   onImportResult, 
@@ -101,6 +102,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
       initialValue: value || '',
       fontFamily,
       preferredColumnOrder,
+      allowDataTransfer: Boolean(canDataTransfer),
       onChange: (nextValue) => {
         if (suppressExternalChangeRef.current) {
           return;
@@ -127,7 +129,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPreferredColumnOrderResolved]);
+  }, [isPreferredColumnOrderResolved, canDataTransfer]);
 
   useEffect(() => {
     if (!coreRef.current || !coreReady || !Array.isArray(preferredColumnOrder)) return;

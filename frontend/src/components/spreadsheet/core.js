@@ -13,6 +13,7 @@ let isKeyboardBound = false;
 const MAX_COLUMN_COUNT = 26 * 26;
 let exportConfigNames = [];
 let exportConfigsLoaded = false;
+let allowDataTransfer = true;
 const SOCIALCALC_SIGNATURE = '--SocialCalcSpreadsheetControlSave';
 
 function ensureColumnCapacity(sheetData, minColumns = MAX_COLUMN_COUNT) {
@@ -28,6 +29,10 @@ function ensureColumnCapacity(sheetData, minColumns = MAX_COLUMN_COUNT) {
 let modalMode = ''; // 'import' or 'export'
 
 function openModal(mode) {
+    if (!allowDataTransfer && (mode === 'import' || mode === 'export')) {
+        return;
+    }
+
     modalMode = mode;
     const modal = document.getElementById('data-modal');
     const title = document.getElementById('modal-title');
@@ -188,6 +193,10 @@ function closeModal() {
 }
 
 async function executeModalAction() {
+    if (!allowDataTransfer && (modalMode === 'import' || modalMode === 'export')) {
+        return;
+    }
+
     if (modalMode === 'import') {
         const textarea = document.getElementById('modal-textarea');
         const rawData = textarea ? textarea.value : '';
@@ -2279,8 +2288,10 @@ function customizeToolbar() {
     const iconAddCol = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="4" y="4" width="18" height="18" rx="2" ry="2"/><line x1="10" y1="4" x2="10" y2="22"/><line x1="16" y1="4" x2="16" y2="22"/><rect x="10" y="4" width="6" height="18" fill="#22c55e" stroke="none"/><circle cx="4" cy="4" r="5" fill="#22c55e" stroke="none"/><line x1="4" y1="2" x2="4" y2="6" stroke="white" stroke-width="2"/><line x1="2" y1="4" x2="6" y2="4" stroke="white" stroke-width="2"/></svg>`;
 
     // Modal triggers
-    createSvgBtn(iconImport, 'Import Data', () => openModal('import'));
-    createSvgBtn(iconExport, 'Export Data', () => openModal('export'));
+    if (allowDataTransfer) {
+        createSvgBtn(iconImport, 'Import Data', () => openModal('import'));
+        createSvgBtn(iconExport, 'Export Data', () => openModal('export'));
+    }
 
     const divider0 = document.createElement('div');
     divider0.className = 'x-spreadsheet-toolbar-divider';
@@ -3556,9 +3567,10 @@ function unbindDomEvents() {
     isDomBound = false;
 }
 
-export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null } = {}) {
+export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], allowDataTransfer: allowTransfer = true, onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null } = {}) {
     configuredSpreadsheetFontFamily = normalizeSpreadsheetFontFamily(fontFamily);
     currentPreferredColumnOrder = Array.isArray(preferredColumnOrder) ? preferredColumnOrder : []; 
+    allowDataTransfer = Boolean(allowTransfer);
     
     onSerializedChange = onChange;
     onCanonicalized = canonicalized;
