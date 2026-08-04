@@ -46,7 +46,37 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
   const highlightedValidationSignatureRef = useRef('');
   const [coreReady, setCoreReady] = useState(false);
   const isPreferredColumnOrderResolved = preferredColumnOrder !== null;
-    
+  
+  const activeFormulaStateRef = useRef(null);
+
+  const captureFormulaFocus = () => {
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.id === 'spreadsheet-formula-input') {
+      activeFormulaStateRef.current = { start: activeEl.selectionStart, end: activeEl.selectionEnd };
+    } else {
+      activeFormulaStateRef.current = null;
+    }
+  };
+
+  const restoreFormulaFocus = () => {
+    if (!activeFormulaStateRef.current) return;
+    // Double rAF ensures we execute AFTER React commits and AFTER the spreadsheet's internal microtasks finish
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const formulaInput = document.getElementById('spreadsheet-formula-input');
+        if (formulaInput && document.activeElement !== formulaInput) {
+          formulaInput.focus();
+          try { 
+            formulaInput.setSelectionRange(
+              activeFormulaStateRef.current.start, 
+              activeFormulaStateRef.current.end
+            ); 
+          } catch(e) {}
+        }
+      });
+    });
+  };
+
   const rootStyle = fontFamily ? { '--spreadsheet-editor-font-family': fontFamily } : undefined;
 
   useImperativeHandle(ref, () => ({
@@ -75,8 +105,11 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
         if (suppressExternalChangeRef.current) {
           return;
         }
+        captureFormulaFocus();        
         lastKnownValueRef.current = nextValue;
         if (onChange) onChange(nextValue);
+        
+        restoreFormulaFocus();
       },
       onCanonicalized,
       onFetchSgml,
@@ -111,10 +144,20 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
   useEffect(() => {
     const nextValue = value || '';
     if (!coreRef.current) return;
-    if (nextValue === lastKnownValueRef.current) return;
+    // Normalize strings to prevent trivial line-ending changes from the parent 
+    // from causing a complete grid destruction loop.
+    const normalize = (str) => typeof str === 'string' ? str.replace(/\r\n/g, '\n').trim() : '';
+    if (normalize(nextValue) === normalize(lastKnownValueRef.current)) {
+      lastKnownValueRef.current = nextValue; // Sync the ref to prevent future mismatch
+      return;
+    }
+    // When an external value change forces a reload, trap focus for formula bar
+    captureFormulaFocus();
 
     coreRef.current.setValue(nextValue);
     lastKnownValueRef.current = nextValue;
+
+    restoreFormulaFocus();
   }, [value]);
 
 useEffect(() => {
@@ -128,6 +171,10 @@ useEffect(() => {
     if (nextHighlightedSignature === highlightedValidationSignatureRef.current) return;
 
     suppressExternalChangeRef.current = true;
+
+    // A validation update triggered by typing mutates the grid, trap focus
+    captureFormulaFocus();
+
     try {
       if (coreRef.current.syncValidationHighlights) {
         // Handles clearing, highlighting, and rogue pastes
@@ -138,6 +185,7 @@ useEffect(() => {
       highlightedValidationSignatureRef.current = nextHighlightedSignature;
     } finally {
       suppressExternalChangeRef.current = false;
+      restoreFormulaFocus();
     }
   }, [validation, coreReady]);
 

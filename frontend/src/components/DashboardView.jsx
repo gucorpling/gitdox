@@ -11,7 +11,7 @@ const getDocumentFieldValue = (doc, field) => {
 };
 
 const hashString = (value) => {
-  const normalized = String(value || '').trim().toLowerCase();
+  const normalized = String(value || '').trim().toLowerCase() + "d";
   let hash = 0;
   for (let i = 0; i < normalized.length; i += 1) {
     hash = ((hash << 5) - hash + normalized.charCodeAt(i)) | 0;

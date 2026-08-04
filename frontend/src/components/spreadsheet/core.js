@@ -908,30 +908,41 @@ function syncFormulaBarFromSelection(options = {}) {
 }
 
 function updateTopLeftSelectedCellFromFormulaBar(nextValue) {
-    if (!mySpreadsheet) return;
+    if (!mySpreadsheet || !mySpreadsheet.sheet) return;
     const textValue = typeof nextValue === 'string' ? nextValue : '';
     const { ri, ci } = getTopLeftSelectionPosition();
 
-    applyDataMutation((d) => {
-        if (!d.rows || typeof d.rows !== 'object') d.rows = { len: 100 };
-        if (!d.rows[ri]) d.rows[ri] = { cells: {} };
-        if (!d.rows[ri].cells) d.rows[ri].cells = {};
+    // Bypass applyDataMutation's loadData() and mutate the active object reference in-place
+    const data = mySpreadsheet.getData()[0];
+    
+    if (!data.rows) data.rows = { len: 100 };
+    if (!data.rows[ri]) data.rows[ri] = { cells: {} };
+    if (!data.rows[ri].cells) data.rows[ri].cells = {};
 
-        const existingCell = d.rows[ri].cells[ci] ? { ...d.rows[ri].cells[ci] } : {};
-        if (textValue === '') {
-            delete existingCell.text;
-        } else {
-            existingCell.text = textValue;
-        }
-
+    const existingCell = data.rows[ri].cells[ci] ? { ...data.rows[ri].cells[ci] } : {};
+    if (textValue === '') {
+        delete existingCell.text;
         if (Object.keys(existingCell).length === 0) {
-            delete d.rows[ri].cells[ci];
-        } else {
-            d.rows[ri].cells[ci] = existingCell;
+            delete data.rows[ri].cells[ci];
         }
+    } else {
+        existingCell.text = textValue;
+        data.rows[ri].cells[ci] = existingCell;
+    }
 
-        d.rows.len = Math.max(Number.isInteger(d.rows.len) ? d.rows.len : 100, ri + 1);
-    });
+    data.rows.len = Math.max(Number.isInteger(data.rows.len) ? data.rows.len : 100, ri + 1);
+
+    // Redraw the canvas. This prevents x-data-spreadsheet from resetting its UI layer and firing the delayed timeouts that steal focus
+    const sheet = mySpreadsheet.sheet;
+    if (typeof sheet.render === 'function') {
+        sheet.render();
+    } else if (sheet.table && typeof sheet.table.render === 'function') {
+        sheet.table.render();
+    }
+
+    // Manually push to history and notify React
+    saveHistoryState();
+    notifySerializedChange();
 }
 
 function handleFormulaBarInput(event) {
@@ -966,10 +977,13 @@ function handleFormulaBarKeydown(event) {
 
 function enforceHeaderRowStyles() {
     // Silently ensure every filled cell in row 0 (header row) has bold font + #f3f4f6 bgcolor.
-    // Updates the X-Spreadsheet data model and re-renders without triggering the save callback.
+    
     if (!mySpreadsheet) return;
-    const data = JSON.parse(JSON.stringify(mySpreadsheet.getData()[0]));
+    
+    // Grab the live reference instead of a cloned copy
+    const data = mySpreadsheet.getData()[0];
     if (!data) return;
+    
     const rows = data.rows || {};
     const row0 = rows[0];
     if (!row0 || !row0.cells) return;
@@ -978,7 +992,6 @@ function enforceHeaderRowStyles() {
     let changed = false;
     const family = getEffectiveSpreadsheetFontFamily();
 
-    // Find or lazily create the bold + #f3f4f6 style entry.
     let headerStyleIndex = stylesList.findIndex(
         (s) => s && s.font && s.font.bold === true && normalizeHexColor(s.bgcolor) === '#f3f4f6'
     );
