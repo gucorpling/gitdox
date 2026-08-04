@@ -946,17 +946,8 @@ function updateTopLeftSelectedCellFromFormulaBar(nextValue) {
 }
 
 function handleFormulaBarInput(event) {
-    const input = event.target;
-    // Capture cursor position before the mutation steals focus
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-
-    updateTopLeftSelectedCellFromFormulaBar(input.value);
-
-    // Force focus back to the formula bar and restore cursor position
-    input.focus();
-    input.setSelectionRange(start, end);
-}
+    updateTopLeftSelectedCellFromFormulaBar(event.target.value);
+} 
 
 function handleFormulaBarFocus() {
     syncFormulaBarFromSelection({ force: true });
@@ -986,7 +977,7 @@ function handleFormulaBarKeydown(event) {
 
 function enforceHeaderRowStyles() {
     // Silently ensure every filled cell in row 0 (header row) has bold font + #f3f4f6 bgcolor.
-    
+
     if (!mySpreadsheet) return;
     
     // Grab the live reference instead of a cloned copy
@@ -3141,45 +3132,32 @@ function restoreViewportScrollPosition(position) {
     applyViewport();
 }
 
-function applyDataMutation(mutationCallback) {
+ function applyDataMutation(mutationCallback) {
+
     let d = JSON.parse(JSON.stringify(mySpreadsheet.getData()[0]));
     ensureColumnCapacity(d);
     const selectionRange = getActiveSelectionRange();
     const viewportScroll = getViewportScrollPosition();
-    
-    // Capture the currently focused element and its cursor position
-    const activeEl = document.activeElement;
-    const cursorStart = activeEl ? activeEl.selectionStart : null;
-    const cursorEnd = activeEl ? activeEl.selectionEnd : null;
-    
+
     mutationCallback(d);
-    
+
     ensureColumnCapacity(d);
     _viewportSyncRequestId++;
     mySpreadsheet.loadData([d]);
     patchSelector();
-    
+
+    // Restore viewport first
     restoreViewportScrollPosition(viewportScroll);
-    restoreSelectorRange(selectionRange);  // Focused control will temporarily lose focus
+    restoreSelectorRange(selectionRange);
 
     requestAnimationFrame(() => {
         restoreViewportScrollPosition(viewportScroll);
         requestAnimationFrame(() => restoreViewportScrollPosition(viewportScroll));
     });
-    
+
     saveHistoryState();
     notifySerializedChange();
-
-    // Restore focus if an input element was active before the reload
-    if (activeEl && typeof activeEl.focus === 'function' && activeEl !== document.body) {
-        activeEl.focus();
-        if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {
-            try { 
-                activeEl.setSelectionRange(cursorStart, cursorEnd); 
-            } catch(e) {}
-        }
-    }
-}
+} 
 
 function replaceOne() {
     if (findMatches.length === 0 || findMatchIndex < 0) return;
