@@ -82,13 +82,19 @@ export default function DocumentEditor({ apiCall, docId, goBack, goBackToCorpus,
   const [lastModifiedAt, setLastModifiedAt] = useState(0);
   const [lastModifiedBy, setLastModifiedBy] = useState('');
   const [conflictData, setConflictData] = useState(null); 
+  const [wakeSyncNotice, setWakeSyncNotice] = useState(null);
   const lastModifiedAtRef = useRef(0);
+  const hasUnsavedChangesRef = useRef(false);
   const isSavingRef = useRef(false);
 
   // Keep ref in sync with state for event listeners
   useEffect(() => {
     lastModifiedAtRef.current = lastModifiedAt;
   }, [lastModifiedAt]);
+
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
   
   // Metadata Modal State
   const [metaModalOpen, setMetaModalOpen] = useState(false);
@@ -241,7 +247,26 @@ useEffect(() => {
     }
   };
 
-  const checkForConflicts = useCallback(async () => {
+  const formatServerEditTime = useCallback((serverTime) => {
+    return new Date(serverTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }, []);
+
+  const applyServerSnapshot = useCallback((data) => {
+    setContentXml(data.content_xml || '');
+    setContentSpreadsheet(data.content_spreadsheet || '');
+
+    const serverTime = data.last_modified_at || 0;
+    setLastModifiedAt(serverTime);
+    lastModifiedAtRef.current = serverTime;
+    setLastModifiedBy(data.last_modified_by || 'unknown');
+
+    setHasUnsavedChanges(false);
+    setIsXmlDirty(false);
+    setIsSpreadsheetDirty(false);
+    setConflictData(null);
+  }, []);
+
+  const checkForConflicts = useCallback(async ({ source = 'passive' } = {}) => {
     if (!docId) return;
     try {
       const data = await apiCall(`/documents/${docId}/contents`);
@@ -249,37 +274,58 @@ useEffect(() => {
       
       // If the server has a newer timestamp than our local ref, trigger a conflict
       if (serverTime > lastModifiedAtRef.current) {
+        const shouldAutoRefreshOnWake = source === 'wake' && !hasUnsavedChangesRef.current && !isSavingRef.current;
+
+        if (shouldAutoRefreshOnWake) {
+          applyServerSnapshot(data);
+          setWakeSyncNotice({
+            user: data.last_modified_by || 'another user',
+            formattedTime: formatServerEditTime(serverTime)
+          });
+          return;
+        }
+
         setConflictData({
           user: data.last_modified_by || 'another user',
           serverTime: serverTime,
           serverXml: data.content_xml || '',
           serverSpreadsheet: data.content_spreadsheet || '',
-          formattedTime: new Date(serverTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          formattedTime: formatServerEditTime(serverTime)
         });
       }
     } catch (err) {
       console.warn("Conflict check failed silently", err);
     }
-  }, [docId, apiCall]);
+  }, [docId, apiCall, applyServerSnapshot, formatServerEditTime]);
 
   useEffect(() => {
     if (!docId) return;
 
     // 1. Tab Visibility Check
+    const handleWakeUpSync = () => {
+      checkForConflicts({ source: 'wake' });
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        checkForConflicts();
+        handleWakeUpSync();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWakeUpSync);
+    window.addEventListener('pageshow', handleWakeUpSync);
 
     // 2. Polling Check (15 minutes = 900,000 ms)
     const pollInterval = setInterval(() => {
-      checkForConflicts();
+      if (document.visibilityState === 'visible') {
+        checkForConflicts({ source: 'poll' });
+      }
     }, 900000);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWakeUpSync);
+      window.removeEventListener('pageshow', handleWakeUpSync);
       clearInterval(pollInterval);
     };
   }, [docId, checkForConflicts]);
@@ -1651,6 +1697,30 @@ const runSpannotatorToolMutation = async (toolKey) => {
         </div>
       )}
       {/* Concurrent Edit Conflict Modal */}
+      {wakeSyncNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-xl shadow-xl w-[500px] max-w-full m-4 border border-sky-300">
+            <div className="flex items-center gap-3 mb-4 text-sky-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              <h3 className="text-lg font-bold text-slate-800">Document Refreshed</h3>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-6">
+              Refreshing view with latest changes (last edited by <strong>{wakeSyncNotice.user}</strong> at <strong>{wakeSyncNotice.formattedTime}</strong>).
+            </p>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setWakeSyncNotice(null)}
+                className="px-4 py-2 text-sm font-medium bg-sky-600 text-white hover:bg-sky-700 rounded-md shadow-sm transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {conflictData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-xl w-[500px] max-w-full m-4 border-2 border-amber-400">
