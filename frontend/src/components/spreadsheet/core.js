@@ -946,7 +946,16 @@ function updateTopLeftSelectedCellFromFormulaBar(nextValue) {
 }
 
 function handleFormulaBarInput(event) {
-    updateTopLeftSelectedCellFromFormulaBar(event.target.value);
+    const input = event.target;
+    // Capture cursor position before the mutation steals focus
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+
+    updateTopLeftSelectedCellFromFormulaBar(input.value);
+
+    // Force focus back to the formula bar and restore cursor position
+    input.focus();
+    input.setSelectionRange(start, end);
 }
 
 function handleFormulaBarFocus() {
@@ -1027,19 +1036,13 @@ function enforceHeaderRowStyles() {
         changed = true;
     });
 
-    if (!changed) return;
-
-    const selectionRange = getActiveSelectionRange();
-    const viewportScroll = getViewportScrollPosition();
-    mySpreadsheet.loadData([data]);
-    patchSelector();
-    restoreViewportScrollPosition(viewportScroll);
-    restoreSelectorRange(selectionRange);
-    if (mySpreadsheet.sheet) {
-        if (typeof mySpreadsheet.sheet.render === 'function') {
-            mySpreadsheet.sheet.render();
-        } else if (mySpreadsheet.sheet.table && typeof mySpreadsheet.sheet.table.render === 'function') {
-            mySpreadsheet.sheet.table.render();
+    if (changed) {
+        // Redraw canvas in-place instead of using loadData()
+        const sheet = mySpreadsheet.sheet;
+        if (typeof sheet.render === 'function') {
+            sheet.render();
+        } else if (sheet.table && typeof sheet.table.render === 'function') {
+            sheet.table.render();
         }
     }
 }
@@ -3144,6 +3147,11 @@ function applyDataMutation(mutationCallback) {
     const selectionRange = getActiveSelectionRange();
     const viewportScroll = getViewportScrollPosition();
     
+    // Capture the currently focused element and its cursor position
+    const activeEl = document.activeElement;
+    const cursorStart = activeEl ? activeEl.selectionStart : null;
+    const cursorEnd = activeEl ? activeEl.selectionEnd : null;
+    
     mutationCallback(d);
     
     ensureColumnCapacity(d);
@@ -3151,9 +3159,8 @@ function applyDataMutation(mutationCallback) {
     mySpreadsheet.loadData([d]);
     patchSelector();
     
-    // Restore viewport first
     restoreViewportScrollPosition(viewportScroll);
-    restoreSelectorRange(selectionRange);
+    restoreSelectorRange(selectionRange);  // Focused control will temporarily lose focus
 
     requestAnimationFrame(() => {
         restoreViewportScrollPosition(viewportScroll);
@@ -3162,6 +3169,16 @@ function applyDataMutation(mutationCallback) {
     
     saveHistoryState();
     notifySerializedChange();
+
+    // Restore focus if an input element was active before the reload
+    if (activeEl && typeof activeEl.focus === 'function' && activeEl !== document.body) {
+        activeEl.focus();
+        if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {
+            try { 
+                activeEl.setSelectionRange(cursorStart, cursorEnd); 
+            } catch(e) {}
+        }
+    }
 }
 
 function replaceOne() {
