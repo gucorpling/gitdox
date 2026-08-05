@@ -440,9 +440,14 @@ const filteredAndSortedDocuments = useMemo(() => {
   return (
     <div className="max-w-6xl mx-auto space-y-6" style={{ maxWidth: '100%' }}>
       <div className="flex justify-between items-center">
-        <h2 className={`text-2xl font-semibold ${
-            (isNavDark ? 'border-white/10 text-white' : 'border-slate-200 text-slate-800')
-          }`}>Document Dashboard</h2>
+        <h2 className={`text-2xl font-semibold flex items-baseline gap-2 ${
+        (isNavDark ? 'border-white/10 text-white' : 'border-slate-200 text-slate-800')
+        }`}>
+        Document Dashboard
+        <span className={`text-sm font-normal ${isNavDark ? 'text-slate-300' : 'text-slate-700'}`}>
+          (Showing {filteredAndSortedDocuments.length}/{documents.length} documents)
+        </span>
+      </h2>
         {user.adminlevel > 0 && (
           <button onClick={() => setShowAdd(!showAdd)} className="bg-indigo-600 text-white px-4 py-2 rounded-md flex items-center gap-2 hover:bg-indigo-700">
             <Plus size={18} /> New Document
