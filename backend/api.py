@@ -1187,7 +1187,7 @@ def get_status_categories(project_name: str, current_user: dict = Depends(requir
     """
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
     categories = _get_project_status_categories(project_name)
-    return {"categories": categories}
+    return {"categories": sorted(categories)}
 
 
 @app.put("/projects/{project_name}/status-categories")
