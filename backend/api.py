@@ -3,7 +3,7 @@ import hashlib
 import secrets
 import asyncio
 import time
-import sys, os, zipfile
+import sys, os, zipfile, re
 import xml.etree.ElementTree as ET
 import yaml
 import redis
@@ -1844,7 +1844,25 @@ async def import_documents_zip(
                     if fmt == "xml":
                         content_xml = text
 
-                        overrides = _extract_import_overrides({}, xml_text=text)
+                        # Check for metadata
+                        open_match = re.match(r'^\s*<meta\s+([^\n]*?)>\n', content_xml, re.IGNORECASE)
+                        close_match = re.search(r'\s*</meta>\s*$', content_xml, re.IGNORECASE)
+                        
+                        if open_match and close_match:
+                            attrs_str = open_match.group(1)
+                            
+                            for k, v in re.findall(r'([a-zA-Z0-9_\-]+)="([^"]*)"', attrs_str):
+                                metadata[k] = v
+                                
+                            # Strip the wrapping <meta> tags from content
+                            content_xml = re.sub(r'</?meta[^\n]*?>\n', '', content_xml + "\n").strip()
+                        
+                        # Remove excluded keys from document metadata
+                        for key in excluded_keys:
+                            metadata.pop(key, None)
+
+                        # Parallel to SGML approach: override using `metadata` dict rather than `xml_text` string parsing
+                        overrides = _extract_import_overrides(metadata, xml_text=None)
                         if overrides["corpus"]:
                             corpus = overrides["corpus"]
                         if overrides["repo"]:
