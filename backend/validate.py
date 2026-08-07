@@ -266,7 +266,8 @@ class SpreadsheetValidator(BaseValidator):
         return cols[0] if cols else None
 
     def validate(self, rule: ValidationRule,
-            ner_pos_config: Optional[Dict[str, Dict[str, List[str]]]] = None
+            ner_pos_config: Optional[Dict[str, Dict[str, List[str]]]] = None,
+            tok_header: str = "tok"
             ) -> List[str]:
         """
         Tests a validation rule and returns a list of violating positions/keys.
@@ -413,6 +414,7 @@ class SpreadsheetValidator(BaseValidator):
                     entity_header=entity_header,
                     identity_header=identity_header,
                     named_pos=named_pos,
+                    tok_header=tok_header,
                 )
 
                 if not result["is_valid"]:
@@ -426,6 +428,7 @@ class SpreadsheetValidator(BaseValidator):
                 entity_header: str = "entity",
                 identity_header: str = "identity",
                 named_pos: Optional[Iterable[str]] = None,
+                tok_header: str = "tok",
         ) -> Dict[str, Union[bool, int, str, List[str]]]:
         """
         Validate that named entity spans in a spreadsheet, where tokens are in consecutive rows,
@@ -453,6 +456,16 @@ class SpreadsheetValidator(BaseValidator):
         pos_cols = _header_cols(pos_header)
         entity_cols = _header_cols(entity_header)
         identity_cols = _header_cols(identity_header)
+        try:
+            tok_col = _header_cols(tok_header)[0]
+        except IndexError:
+            return {
+                "is_valid": False,
+                "message": f"No word column {tok_header} found",
+                "resolved": 0,
+                "expected": 0,
+                "missing_types": [],
+            }
 
         # If we lack pos or entity columns, we cannot find any named entities,
         # so treat as 0 expected identities. 
@@ -505,11 +518,20 @@ class SpreadsheetValidator(BaseValidator):
         for r in named_rows:
             containing = [sp for sp in entity_spans if sp[0] <= r <= sp[1]]
             if not containing:
-                # Per your rule: ignore named rows that have no entity span.
+                # Ignore named rows that have no entity span.
                 continue
 
             containing.sort(key=lambda sp: ((sp[1] - sp[0] + 1), sp[0]))
-            expected_span_instances.add(containing[0])
+            # Get entity string for this entity from token column
+            ent_text = []
+            for r in range(containing[0][0], containing[0][1] + 1):
+                if tok_col:
+                    tok_cell = self.row_maps.get(tok_col, {}).get(r)
+                    if tok_cell:
+                        ent_text.append(str(tok_cell.value).strip())
+
+            containing = tuple(list(containing[0]) + ["".join(ent_text)])
+            expected_span_instances.add(containing)
 
         # 4) Collect filled identity spans (we only need coordinates here).
         # If identity_cols is empty, this simply results in an empty set.
@@ -540,11 +562,11 @@ class SpreadsheetValidator(BaseValidator):
         expected_types: Set[str] = set()
         unresolved_types: Set[str] = set()
 
-        for start, end, val in expected_span_instances:
-            expected_types.add(val)
+        for start, end, etype, text in expected_span_instances:
+            expected_types.add((etype,text))
             # If ANY specific instance lacks a linked identity, the whole string type counts as unresolved
             if (start, end) not in identity_spans:
-                unresolved_types.add(val)
+                unresolved_types.add((etype,text))
 
         expected = len(expected_types)
         if expected == 0:
@@ -693,9 +715,14 @@ def run_all_validations(
     meta_validator = MetadataValidator(metadata)
 
     ner_pos_config: Dict[str, Dict[str, List[str]]] = {}
+    tok_header = "tok"
     if config:
         entities = config.get("entities")
         if isinstance(entities, dict):
+            tokens = entities.get("tokens")
+            if isinstance(tokens, str) and tokens.strip():
+                tok_header = tokens.strip()
+
             annotations = entities.get("annotations")
             if isinstance(annotations, dict):
                 for ann_name, ann_cfg in annotations.items():
@@ -728,7 +755,11 @@ def run_all_validations(
         if domain == "metadata":
             violations = meta_validator.validate(rule)
         elif domain == "spreadsheet" and ss_validator:
-            violations = ss_validator.validate(rule, ner_pos_config=ner_pos_config)
+            violations = ss_validator.validate(
+                rule,
+                ner_pos_config=ner_pos_config,
+                tok_header=tok_header,
+            )
         elif domain == "xml" and sgml_validator:
             violations = sgml_validator.validate(indata, rule)
 
