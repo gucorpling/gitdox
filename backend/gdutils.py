@@ -957,6 +957,7 @@ def fix_colnames(socialcalc):
     socialcalc = re.sub(r'(:[A-Z]1:t:)norm_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
     socialcalc = re.sub(r'(:[A-Z]1:t:)morph_xml\\c((orig|pos|lemma|lang):)', r'\1\2', socialcalc)
     socialcalc = re.sub(r'(:[A-Z]1:t:)entity_(group\\c(coref|bridge):|(identity|infstat|salience):)', r'\1\2', socialcalc)
+    socialcalc = re.sub(r'(:[A-Z]1:t:)entity_((identity):)', r'\1\2', socialcalc)
 
     return socialcalc
 
