@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Check, AlertCircle, ChevronDown, Loader2 } from 'lucide-react';
 
 const DEFAULT_MAX_COORDS_PER_RULE = 8;
-const VALIDATION_COORDINATE_LIST_PATTERN = /^(.+?:)\s*([A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)$/;
+const VALIDATION_COORDINATE_LIST_PATTERN = /^(.+?:)\s*([A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)(, ... \(\d+ total\))?$/;
 
 const truncateValidationLine = (line, maxCoordsPerRule) => {
   if (typeof line !== 'string') return '';
@@ -42,7 +42,7 @@ const parseValidationCoordinateLine = (line) => {
   const match = line.match(VALIDATION_COORDINATE_LIST_PATTERN);
   if (!match) return null;
 
-  const [, ruleLabel, coordinateList] = match;
+  const [, ruleLabel, coordinateList, suffix] = match;
   const coordinates = coordinateList
     .split(',')
     .map((entry) => entry.trim())
@@ -53,6 +53,7 @@ const parseValidationCoordinateLine = (line) => {
   return {
     ruleLabel,
     coordinates,
+    suffix,
   };
 };
 
@@ -130,7 +131,7 @@ export default function ValidationBadge({
                             {coordinate}
                           </a>
                         </React.Fragment>
-                      ))}
+                      ))}{parsedLine.suffix ? `${parsedLine.suffix}` : null}
                     </>
                   );
                 })()}
