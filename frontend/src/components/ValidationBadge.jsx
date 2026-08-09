@@ -109,7 +109,7 @@ export default function ValidationBadge({
         }`}>
           <div className="space-y-1">
             {errorLines.map((line, idx) => (
-              <div key={idx} className="whitespace-pre-wrap font-mono">
+              <div key={idx} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-mono">
                 {(() => {
                   const parsedLine = canLinkCellReferences ? parseValidationCoordinateLine(line) : null;
                   if (!parsedLine) return line;
