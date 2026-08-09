@@ -208,7 +208,7 @@ useEffect(() => {
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden relative">
-        <div id="spreadsheet-container" className="absolute inset-0" />
+        <div id="spreadsheet-container" className="absolute inset-0" style={{ overscrollBehavior: 'none' }}/>
       </div>
 
       <div id="find-replace-dialog" className="hidden fixed top-24 right-6 z-50 bg-white border border-gray-300 rounded-lg shadow-xl" style={{ width: 320 }}>

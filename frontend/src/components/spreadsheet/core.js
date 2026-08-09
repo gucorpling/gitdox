@@ -14,6 +14,7 @@ const MAX_COLUMN_COUNT = 26 * 26;
 let exportConfigNames = [];
 let exportConfigsLoaded = false;
 let allowDataTransfer = true;
+
 const SOCIALCALC_SIGNATURE = '--SocialCalcSpreadsheetControlSave';
 
 function ensureColumnCapacity(sheetData, minColumns = MAX_COLUMN_COUNT) {
@@ -349,20 +350,32 @@ const restoreFocus = (selectionOverride = null, options = {}) => {
         mySpreadsheet.sheet.isFocus = true; 
         restoreSelectorRange(selectionRange);
 
-        // TARGETED RADICAL FIX: Synthetic mouseclick strictly on the actively selected cell
+        // Synthetic mouseclick strictly on the actively selected cell - 
         // Wakes up the canvas engine without snapping selection to A1
         const canvas = document.querySelector('.x-spreadsheet-sheet canvas');
-        if (!skipSyntheticClick && canvas && mySpreadsheet.sheet.data) {
+        const hiddenInputContainer = document.querySelector('#spreadsheet-container .x-spreadsheet-selector .hide-input');
+        
+        if (!skipSyntheticClick && canvas && hiddenInputContainer && mySpreadsheet.sheet.data) {
             try {
-                const rect = canvas.getBoundingClientRect();
-                const selRect = mySpreadsheet.sheet.data.getSelectedRect();
-                if (selRect) {
-                    const clickX = rect.left + selRect.left + 5;
-                    const clickY = rect.top + selRect.top + 5;
+                const inputRect = hiddenInputContainer.getBoundingClientRect();
+                
+                // Add 5px padding to ensure the click hits inside the cell bounds
+                const clickX = inputRect.left + 5;
+                const clickY = inputRect.top + 5;
+                
+                // Only dispatch if coordinates are actually visually on-screen
+                if (clickX > 0 && clickY > 0) {
+                    // Mute the library's autoscroll for this click only
+                    window._isSyntheticFocusClick = true; 
+                    
                     canvas.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true, clientX: clickX, clientY: clickY }));
                     canvas.dispatchEvent(new MouseEvent('mouseup', { view: window, bubbles: true, cancelable: true, clientX: clickX, clientY: clickY }));
+                    
+                    window._isSyntheticFocusClick = false;
                 }
-            } catch(e) {}
+            } catch(e) {
+                window._isSyntheticFocusClick = false;
+            }
         }
     }
 };
@@ -454,7 +467,7 @@ function patchSelector() {
         const freezeH = typeof data.freezeTotalHeight === 'function' ? data.freezeTotalHeight() : 0;
         const targetTop = Math.max(0, (Number(selectedRect.t) || 0) - 1 - freezeH);
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move({ top: targetTop }); } catch (e) {}
+            try { sheet.verticalScrollbar.move(targetTop); } catch (e) {}
         }
     };
     
@@ -470,7 +483,7 @@ function patchSelector() {
             : !!setArg;
         const autoScroll = setOptions
             ? (setOptions.autoScroll !== undefined ? !!setOptions.autoScroll : true)
-            : true;
+            : (window._isSyntheticFocusClick ? false : true);
         const preservedScroll = data && data.scroll
             ? {
                 x: Number.isFinite(data.scroll.x) ? data.scroll.x : 0,
@@ -598,10 +611,10 @@ function patchSelector() {
             if (mySpreadsheet && mySpreadsheet.sheet) {
                 let sheet = mySpreadsheet.sheet;
                 if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                    try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : 0 }); } catch(e) {}
+                    try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0); } catch(e) {}
                 }
                 if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-                    try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : 0 }); } catch(e) {}
+                    try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : 0); } catch(e) {}
                 }
                 if (typeof sheet.render === 'function') {
                     sheet.render();
@@ -693,11 +706,11 @@ function syncViewportFromSheetData(options = {}) {
         
         // 1. Move Scrollbars first before calculating pixel offsets
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : 0 }); } catch (e) {}
+            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0 ); } catch (e) {}
         }
         if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
             const left = lockedScrollX !== null ? lockedScrollX : (data.scroll ? data.scroll.x : 0);
-            try { sheet.horizontalScrollbar.move({ left }); } catch (e) {}
+            try { sheet.horizontalScrollbar.move( left ); } catch (e) {}
         }
 
         // 2. Now recalculate blue selection box offsets against the new scroll position
@@ -2011,11 +2024,13 @@ function handleSpreadsheetKeydown(e) {
         if (e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
             closeFindReplace();
             return;
         }
         if (findDialog.contains(e.target)) {
             e.stopPropagation();
+            e.stopImmediatePropagation();
             return;  // Let find dialog handle it
         }
     }
@@ -2055,66 +2070,67 @@ function handleSpreadsheetKeydown(e) {
         if (startSelectionEditWithInitialText(e.key)) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
             return;
         }
     }
     
     if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'z') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (e.shiftKey) performRedo(); else performUndo();
             scheduleRestoreFocus();
         } else if (e.key.toLowerCase() === 'y') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             performRedo();
             scheduleRestoreFocus();
         } else if (e.key.toLowerCase() === 'm') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             mergeSelectionSafely();
         } else if (e.key.toLowerCase() === 'j') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             joinSelectionContentsSafely();
         } else if (e.key.toLowerCase() === 'b') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             toggleBoldForSelection();
         } else if (e.key.toLowerCase() === 'd') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             mergeDownSelection();
             scheduleRestoreFocus();
         } else if (e.key.toLowerCase() === 'l') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             insertRowAtSelection();
             scheduleRestoreFocus();
         } else if (e.key.toLowerCase() === 'k') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             deleteRowAtSelection();
             scheduleRestoreFocus();
         } else if (e.key === 'Home') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
                 jumpSelectionTo(0, 0);
             }
         } else if (e.key === 'End') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
                 let maxBounds = getMaxBounds(mySpreadsheet.getData()[0]);
                 jumpSelectionTo(maxBounds.maxR, maxBounds.maxC);
             }
         } else if (e.key.toLowerCase() === 'f') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             openFindReplace();
         }
     } else {
         // Non-Modifier Custom Shortcuts (PageUp / PageDown)
         if (e.key === 'PageUp') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.data && mySpreadsheet.sheet.data.selector) {
                 let ri = Math.max(0, mySpreadsheet.sheet.data.selector.ri - 15);
                 let ci = mySpreadsheet.sheet.data.selector.ci;
                 jumpSelectionTo(ri, ci, false, { preserveHorizontal: true });
             }
         } else if (e.key === 'PageDown') {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.data && mySpreadsheet.sheet.data.selector) {
                 let d = mySpreadsheet.getData()[0];
                 let maxBounds = getMaxBounds(d);
@@ -3115,10 +3131,10 @@ function restoreViewportScrollPosition(position) {
     const applyViewport = () => {
         // 1. MOVE SCROLLBARS FIRST
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : targetY }); } catch (e) {}
+            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : targetY); } catch (e) {}
         }
         if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : targetX }); } catch (e) {}
+            try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : targetX); } catch (e) {}
         }
 
         // 2. RECALCULATE SELECTION BOX OFFSETS
@@ -3215,7 +3231,22 @@ function replaceAll() {
     runFindSearch();
 }
 
-// --- WHEEL SCROLLING FIX ---
+// --- WHEEL SCROLLING FIXES ---
+
+function blockLegacyScroll(e) {
+    const container = document.getElementById('spreadsheet-container');
+    if (!container || !container.contains(e.target)) return;
+
+    if (e.target.closest('.x-spreadsheet-scrollbar') || e.target.closest('.x-spreadsheet-contextmenu')) {
+        return;
+    }
+
+    // Kill legacy scrolling event used by Firefox so it doesn't use it to scroll the window on top of normal scroll
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+}
+
 function handleSpreadsheetWheel(e) {
     if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
 
@@ -3234,6 +3265,8 @@ function handleSpreadsheetWheel(e) {
 
     // Stop the whole window from scrolling
     e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
 
     const sheet = mySpreadsheet.sheet;
     const data = sheet.data;
@@ -3269,10 +3302,10 @@ function handleSpreadsheetWheel(e) {
     // Resync UI to match the new scroll coordinates
     if (needsRender) {
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move({ top: data.scroll.y }); } catch (err) {}
+            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (err) {}
         }
         if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            try { sheet.horizontalScrollbar.move({ left: data.scroll.x }); } catch (err) {}
+            try { sheet.horizontalScrollbar.move(data.scroll.x); } catch (err) {}
         }
 
         if (sheet.selector) {
@@ -3510,8 +3543,11 @@ function bindDomEvents() {
     }
 
     // Intercept wheel events to prevent the whole window from scrolling when the cursor is over the spreadsheet
-    window.addEventListener('wheel', handleSpreadsheetWheel, { passive: false });
-
+    window.addEventListener('wheel', handleSpreadsheetWheel, { passive: false, capture: true });
+    window.addEventListener('DOMMouseScroll', blockLegacyScroll, { passive: false, capture: true });
+    window.addEventListener('MozMousePixelScroll', blockLegacyScroll, { passive: false, capture: true });
+    window.addEventListener('mousewheel', blockLegacyScroll, { passive: false, capture: true });
+    
     // Intercept paste events globally
     window.addEventListener('paste', handleSpreadsheetPaste, true);
     window.addEventListener('copy', handleSpreadsheetCopyCut, true);
@@ -3544,7 +3580,10 @@ function unbindDomEvents() {
 
     if (isKeyboardBound) {
         window.removeEventListener('keydown', handleSpreadsheetKeydown, true);
-        window.removeEventListener('wheel', handleSpreadsheetWheel);
+        window.removeEventListener('wheel', handleSpreadsheetWheel, { capture: true });
+        window.removeEventListener('DOMMouseScroll', blockLegacyScroll, { capture: true });
+        window.removeEventListener('MozMousePixelScroll', blockLegacyScroll, { capture: true });
+        window.removeEventListener('mousewheel', blockLegacyScroll, { capture: true });
         window.removeEventListener('paste', handleSpreadsheetPaste, true);
         window.removeEventListener('copy', handleSpreadsheetCopyCut, true);
         window.removeEventListener('cut', handleSpreadsheetCopyCut, true);
