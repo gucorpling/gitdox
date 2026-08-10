@@ -100,6 +100,202 @@ const buildStatusPalette = (labels) => {
   return palette;
 };
 
+const documentRowPropsAreEqual = (prevProps, nextProps) => {
+  // Only re-render if the document data, saving state, or dropdown state changes
+  return (
+    prevProps.doc === nextProps.doc &&
+    prevProps.isStatusMenuOpen === nextProps.isStatusMenuOpen &&
+    prevProps.isSavingStatus === nextProps.isSavingStatus &&
+    prevProps.isSavingAssigned === nextProps.isSavingAssigned
+  );
+};
+
+const DocumentRow = React.memo(({
+  doc,
+  isStatusMenuOpen,
+  isSavingStatus,
+  isSavingAssigned,
+  statusPalette,
+  baseStatusOptions,
+  baseUsernames,
+  canEditAssignee,
+  user,
+  frontendBasePath,
+  menuRef,
+  onToggleMenu,
+  onUpdateField,
+  onDelete,
+  openDoc
+}) => {
+  // Local state to track opening direction of the status menu
+  const [openUpwards, setOpenUpwards] = useState(false);
+  const validationSummary = getValidationSummary(doc.validation);
+
+  // Calculate space on click
+  const handleMenuClick = (e) => {
+    if (!isStatusMenuOpen) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const menuHeightEstimate = 250; // roughly enough for 7-8 status items
+      
+      // Flip upwards if space below is too small AND there is more space above
+      setOpenUpwards(spaceBelow < menuHeightEstimate && spaceAbove > spaceBelow);
+    }
+    onToggleMenu(doc.id);
+  };
+
+  const statusOptions = doc?.status && !baseStatusOptions.includes(doc.status)
+    ? [...baseStatusOptions, doc.status]
+    : baseStatusOptions;
+
+  const assigned = String(doc?.assigned || '').trim();
+  const assigneeOptions = assigned && !baseUsernames.includes(assigned)
+    ? [assigned, ...baseUsernames]
+    : baseUsernames;
+
+  const safeStatus = String(doc.status || '').trim();
+  const statusColors = statusPalette[safeStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
+  const statusButtonStyle = {
+    backgroundColor: statusColors?.backgroundColor || '#475569',
+    borderColor: statusColors?.borderColor || '#334155',
+    color: statusColors?.textColor || '#ffffff'
+  };
+
+  const getStatusMenuItemStyle = (status, isSelected) => {
+    const safeMenuStatus = String(status || '').trim();
+    const menuStatusColors = statusPalette[safeMenuStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
+    return {
+      backgroundColor: isSelected ? (menuStatusColors?.chipBackgroundColor || '#e2e8f0') : 'transparent',
+      color: isSelected ? (menuStatusColors?.chipTextColor || '#0f172a') : '#1e293b'
+    };
+  };
+
+  return (
+    <tr className="border-b last:border-0 hover:bg-slate-50">
+      <td className="p-4 font-mono text-sm text-indigo-600">{doc.id}</td>
+      <td className="p-4">{doc.corpus}</td>
+      <td className="p-4 font-medium">{doc.docname}</td>
+      <td className="p-4">
+        <div className="flex items-center gap-2">
+          <div className="relative" ref={isStatusMenuOpen ? menuRef : null}>
+            <button
+              type="button"
+              className="inline-flex min-w-36 items-center justify-between gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:brightness-95"
+              style={statusButtonStyle}
+              onClick={handleMenuClick}
+              aria-haspopup="menu"
+              aria-expanded={isStatusMenuOpen}
+            >
+              <span className="truncate">{formatStatusCategoryLabel(doc.status || '')}</span>
+              <ChevronDown size={14} />
+            </button>
+
+            {isStatusMenuOpen && (
+              <div
+                className={`absolute left-0 z-20 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-lg overflow-y-auto max-h-64 ${
+                  openUpwards ? 'bottom-full mb-2' : 'mt-2'
+                }`}
+                role="menu"
+              >
+                {statusOptions.map((status) => {
+                  const isSelected = status === doc.status;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
+                      onClick={() => onUpdateField(doc, 'status', status)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                      style={getStatusMenuItemStyle(status, isSelected)}
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: statusPalette[String(status)]?.backgroundColor || '#64748b' }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{formatStatusCategoryLabel(status)}</span>
+                      {isSelected ? <Check size={12} className="ml-auto" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <span className="inline-flex h-4 w-4 items-center justify-center text-slate-400" title={isSavingStatus ? 'Saving status update' : undefined}>
+            {isSavingStatus ? <Loader2 size={12} className="animate-spin" /> : null}
+          </span>
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="flex items-center gap-2">
+          <select
+            className="w-full min-w-32 border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+            value={doc.assigned || ''}
+            onChange={(e) => onUpdateField(doc, 'assigned', e.target.value)}
+            disabled={!canEditAssignee}
+            title={!canEditAssignee ? 'Only admins can reassign documents.' : undefined}
+          >
+            {assigneeOptions.map((username) => (
+              <option key={username} value={username}>{username}</option>
+            ))}
+          </select>
+          <span className="inline-flex h-4 w-4 items-center justify-center text-slate-400" title={isSavingAssigned ? 'Saving assignee update' : undefined}>
+            {isSavingAssigned ? <Loader2 size={12} className="animate-spin" /> : null}
+          </span>
+        </div>
+      </td>
+      <td className="p-4 text-sm text-slate-500">
+        {doc.mode === 'spreadsheet' ? (
+          <span className="inline-flex items-center" title="spreadsheet"><Sheet size={16} /></span>
+        ) : doc.mode === 'entities' ? (
+          <span className="inline-flex items-center" title="entities"><Users size={16} /></span>
+        ) : doc.mode === 'xml' ? (
+          <span className="inline-flex items-center" title="xml"><Code2 size={16} /></span>
+        ) : (
+          doc.mode
+        )}
+      </td>
+      <td className="p-4">
+        {validationSummary.status === 'validating' ? (
+          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs cursor-default" title={validationSummary.title}>
+            <Loader2 size={12} className="animate-spin" /> {validationSummary.label}
+          </span>
+        ) : validationSummary.status === 'valid' ? (
+          <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded text-xs cursor-default" title={validationSummary.title}>
+            <Check size={12} /> {validationSummary.label}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2 py-1 rounded text-xs cursor-help whitespace-pre-line" title={validationSummary.title}>
+            <AlertCircle size={12} /> {validationSummary.label}
+          </span>
+        )}
+      </td>
+      <td className="p-4 text-right">
+        <div className="inline-flex items-center gap-2 whitespace-nowrap">
+          <a
+            href={buildFrontendPath(`/docs/${encodeURIComponent(String(doc.id))}`, frontendBasePath)}
+            onClick={(e) => {
+              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                e.preventDefault();
+                openDoc(doc.id);
+              }
+            }}
+            className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 p-2"
+            title={`Open document ${doc.id}`}
+          >
+            <Edit size={18} />
+          </a>
+          <button disabled={user.adminlevel <= 1} onClick={() => onDelete(doc.id)} className="text-red-500 hover:text-red-700 p-2 disabled:opacity-30">
+            <Trash2 size={18} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}, documentRowPropsAreEqual);
+
 export default function DashboardView({ apiCall, user, openDoc, projectName, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [], frontendBasePath = ''}) {
   const [documents, setDocuments] = useState([]);
   const [usersList, setUsersList] = useState([]);
@@ -120,7 +316,6 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
       const data = await apiCall(`/projects/${projectName}/documents`);
       setDocuments(data);
     } catch (err) {
-      // Keep existing error handling
     } finally {
       setIsInitialLoad(false);
     }
@@ -330,15 +525,18 @@ const filteredAndSortedDocuments = useMemo(() => {
     setColumnFilters((prev) => ({ ...prev, [field]: value }));
   };
 
-  const getStatusOptionsForDoc = (doc) => {
-    const baseOptions = Array.isArray(statusCategories) && statusCategories.length > 0
+  // Memoize the base status options and user names so they only compute once
+  const baseStatusOptions = useMemo(() => {
+    return Array.isArray(statusCategories) && statusCategories.length > 0
       ? statusCategories
       : DEFAULT_STATUS_CATEGORIES;
-    if (doc?.status && !baseOptions.includes(doc.status)) {
-      return [...baseOptions, doc.status];
-    }
-    return baseOptions;
-  };
+  }, [statusCategories]);
+
+  const baseUsernames = useMemo(() => {
+    return usersList
+      .map((u) => String(u?.username || '').trim())
+      .filter((name) => name.length > 0);
+  }, [usersList]);
 
   const allStatusLabels = useMemo(() => {
     const labels = [
@@ -350,42 +548,6 @@ const filteredAndSortedDocuments = useMemo(() => {
   }, [statusCategories, documents]);
 
   const statusPalette = useMemo(() => buildStatusPalette(allStatusLabels), [allStatusLabels]);
-
-  const getStatusBadgeStyle = (status) => {
-    const safeStatus = String(status || '').trim();
-    const statusColors = statusPalette[safeStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
-    return {
-      backgroundColor: statusColors?.backgroundColor || '#475569',
-      borderColor: statusColors?.borderColor || '#334155',
-      color: statusColors?.textColor || '#ffffff'
-    };
-  };
-
-  const getStatusMenuItemStyle = (status, isSelected) => {
-    const safeStatus = String(status || '').trim();
-    const statusColors = statusPalette[safeStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
-    return {
-      backgroundColor: isSelected
-        ? (statusColors?.chipBackgroundColor || '#e2e8f0')
-        : 'transparent',
-      color: isSelected
-        ? (statusColors?.chipTextColor || '#0f172a')
-        : '#1e293b'
-    };
-  };
-
-  const getAssigneeOptionsForDoc = (doc) => {
-    const usernames = usersList
-      .map((u) => String(u?.username || '').trim())
-      .filter((name) => name.length > 0);
-
-    const assigned = String(doc?.assigned || '').trim();
-    if (assigned && !usernames.includes(assigned)) {
-      usernames.unshift(assigned);
-    }
-
-    return usernames;
-  };
 
   const parseMetadataForUpdate = (metadata) => {
     if (!metadata) return {};
@@ -466,7 +628,7 @@ const filteredAndSortedDocuments = useMemo(() => {
         </div>
       )}
 
-      <div className={`rounded-xl shadow-sm border border-slate-200 overflow-visible ${panelBackgroundColor ? '' : 'bg-white'}`} style={panelStyle}>
+      <div className={`rounded-xl shadow-sm border border-slate-200 overflow-x-auto pb-4 overflow-y-hidden ${panelBackgroundColor ? '' : 'bg-white'}`} style={panelStyle}>
         <table className="w-full text-left">
           <thead className={`text-slate-600 border-b ${tableHeaderStyle ? '' : 'bg-slate-50'}`} style={tableHeaderStyle}>
             <tr>
@@ -519,171 +681,49 @@ const filteredAndSortedDocuments = useMemo(() => {
             </tr>
           </thead>
           <tbody>
-            {/* Display loading message */}
-            {isInitialLoad && (
-              <tr>
-                <td colSpan="8" className="p-8 text-center text-slate-500">
-                  <div className="flex items-center justify-center gap-2">
-                    <Loader2 size={18} className="animate-spin text-indigo-600" />
-                    <span>Loading documents...</span>
-                  </div>
-                </td>
-              </tr>
-            )}
-
-            {/* No documents found*/}
-            {!isInitialLoad && filteredAndSortedDocuments.length === 0 && (
-              <tr>
-                <td colSpan="8" className="p-8 text-center text-slate-500">
-                  No documents found.
-                </td>
-              </tr>
-            )}
-            {filteredAndSortedDocuments.map(doc => {
-              const validationSummary = getValidationSummary(doc.validation);
-              const isSavingStatus = savingFieldKeys.includes(`${doc.id}:status`);
-              const isSavingAssigned = savingFieldKeys.includes(`${doc.id}:assigned`);
-              const statusOptions = getStatusOptionsForDoc(doc);
-              const statusButtonStyle = getStatusBadgeStyle(doc.status);
-              const isStatusMenuOpen = openStatusMenuDocId === doc.id;
-              return (
-                <tr key={doc.id} className="border-b last:border-0 hover:bg-slate-50">
-                  <td className="p-4 font-mono text-sm text-indigo-600">{doc.id}</td>
-                  <td className="p-4">{doc.corpus}</td>
-                  <td className="p-4 font-medium">{doc.docname}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <div className="relative" ref={isStatusMenuOpen ? statusMenuRef : null}>
-                        <button
-                          type="button"
-                          className="inline-flex min-w-36 items-center justify-between gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:brightness-95"
-                          style={statusButtonStyle}
-                          onClick={() => setOpenStatusMenuDocId((prev) => (prev === doc.id ? null : doc.id))}
-                          aria-haspopup="menu"
-                          aria-expanded={isStatusMenuOpen}
-                          aria-label={`Change status for document ${doc.id}`}
-                        >
-                          <span className="truncate">{formatStatusCategoryLabel(doc.status || '')}</span>
-                          <ChevronDown size={14} />
-                        </button>
-
-                        {isStatusMenuOpen && (
-                          <div className="absolute left-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1 shadow-lg" role="menu">
-                            {statusOptions.map((status) => {
-                              const isSelected = status === doc.status;
-                              return (
-                                <button
-                                  key={status}
-                                  type="button"
-                                  role="menuitemradio"
-                                  aria-checked={isSelected}
-                                  onClick={() => {
-                                    setOpenStatusMenuDocId(null);
-                                    handleInlineDocumentFieldUpdate(doc, 'status', status);
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
-                                  style={getStatusMenuItemStyle(status, isSelected)}
-                                >
-                                  <span
-                                    className="inline-block h-2.5 w-2.5 rounded-full"
-                                    style={{ backgroundColor: statusPalette[String(status)]?.backgroundColor || '#64748b' }}
-                                    aria-hidden="true"
-                                  />
-                                  <span className="truncate">{formatStatusCategoryLabel(status)}</span>
-                                  {isSelected ? <Check size={12} className="ml-auto" /> : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                      <span className="inline-flex h-4 w-4 items-center justify-center text-slate-400" title={isSavingStatus ? 'Saving status update' : undefined}>
-                        {isSavingStatus ? <Loader2 size={12} className="animate-spin" /> : null}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <select
-                        className="w-full min-w-32 border border-slate-200 rounded px-2 py-1 text-xs bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
-                        value={doc.assigned || ''}
-                        onChange={(e) => handleInlineDocumentFieldUpdate(doc, 'assigned', e.target.value)}
-                        disabled={!canEditAssignee}
-                        title={!canEditAssignee ? 'Only admins can reassign documents.' : undefined}
-                      >
-                        {getAssigneeOptionsForDoc(doc).map((username) => (
-                          <option key={username} value={username}>{username}</option>
-                        ))}
-                      </select>
-                      <span className="inline-flex h-4 w-4 items-center justify-center text-slate-400" title={isSavingAssigned ? 'Saving assignee update' : undefined}>
-                        {isSavingAssigned ? <Loader2 size={12} className="animate-spin" /> : null}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-sm text-slate-500">
-                    {doc.mode === 'spreadsheet' ? (
-                      <span className="inline-flex items-center" title="spreadsheet" aria-label="spreadsheet">
-                        <Sheet size={16} />
-                      </span>
-                    ) : doc.mode === 'entities' ? (
-                      <span className="inline-flex items-center" title="entities" aria-label="entities">
-                        <Users size={16} />
-                      </span>
-                    ) : doc.mode === 'xml' ? (
-                      <span className="inline-flex items-center" title="xml" aria-label="xml">
-                        <Code2 size={16} />
-                      </span>
-                    ) : (
-                      doc.mode
-                    )}
-                  </td>
-                  <td className="p-4">
-                    {validationSummary.status === 'validating' ? (
-                      <span
-                        className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs cursor-default"
-                        title={validationSummary.title}
-                      >
-                        <Loader2 size={12} className="animate-spin" /> {validationSummary.label}
-                      </span>
-                    ) : validationSummary.status === 'valid' ? (
-                      <span
-                        className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded text-xs cursor-default"
-                        title={validationSummary.title}
-                      >
-                        <Check size={12} /> {validationSummary.label}
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1 bg-red-100 text-red-800 px-2 py-1 rounded text-xs cursor-help whitespace-pre-line"
-                        title={validationSummary.title}
-                      >
-                        <AlertCircle size={12} /> {validationSummary.label}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="inline-flex items-center gap-2 whitespace-nowrap">
-                      <a
-                        href={buildFrontendPath(`/docs/${encodeURIComponent(String(doc.id))}`, frontendBasePath)}
-                        onClick={(e) => {
-                          if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                            e.preventDefault();
-                            openDoc(doc.id);
-                          }
-                        }}
-                        className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 p-2"
-                        aria-label={`Open document ${doc.id}`}
-                        title={`Open document ${doc.id}`}
-                      >
-                        <Edit size={18} />
-                      </a>
-                      <button disabled={user.adminlevel <= 1} onClick={() => handleDelete(doc.id)} className="text-red-500 hover:text-red-700 p-2 disabled:opacity-30"><Trash2 size={18} /></button>
+              {isInitialLoad && (
+                <tr>
+                  <td colSpan="8" className="p-8 text-center text-slate-500">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 size={18} className="animate-spin text-indigo-600" />
+                      <span>Loading documents...</span>
                     </div>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
+              )}
+
+              {!isInitialLoad && filteredAndSortedDocuments.length === 0 && (
+                <tr>
+                  <td colSpan="8" className="p-8 text-center text-slate-500">
+                    No documents found.
+                  </td>
+                </tr>
+              )}
+
+              {filteredAndSortedDocuments.map((doc, index) => (
+                <DocumentRow
+                  key={doc.id}
+                  doc={doc}
+                  isStatusMenuOpen={openStatusMenuDocId === doc.id}
+                  isSavingStatus={savingFieldKeys.includes(`${doc.id}:status`)}
+                  isSavingAssigned={savingFieldKeys.includes(`${doc.id}:assigned`)}
+                  statusPalette={statusPalette}
+                  baseStatusOptions={baseStatusOptions}
+                  baseUsernames={baseUsernames}
+                  canEditAssignee={canEditAssignee}
+                  user={user}
+                  frontendBasePath={frontendBasePath}
+                  menuRef={statusMenuRef}
+                  onToggleMenu={(id) => setOpenStatusMenuDocId((prev) => (prev === id ? null : id))}
+                  onUpdateField={(docToUpdate, field, value) => {
+                    setOpenStatusMenuDocId(null);
+                    handleInlineDocumentFieldUpdate(docToUpdate, field, value);
+                  }}
+                  onDelete={handleDelete}
+                  openDoc={openDoc}
+                />
+              ))}
+            </tbody>
         </table>
       </div>
     </div>
