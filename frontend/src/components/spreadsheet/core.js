@@ -384,6 +384,31 @@ const restoreFocus = (selectionOverride = null, options = {}) => {
 function patchSelector() {
     if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector) return;
 
+    const sheet = mySpreadsheet.sheet;
+    
+    // Prevent native browser scroll-jump when library internally focuses the hidden input or editor.
+    // By dynamically targeting the specific elements from the instance, we guarantee they exist.
+    if (sheet.selector && sheet.selector.hideInputDiv && sheet.selector.hideInputDiv.el) {
+        const hiddenInput = sheet.selector.hideInputDiv.el.querySelector('input');
+        if (hiddenInput && !hiddenInput._focusPatched) {
+            const origFocus = hiddenInput.focus;
+            hiddenInput.focus = function(opts) {
+                origFocus.call(this, { preventScroll: true, ...(opts || {}) });
+            };
+            hiddenInput._focusPatched = true;
+        }
+    }
+    if (sheet.editor && sheet.editor.textEl && sheet.editor.textEl.el) {
+        const textarea = sheet.editor.textEl.el;
+        if (textarea && !textarea._focusPatched) {
+            const origFocus = textarea.focus;
+            textarea.focus = function(opts) {
+                origFocus.call(this, { preventScroll: true, ...(opts || {}) });
+            };
+            textarea._focusPatched = true;
+        }
+    }
+
     const sanitizeOffsetPayload = (payload) => {
         if (!payload || typeof payload !== 'object') return payload;
         const nextPayload = { ...payload };
@@ -414,9 +439,7 @@ function patchSelector() {
     };
 
     const patchGeometryOffsetGuards = () => {
-        const sheet = mySpreadsheet && mySpreadsheet.sheet;
         if (!sheet) return;
-
         const selector = sheet.selector;
         if (selector && !selector._offsetGuardsPatched) {
             ['br', 't', 'l', 'tl'].forEach((regionKey) => {
@@ -442,36 +465,9 @@ function patchSelector() {
     };
 
     patchGeometryOffsetGuards();
-    if (mySpreadsheet.sheet.selector._isPatched) return;
+    if (sheet.selector._isPatched) return;
 
-    const snapTallSelectionToTop = () => {
-        const sheet = mySpreadsheet && mySpreadsheet.sheet;
-        const data = sheet && sheet.data;
-        if (!sheet || !data || typeof data.getSelectedRect !== 'function' || typeof sheet.getTableOffset !== 'function') {
-            return;
-        }
-
-        const selectedRect = data.getSelectedRect();
-        const tableOffset = sheet.getTableOffset();
-        const selectionHeight = Number(selectedRect && selectedRect.height) || 0;
-        const viewportHeight = Number(tableOffset && tableOffset.height) || 0;
-        if (selectionHeight <= 0 || viewportHeight <= 0 || selectionHeight <= viewportHeight) {
-            return;
-        }
-
-        // Cell is taller than the viewport: scroll so its top row is visible.
-        // We pass (t - 1 - freezeH) to verticalScrollbar.move() so the library's
-        // internal scrolly() snaps scroll.y to exactly sumHeight(freeze_start, sri),
-        // placing the cell's top row at the very top of the viewport.
-        // Passing t directly would snap one row further (to the bottom of row sri).
-        const freezeH = typeof data.freezeTotalHeight === 'function' ? data.freezeTotalHeight() : 0;
-        const targetTop = Math.max(0, (Number(selectedRect.t) || 0) - 1 - freezeH);
-        if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move(targetTop); } catch (e) {}
-        }
-    };
-    
-    let sel = mySpreadsheet.sheet.selector;
+    let sel = sheet.selector;
     const origSet = sel.set.bind(sel);
     
     sel.set = function(ri, ci, setArg = true) {
@@ -540,9 +536,6 @@ function patchSelector() {
         lastRi = ri;
         lastCi = ci;
 
-        // FIX: Deep gag order. The library's Selector.set calls sheet UI methods, 
-        // not just data methods. We must freeze the physical scrollbars too.
-        let sheet = mySpreadsheet.sheet;
         let origDataX = data.scrollx;
         let origDataY = data.scrolly;
         let origSheetX = sheet ? sheet.scrollx : null;
@@ -564,21 +557,56 @@ function patchSelector() {
         let ret = origSet(ri, ci, indexesUpdated);
 
         if (autoScroll !== false) {
-            // The library's scrollbarMove() is called by selectorMove() AFTER sel.set()
-            // returns, so a synchronous snap here would be immediately overwritten.
-            // A microtask fires after the full synchronous call stack (including
-            // scrollbarMove) completes but before the browser paints, so it wins.
-            const snapRi = mySpreadsheet?.sheet?.data?.selector?.ri ?? ri;
-            const snapCi = mySpreadsheet?.sheet?.data?.selector?.ci ?? ci;
-            queueMicrotask(() => {
-                const curSel = mySpreadsheet?.sheet?.data?.selector;
-                if (curSel && curSel.ri === snapRi && curSel.ci === snapCi) {
-                    snapTallSelectionToTop();
+            const expectedRi = ri;
+            const expectedCi = ci;
+            
+            const doSnap = () => {
+                const data = mySpreadsheet?.sheet?.data;
+                const curSel = data?.selector;
+                if (!data || !curSel || curSel.ri !== expectedRi || curSel.ci !== expectedCi) return;
+                
+                if (typeof data.getSelectedRect !== 'function' || typeof sheet.getTableOffset !== 'function') return;
+
+                const selectedRect = data.getSelectedRect();
+                const tableOffset = sheet.getTableOffset();
+                const selectionHeight = Number(selectedRect && selectedRect.height) || 0;
+                const viewportHeight = Number(tableOffset && tableOffset.height) || 0;
+                
+                if (selectionHeight <= 0 || viewportHeight <= 0 || selectionHeight <= viewportHeight) return;
+
+                const freezeH = typeof data.freezeTotalHeight === 'function' ? data.freezeTotalHeight() : 0;
+                const targetTop = Math.max(0, (Number(selectedRect.t) || 0) - 1 - freezeH);
+                const currentY = data.scroll && Number.isFinite(data.scroll.y) ? data.scroll.y : 0;
+
+                // Only force UI rendering and scrolling if we are not already at the desired absolute coordinate
+                if (Math.abs(currentY - targetTop) > 1 && typeof data.scrolly === 'function') {
+                    data.scrolly(targetTop, () => {
+                        if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (e) {}
+                        }
+                        if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
+                            sheet.selector.resetAreaOffset();
+                            if (typeof sheet.selector.resetBRTAreaOffset === 'function') sheet.selector.resetBRTAreaOffset();
+                            if (typeof sheet.selector.resetBRLAreaOffset === 'function') sheet.selector.resetBRLAreaOffset();
+                        }
+                        if (typeof sheet.render === 'function') {
+                            sheet.render();
+                        } else if (sheet.table && typeof sheet.table.render === 'function') {
+                            sheet.table.render();
+                        }
+                    });
                 }
-            });
+            };
+
+            // Wait for the library's internal keydown loop (which fires synchronously *after* sel.set returns)
+            // to finish messing with the viewport, then enforce our boundary.
+            setTimeout(() => {
+                doSnap();
+                // Secondary safety net catch in case the library defers via requestAnimationFrame natively
+                requestAnimationFrame(doSnap);
+            }, 0);
         }
 
-        // Restore mutators
         if (autoScroll === false) {
             data.scrollx = origDataX;
             data.scrolly = origDataY;
@@ -589,7 +617,6 @@ function patchSelector() {
                 if (origHScroll) sheet.horizontalScrollbar.move = origHScroll;
             }
 
-            // Hard-restore scroll coordinates as origSet may still mutate raw scroll state.
             if (preservedScroll) {
                 if (!data.scroll || typeof data.scroll !== 'object') data.scroll = {};
                 data.scroll.x = preservedScroll.x;
@@ -820,34 +847,20 @@ function jumpSelectionTo(ri, ci, skipFocusRestore = false, options = {}) {
         // 1. Identify true span of target cell (handling merges)
         const targetBounds = getExpandedCellBounds(mySpreadsheet.sheet.data, ri, ci);
         
-        // 2. Pre-stage coordinates and the selection range so syncViewportFromSheetData 
-        //    reads the correct getSelectedRect() bounding box before calculating the scroll distance.
-        if (mySpreadsheet.sheet.data.selector) {
-            mySpreadsheet.sheet.data.selector.ri = targetBounds.sri;
-            mySpreadsheet.sheet.data.selector.ci = targetBounds.sci;
-            
-            // Force the range to update before calculating viewport offsets
-            if (mySpreadsheet.sheet.data.selector.range && typeof mySpreadsheet.sheet.data.selector.range.set === 'function') {
-                mySpreadsheet.sheet.data.selector.range.set(
-                    targetBounds.sri, 
-                    targetBounds.sci, 
-                    targetBounds.eri, 
-                    targetBounds.eci
-                );
-            }
-        }
-
-        // Move the viewport to destination
-        syncViewportFromSheetData({ preserveHorizontal, requestId, lockedScrollX });
-        
-        // Force generation of the blue selection box against the new scroll state
+        // 2. Let the native patched selector update all internal UI and data states safely 
+        //    before we attempt to calculate scroll distances.
         restoreSelectorRange(targetBounds);
+
+        // 3. Move the viewport to destination
+        syncViewportFromSheetData({ preserveHorizontal, requestId, lockedScrollX });
     } finally {
         isProgrammaticJump = false;
     }
     
     if (!skipFocusRestore) {
-        scheduleRestoreFocus();
+        // Pass skipSyntheticClick: true to prevent stale coordinate ghost clicks 
+        // from accidentally triggering the editor on the previous cell.
+        scheduleRestoreFocus(null, { skipSyntheticClick: true });
     }
 }
 
@@ -1179,23 +1192,13 @@ function restoreSelectorRange(selectionRange) {
     
     const sheet = mySpreadsheet.sheet;
     const sel = sheet.selector;
-    const dataSel = sheet.data && sheet.data.selector;
     
-    // 1. HARD-SYNC THE DATA LAYER FIRST
-    // Prevents proxy detachment bugs from silently corrupting history
-    if (dataSel) {
-        dataSel.ri = selectionRange.sri;
-        dataSel.ci = selectionRange.sci;
-        if (dataSel.range && typeof dataSel.range.set === 'function') {
-            dataSel.range.set(selectionRange.sri, selectionRange.sci, selectionRange.eri, selectionRange.eci);
-        }
-    }
-
     // Keep the patched selector's merge-navigation state aligned with the true anchor.
     lastRi = selectionRange.sri;
     lastCi = selectionRange.sci;
 
-    // 2. UPDATE THE UI LAYER without triggering viewport movement.
+    // UPDATE THE UI LAYER natively without triggering viewport movement.
+    // By using the native sel.set, we ensure all internal proxy states (like merges) are updated safely.
     sel.set(selectionRange.sri, selectionRange.sci, { autoScroll: false, indexesUpdated: true });
     
     if (selectionRange.eri !== selectionRange.sri || selectionRange.eci !== selectionRange.sci) {
@@ -1203,12 +1206,12 @@ function restoreSelectorRange(selectionRange) {
         sel.setEnd(selectionRange.eri, selectionRange.eci, false);
     }
 
-    // 3. RECALCULATE PIXEL BOUNDARIES FOR THE BLUE BOX
+    // RECALCULATE PIXEL BOUNDARIES FOR THE BLUE BOX
     if (typeof sel.resetAreaOffset === 'function') sel.resetAreaOffset();
     if (typeof sel.resetBRTAreaOffset === 'function') sel.resetBRTAreaOffset();
     if (typeof sel.resetBRLAreaOffset === 'function') sel.resetBRLAreaOffset();
 
-    // 4. REPAINT THE CANVAS
+    // REPAINT THE CANVAS
     if (typeof sheet.render === 'function') {
         sheet.render();
     } else if (sheet.table && typeof sheet.table.render === 'function') {
@@ -2119,7 +2122,8 @@ function handleSpreadsheetKeydown(e) {
         } else if (e.key === 'End') {
             e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
-                let maxBounds = getMaxBounds(mySpreadsheet.getData()[0]);
+                // Revert to getData()[0] so getMaxBounds can iterate the rows correctly
+                let maxBounds = getMaxBounds(mySpreadsheet.getData()[0]); 
                 jumpSelectionTo(maxBounds.maxR, maxBounds.maxC);
             }
         } else if (e.key.toLowerCase() === 'f') {
@@ -2131,19 +2135,48 @@ function handleSpreadsheetKeydown(e) {
         if (e.key === 'PageUp') {
             e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.data && mySpreadsheet.sheet.data.selector) {
-                let ri = Math.max(0, mySpreadsheet.sheet.data.selector.ri - 15);
-                let ci = mySpreadsheet.sheet.data.selector.ci;
+                let sel = mySpreadsheet.sheet.data.selector;
+                // Because sel.ri is always the top of a merge, -15 guarantees we exit it moving up.
+                let ri = Math.max(0, sel.ri - 15);
+                let ci = sel.ci;
                 jumpSelectionTo(ri, ci, false, { preserveHorizontal: true });
             }
         } else if (e.key === 'PageDown') {
             e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
             if (mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.data && mySpreadsheet.sheet.data.selector) {
-                let d = mySpreadsheet.getData()[0];
-                let maxBounds = getMaxBounds(d);
-                let len = d.rows.len || Math.max(100, maxBounds.maxR + 20);
-                let ri = Math.min(len - 1, mySpreadsheet.sheet.data.selector.ri + 15);
-                let ci = mySpreadsheet.sheet.data.selector.ci;
-                jumpSelectionTo(ri, ci, false, { preserveHorizontal: true });
+                let sheetData = mySpreadsheet.sheet.data;
+                let sel = sheetData.selector;
+                
+                let ri = sel.ri;
+                let ci = sel.ci;
+                let targetRi = ri + 15;
+                
+                // The live DataProxy stores rows inside the `_` property, while 
+                // the serialized JSON stores them at the root of `rows`. We check both.
+                let rowsMap = sheetData.rows._ || sheetData.rows;
+                let row = rowsMap && rowsMap[ri];
+                let cell = row && row.cells && row.cells[ci];
+                
+                // cell.merge in the live model is an array: [rowspan - 1, colspan - 1]
+                if (cell && Array.isArray(cell.merge) && cell.merge[0] > 0) {
+                    let rowspan = cell.merge[0] + 1;
+                    let bottomRi = ri + rowspan - 1;
+                    
+                    // If a standard 15-row jump keeps us trapped inside this merged cell,
+                    // jump exactly to the first row beneath it.
+                    if (targetRi <= bottomRi) {
+                        targetRi = bottomRi + 1;
+                    }
+                }
+                
+                // Prevent scrolling off the absolute bottom of the grid
+                let maxLen = 100;
+                if (sheetData.rows && typeof sheetData.rows.len === 'number') {
+                    maxLen = sheetData.rows.len;
+                }
+                
+                targetRi = Math.min(maxLen - 1, targetRi);
+                jumpSelectionTo(targetRi, ci, false, { preserveHorizontal: true });
             }
         }
     }
