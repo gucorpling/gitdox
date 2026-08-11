@@ -131,6 +131,51 @@ export const DEFAULT_PROJECT = 'main_project';
 export const DEFAULT_DISPLAY_NAME = 'GitDOX';
 export const EMPTY_VALIDATION = { id: '', document: '', corpus: '', domain: 'spreadsheet', key: '', operator: 'exists', value: '' };
 export const DEFAULT_STATUS_CATEGORIES = ['init', 'review', 'published'];
+const EDITOR_DEFINITIONS = {
+  xml: { key: 'xml', mode: 'xml', label: 'xml' },
+  spreadsheet: { key: 'spreadsheet', mode: 'spreadsheet', label: 'spreadsheet' },
+  entities: { key: 'entities', mode: 'entities', label: 'entities' }
+};
+const DEFAULT_EDITOR_OPTIONS = Object.freeze([
+  { key: 'xml', mode: 'xml', label: 'xml' }
+]);
+
+export const normalizeConfiguredEditors = (value) => {
+  const sourceEntries = value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.entries(value)
+    : [];
+  const normalizedByMode = new Map();
+
+  sourceEntries.forEach(([rawKey, rawLabel]) => {
+    const normalizedKey = String(rawKey || '').trim().toLowerCase();
+    const definition = EDITOR_DEFINITIONS[normalizedKey];
+    if (!definition) return;
+
+    const label = typeof rawLabel === 'string' && rawLabel.trim().length > 0
+      ? rawLabel.trim()
+      : definition.label;
+
+    normalizedByMode.delete(definition.mode);
+    normalizedByMode.set(definition.mode, {
+      key: definition.key,
+      mode: definition.mode,
+      label
+    });
+  });
+
+  if (normalizedByMode.size === 0) {
+    return DEFAULT_EDITOR_OPTIONS.map((option) => ({ ...option }));
+  }
+
+  return Array.from(normalizedByMode.values());
+};
+
+export const getDefaultEditorMode = (editorOptions) => {
+  if (Array.isArray(editorOptions) && editorOptions.length > 0) {
+    return editorOptions[0].mode;
+  }
+  return DEFAULT_EDITOR_OPTIONS[0].mode;
+};
 
 export const normalizeStatusCategories = (value) => {
   const source = Array.isArray(value)

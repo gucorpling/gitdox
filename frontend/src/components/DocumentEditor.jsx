@@ -23,7 +23,7 @@ import {
   isSpreadsheetBackedMode
 } from '../App';
 
-export default function DocumentEditor({ apiCall, docId, goBack, goBackToCorpus, user, projectName, mutationTools, spannotatorConfig = {}, editorFonts = {}, spreadsheetColumnOrderConfig = [], xmlTagCompletion = null, statusCategories = [], isAppConfigLoaded = false }) {
+export default function DocumentEditor({ apiCall, docId, goBack, goBackToCorpus, user, projectName, mutationTools, spannotatorConfig = {}, editorOptions = [], editorFonts = {}, spreadsheetColumnOrderConfig = [], xmlTagCompletion = null, statusCategories = [], isAppConfigLoaded = false }) {
   const [doc, setDoc] = useState(null);
   const [contentXml, setContentXml] = useState('');
   const [contentSpreadsheet, setContentSpreadsheet] = useState('');
@@ -1017,6 +1017,13 @@ const runSpannotatorToolMutation = async (toolKey) => {
     && hasGithubCommittedVersion
     && !isLoadingGithubCommitMessage
     && !isRestoringFromGithub;
+  const modeSelectOptions = useMemo(() => {
+    if (!doc?.mode) return editorOptions;
+    if (editorOptions.some((option) => option.mode === doc.mode)) {
+      return editorOptions;
+    }
+    return [...editorOptions, { key: `legacy-${doc.mode}`, mode: doc.mode, label: doc.mode }];
+  }, [doc?.mode, editorOptions]);
   const githubModeKind = doc?.mode === 'xml' ? 'xml' : 'spreadsheet';
   const githubRepoValue = typeof doc?.repo === 'string' ? doc.repo.trim() : '';
   const githubDocnameValue = typeof doc?.docname === 'string' ? doc.docname.trim() : '';
@@ -1315,9 +1322,9 @@ const runSpannotatorToolMutation = async (toolKey) => {
         >
           <div className="absolute top-2 right-4 z-10 bg-white rounded p-1 shadow-sm" style={{top: "-1px"}}>
              <select className="text-xs bg-slate-100 border-none rounded p-1" value={doc.mode} onChange={e => autoSaveDocField('mode', e.target.value)}>
-              <option value="spreadsheet">Spreadsheet View</option>
-              <option value="entities">Entities View</option>
-              <option value="xml">XML View</option>
+              {modeSelectOptions.map((option) => (
+                <option key={option.key} value={option.mode}>{option.label}</option>
+              ))}
             </select>
           </div>
           

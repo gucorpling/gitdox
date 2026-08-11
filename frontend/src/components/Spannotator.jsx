@@ -2414,7 +2414,7 @@ const runDynamicTool = useCallback(async (toolKey) => {
 
         {/* Dynamic Configured Tools */}
         {Object.entries(mutationTools || {}).map(([toolKey, toolConfig]) => {
-          if (toolConfig.editor !== 'spannotator') return null;
+          if (toolConfig.editor !== 'entities') return null;
 
           const isRunning = activeTools[toolKey];
           // Use config color if provided, fallback to the default indigo class

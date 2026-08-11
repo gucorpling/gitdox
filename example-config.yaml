@@ -5,6 +5,8 @@ instance:
   # You can set up a link to your annotation guidelines like this:
   help_message: <span style="color:black">For help getting started see the</span> <a href="https://gucorpling.org/gitdox/">website</a>
   excluded_metadata: []  # Document and corpus metadata keys to always exclude on corpus import
+  editors: {xml: "XML", spreadsheet: "spreadsheet", entities: "entities"}  # Which editors to enable (xml, spreadsheet and/or entities)
+
 
 # Tools live in backend/nlp_modules/
 tools:
@@ -79,3 +81,4 @@ xml:
 spreadsheet:
   column_order: [tok, pos, lemma, s_type, entity, infstat, salience, identity]
   font: "Times New Roman"
+  copy_paste_level: 0

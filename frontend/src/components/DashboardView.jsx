@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown } from 'lucide-react';
-import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath } from '../appShared';
+import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath, getDefaultEditorMode } from '../appShared';
 import { EMPTY_DASHBOARD_FILTERS, normalizeDashboardViewState, areColumnFiltersEqual, getValidationSummary, isNavDark } from '../App';
 
 const getDocumentFieldValue = (doc, field) => {
@@ -106,7 +106,8 @@ const documentRowPropsAreEqual = (prevProps, nextProps) => {
     prevProps.doc === nextProps.doc &&
     prevProps.isStatusMenuOpen === nextProps.isStatusMenuOpen &&
     prevProps.isSavingStatus === nextProps.isSavingStatus &&
-    prevProps.isSavingAssigned === nextProps.isSavingAssigned
+    prevProps.isSavingAssigned === nextProps.isSavingAssigned &&
+    prevProps.editorLabelByMode === nextProps.editorLabelByMode
   );
 };
 
@@ -118,6 +119,7 @@ const DocumentRow = React.memo(({
   statusPalette,
   baseStatusOptions,
   baseUsernames,
+  editorLabelByMode,
   canEditAssignee,
   user,
   frontendBasePath,
@@ -156,6 +158,7 @@ const DocumentRow = React.memo(({
 
   const safeStatus = String(doc.status || '').trim();
   const statusColors = statusPalette[safeStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
+  const modeLabel = editorLabelByMode[doc.mode] || doc.mode;
   const statusButtonStyle = {
     backgroundColor: statusColors?.backgroundColor || '#475569',
     borderColor: statusColors?.borderColor || '#334155',
@@ -248,13 +251,13 @@ const DocumentRow = React.memo(({
       </td>
       <td className="p-4 text-sm text-slate-500">
         {doc.mode === 'spreadsheet' ? (
-          <span className="inline-flex items-center" title="spreadsheet"><Sheet size={16} /></span>
+          <span className="inline-flex items-center" title={modeLabel}><Sheet size={16} /></span>
         ) : doc.mode === 'entities' ? (
-          <span className="inline-flex items-center" title="entities"><Users size={16} /></span>
+          <span className="inline-flex items-center" title={modeLabel}><Users size={16} /></span>
         ) : doc.mode === 'xml' ? (
-          <span className="inline-flex items-center" title="xml"><Code2 size={16} /></span>
+          <span className="inline-flex items-center" title={modeLabel}><Code2 size={16} /></span>
         ) : (
-          doc.mode
+          modeLabel
         )}
       </td>
       <td className="p-4">
@@ -296,7 +299,8 @@ const DocumentRow = React.memo(({
   );
 }, documentRowPropsAreEqual);
 
-export default function DashboardView({ apiCall, user, openDoc, projectName, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [], frontendBasePath = ''}) {
+export default function DashboardView({ apiCall, user, openDoc, projectName, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [], editorOptions = [], frontendBasePath = ''}) {
+  const defaultEditorMode = getDefaultEditorMode(editorOptions);
   const [documents, setDocuments] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [savingFieldKeys, setSavingFieldKeys] = useState([]);
@@ -309,7 +313,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
   const canEditAssignee = (user?.adminlevel ?? 0) > 0;
   
   // New document form state
-  const [newDoc, setNewDoc] = useState({ corpus: '', docname: '', mode: 'spreadsheet', status: DEFAULT_STATUS_CATEGORIES[0], assigned: user.username });
+  const [newDoc, setNewDoc] = useState({ corpus: '', docname: '', mode: defaultEditorMode, status: DEFAULT_STATUS_CATEGORIES[0], assigned: user.username });
 
   const fetchDocs = async () => {
     try {
@@ -332,6 +336,13 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
       return { ...prev, status: statusCategories[0] };
     });
   }, [statusCategories]);
+
+  useEffect(() => {
+    setNewDoc((prev) => {
+      if (prev.mode === defaultEditorMode) return prev;
+      return { ...prev, mode: defaultEditorMode };
+    });
+  }, [defaultEditorMode]);
 
   useEffect(() => {
     const closeOnOutsideClick = (event) => {
@@ -436,7 +447,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
       });
       setShowAdd(false);
       fetchDocs();
-      setNewDoc({ corpus: '', docname: '', mode: 'spreadsheet', status: 'init', assigned: user.username });
+      setNewDoc({ corpus: '', docname: '', mode: defaultEditorMode, status: statusCategories[0] || DEFAULT_STATUS_CATEGORIES[0], assigned: user.username });
     } catch (err) {}
   };
 
@@ -548,6 +559,16 @@ const filteredAndSortedDocuments = useMemo(() => {
   }, [statusCategories, documents]);
 
   const statusPalette = useMemo(() => buildStatusPalette(allStatusLabels), [allStatusLabels]);
+  const editorLabelByMode = useMemo(() => {
+    return editorOptions.reduce((acc, option) => {
+      acc[option.mode] = option.label;
+      return acc;
+    }, {});
+  }, [editorOptions]);
+  const modeFilterPlaceholder = useMemo(() => {
+    const labels = editorOptions.map((option) => option.label).filter(Boolean);
+    return labels.length > 0 ? labels.join('/') : 'mode';
+  }, [editorOptions]);
 
   const parseMetadataForUpdate = (metadata) => {
     if (!metadata) return {};
@@ -672,7 +693,7 @@ const filteredAndSortedDocuments = useMemo(() => {
                 <input className="w-full border border-slate-300 rounded px-2 py-1 text-sm" placeholder="Filter assignee" value={columnFilters.assigned} onChange={(e) => handleFilterChange('assigned', e.target.value)} />
               </th>
               <th className="p-2">
-                <input className="w-full border border-slate-300 rounded px-2 py-1 text-sm" placeholder="xml/spread/entities" value={columnFilters.mode} onChange={(e) => handleFilterChange('mode', e.target.value)} />
+                <input className="w-full border border-slate-300 rounded px-2 py-1 text-sm" placeholder={modeFilterPlaceholder} value={columnFilters.mode} onChange={(e) => handleFilterChange('mode', e.target.value)} />
               </th>
               <th className="p-2">
                 <input className="w-full border border-slate-300 rounded px-2 py-1 text-sm" placeholder="Filter validation" value={columnFilters.validation} onChange={(e) => handleFilterChange('validation', e.target.value)} />
@@ -710,6 +731,7 @@ const filteredAndSortedDocuments = useMemo(() => {
                   statusPalette={statusPalette}
                   baseStatusOptions={baseStatusOptions}
                   baseUsernames={baseUsernames}
+                  editorLabelByMode={editorLabelByMode}
                   canEditAssignee={canEditAssignee}
                   user={user}
                   frontendBasePath={frontendBasePath}

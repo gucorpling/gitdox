@@ -133,6 +133,24 @@ def get_project_config(project_name: Optional[str] = None) -> dict:
     except Exception:
         return {}
 
+
+VALID_DOCUMENT_MODES = {"xml", "spreadsheet", "entities"}
+
+
+def normalize_document_mode(mode: Optional[str]) -> str:
+    normalized = (mode or "").strip().lower()
+    return normalized if normalized in VALID_DOCUMENT_MODES else ""
+
+
+def get_default_document_mode(project_config: Optional[dict]) -> str:
+    editors = project_config.get("instance", {}).get("editors") if isinstance(project_config, dict) else None
+    if isinstance(editors, dict):
+        for raw_key in editors.keys():
+            normalized = normalize_document_mode(raw_key)
+            if normalized:
+                return normalized
+    return "xml"
+
 # --- Pydantic Models for Data Validation ---
 ALLOWED_VALIDATION_DOMAINS = {"xml", "spreadsheet", "metadata"}
 COMMON_IMPORT_EXTENSIONS = (".xml", ".sgml", ".tt")
@@ -216,7 +234,7 @@ class DocumentCreate(BaseModel):
     docname: str
     repo: str = ""
     validation: dict = {}
-    mode: str = "spreadsheet"
+    mode: Optional[str] = None
     status: str = "init"
     assigned: str = ""
     content_xml: str = ""
@@ -1364,6 +1382,8 @@ def add_document(
     doc_key = f"doc:{doc_id}"
 
     doc_dict = doc.model_dump()
+    project_config = get_project_config(doc.project)
+    doc_dict["mode"] = normalize_document_mode(doc_dict.get("mode")) or get_default_document_mode(project_config)
     doc_dict["id"] = doc_id
     doc_dict["assigned"] = doc_dict.get("assigned") or current_user.get("username", "admin")
     doc_dict["metadata"] = _dump_json_field(doc_dict.get("metadata", {}))
