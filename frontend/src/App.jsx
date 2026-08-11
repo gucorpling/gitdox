@@ -1034,25 +1034,32 @@ const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
       </div>
     </div>
           <div className="flex items-center space-x-4">
-            <div className={`inline-flex items-center overflow-hidden rounded-full text-sm font-medium border ${
-              isNavDark ? 'bg-white/10 text-slate-100 border-white/20' : 'bg-slate-100 text-slate-700 border-transparent'
-            }`}>
-              <span className="px-3 py-1">
-                {user?.username} (Lvl {user?.adminlevel})
+  
+            <div className={`text-sm hidden sm:block ${isNavDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              Signed in as{' '}
+              <span className={`font-semibold ${isNavDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                {user?.username}
               </span>
-              <button
-                onClick={handleLogout}
-                className={`border-l px-2 py-1 transition-colors ${
-                  isNavDark 
-                    ? 'border-white/20 text-slate-300 hover:bg-red-500/80 hover:text-white' 
-                    : 'border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-red-500'
-                }`}
-                aria-label="Logout"
-                title="Logout"
-              >
-                <LogOut size={16} />
-              </button>
+              <span className="ml-1 text-xs opacity-80">
+                (Lvl {user?.adminlevel})
+              </span>
             </div>
+
+            {/* Distinct Logout Button */}
+            <button
+              onClick={handleLogout}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                isNavDark 
+                  ? 'bg-white/10 text-slate-200 hover:bg-red-500 hover:text-white' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600'
+              }`}
+              aria-label="Logout"
+              title="Logout"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+
             {displayImage ? (
               <img
                 src={displayImage.src}
