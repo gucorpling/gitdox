@@ -2029,9 +2029,18 @@ function handleSpreadsheetKeydown(e) {
             return;
         }
         if (findDialog.contains(e.target)) {
+            // Check for Enter key here in the capture phase before stopping propagation
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    findPrev();
+                } else {
+                    findNext();
+                }
+            }
             e.stopPropagation();
             e.stopImmediatePropagation();
-            return;  // Let find dialog handle it
+            return;
         }
     }
 
@@ -2054,10 +2063,7 @@ function handleSpreadsheetKeydown(e) {
     const isSelectionFocused = !!(mySpreadsheet && mySpreadsheet.sheet && mySpreadsheet.sheet.focusing);
     const isPrintableSingleChar = typeof e.key === 'string' && e.key.length === 1 && !/\s/.test(e.key);
 
-    // Iintercept all single printable characters if they hit the hidden selector input.
-    // Note that native x-data-spreadsheet only starts edit mode for [A-Z0-9=] from selector mode.
-    // This allows users to type ",.;:" directly, but we do it for all characters to prevent race
-    // conditions with the library's own key handling which can lead to duplicate keystrokes appearing in the editor.
+    // Intercept all single printable characters if they hit the hidden selector input.
     if (
         isSelectionFocused
         && !e.ctrlKey
@@ -2931,20 +2937,6 @@ function openFindReplace() {
     runFindSearch();
 }
 
-function handleFindInputBlur(e) {
-    const findDialog = document.getElementById('find-replace-dialog');
-    if (!findDialog) return;
-    // If the dialog is still open and focus went outside it, claw it back
-    if (!findDialog.classList.contains('hidden') && !findDialog.contains(e.relatedTarget)) {
-        // Double-rAF ensures we run after *any* library-scheduled focus work
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-            if (!findDialog.classList.contains('hidden') && !findDialog.contains(document.activeElement)) {
-                document.getElementById('find-input').focus();
-            }
-        }));
-    }
-}
-
 function closeFindReplace() {
     document.getElementById('find-replace-dialog').classList.add('hidden');
     findMatches = [];
@@ -2986,10 +2978,17 @@ function runFindSearch() {
     const caseSensitive = document.getElementById('find-case-sensitive').checked;
     const useRegex = document.getElementById('find-use-regex').checked;
     const findInput = document.getElementById('find-input');
+    
+    // Removed the line causing the ReferenceError since it is undefined and unused
+    
     findMatches = [];
     findMatchIndex = -1;
     const info = document.getElementById('find-match-info');
-    if (!query) { info.textContent = ''; findInput.style.borderColor = ''; return; }
+    if (!query) { 
+        info.textContent = ''; 
+        findInput.style.borderColor = ''; 
+        return; 
+    }
 
     let regex;
     try {
@@ -3007,6 +3006,7 @@ function runFindSearch() {
     getAllCellsForSearch().forEach(({ ri, ci, text }) => {
         if (regex.test(text)) findMatches.push({ ri, ci });
     });
+    
     if (findMatches.length === 0) {
         info.textContent = 'No matches';
         info.style.color = '#ef4444';
@@ -3020,15 +3020,37 @@ function navigateToMatch(idx) {
     idx = ((idx % findMatches.length) + findMatches.length) % findMatches.length;
     findMatchIndex = idx;
     const match = findMatches[idx];
-    jumpSelectionTo(match.ri, match.ci, true);
     const info = document.getElementById('find-match-info');
     info.textContent = `${idx + 1} / ${findMatches.length}`;
     info.style.color = '#6b7280';
 
-    // Re-focus find input if the dialog is open (library's selector.set steals focus)
+    // Verify the match still falls within the spreadsheet's current dimensions
+    const data = mySpreadsheet.getData()[0];
+    const rowsLen = data.rows && typeof data.rows.len === 'number' ? data.rows.len : 100;
+    const colsLen = data.cols && typeof data.cols.len === 'number' ? data.cols.len : 676;
+
+    if (match.ri >= rowsLen || match.ci >= colsLen) {
+        // Match is out of bounds. Gracefully ignore jumping but keep the state.
+        return; 
+    }
+
+    // Capture focus before jumping to the match
+    const activeEl = document.activeElement;
     const findDialog = document.getElementById('find-replace-dialog');
-    if (findDialog && !findDialog.classList.contains('hidden')) {
-        setTimeout(() => document.getElementById('find-input').focus(), 0);
+    const wasInDialog = findDialog && findDialog.contains(activeEl);
+
+    jumpSelectionTo(match.ri, match.ci, true);
+
+    // Restore focus
+    if (findDialog && !findDialog.classList.contains('hidden') && wasInDialog) {
+        setTimeout(() => {
+            // Restore focus to exactly what the user was using (e.g. input box or Next button)
+            if (activeEl && typeof activeEl.focus === 'function') {
+                activeEl.focus();
+            } else {
+                document.getElementById('find-input').focus();
+            }
+        }, 0);
     }
 }
 
@@ -3195,6 +3217,19 @@ function replaceOne() {
     const useRegex = document.getElementById('find-use-regex').checked;
     let regex;
     try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { return; }
+
+    const data = mySpreadsheet.getData()[0];
+    const rowsLen = data.rows && typeof data.rows.len === 'number' ? data.rows.len : 100;
+    const colsLen = data.cols && typeof data.cols.len === 'number' ? data.cols.len : 676;
+    if (match.ri >= rowsLen || match.ci >= colsLen) {
+        return; 
+    }
+
+    // Capture focus before mutation
+    const activeEl = document.activeElement;
+    const findDialog = document.getElementById('find-replace-dialog');
+    const wasInDialog = findDialog && findDialog.contains(activeEl);
+
     applyDataMutation((d) => {
         const row = d.rows[match.ri];
         if (row && row.cells && row.cells[match.ci]) {
@@ -3202,7 +3237,17 @@ function replaceOne() {
             cell.text = String(cell.text || '').replace(regex, replaceVal);
         }
     });
-    runFindSearch();
+
+    // Restore focus after mutation
+    if (findDialog && !findDialog.classList.contains('hidden') && wasInDialog) {
+        setTimeout(() => {
+            if (activeEl && typeof activeEl.focus === 'function') {
+                activeEl.focus();
+            } else {
+                document.getElementById('find-input').focus();
+            }
+        }, 0);
+    }
 }
 
 function replaceAll() {
@@ -3213,6 +3258,12 @@ function replaceAll() {
     const useRegex = document.getElementById('find-use-regex').checked;
     let regex;
     try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { return; }
+    
+    // Capture focus before mutation
+    const activeEl = document.activeElement;
+    const findDialog = document.getElementById('find-replace-dialog');
+    const wasInDialog = findDialog && findDialog.contains(activeEl);
+
     applyDataMutation((d) => {
         const rows = d.rows;
         Object.keys(rows).forEach(rStr => {
@@ -3228,7 +3279,17 @@ function replaceAll() {
             }
         });
     });
-    runFindSearch();
+
+    // Restore focus after mutation
+    if (findDialog && !findDialog.classList.contains('hidden') && wasInDialog) {
+        setTimeout(() => {
+            if (activeEl && typeof activeEl.focus === 'function') {
+                activeEl.focus();
+            } else {
+                document.getElementById('find-input').focus();
+            }
+        }, 0);
+    }
 }
 
 // --- WHEEL SCROLLING FIXES ---
@@ -3496,7 +3557,6 @@ function bindDomEvents() {
 
     const findInput = document.getElementById('find-input');
     if (findInput) {
-        findInput.addEventListener('blur', handleFindInputBlur);
         findInput.addEventListener('input', runFindSearch);
         findInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
@@ -3574,7 +3634,6 @@ function bindDomEvents() {
 function unbindDomEvents() {
     const findInput = document.getElementById('find-input');
     if (findInput) {
-        findInput.removeEventListener('blur', handleFindInputBlur);
         findInput.removeEventListener('input', runFindSearch);
     }
 
