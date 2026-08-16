@@ -36,6 +36,7 @@ export default function DocumentEditor({ apiCall, docId, goBack, goBackToCorpus,
   const [isRestoringFromGithub, setIsRestoringFromGithub] = useState(false);
   const [latestGithubCommitMessage, setLatestGithubCommitMessage] = useState('');
   const [latestGithubCommitUrl, setLatestGithubCommitUrl] = useState('');
+  const [latestGithubCommitDate, setLatestGithubCommitDate] = useState('');
   const [isLoadingGithubCommitMessage, setIsLoadingGithubCommitMessage] = useState(false);
   const spreadsheetEditorRef = useRef(null);
   const previousEditorModeRef = useRef(null);
@@ -642,6 +643,12 @@ const runSpannotatorToolMutation = async (toolKey) => {
     }
   };
 
+  const formatGithubCommitTimestamp = (isoDate) => {
+    const parsed = new Date(isoDate);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  };
+
   const buildGithubFilePath = (mode, docnameValue) => {
     const normalizedDocname = String(docnameValue || '').trim();
     if (!normalizedDocname) return '';
@@ -653,6 +660,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
     if (!doc || !isCommitter) {
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
+      setLatestGithubCommitDate('');
       return;
     }
 
@@ -660,6 +668,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
     if (!repoIsConfigured) {
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
+      setLatestGithubCommitDate('');
       return;
     }
 
@@ -668,6 +677,7 @@ const runSpannotatorToolMutation = async (toolKey) => {
     if (!filePath) {
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
+      setLatestGithubCommitDate('');
       return;
     }
 
@@ -676,11 +686,14 @@ const runSpannotatorToolMutation = async (toolKey) => {
       const response = await apiCall(`/documents/${docId}/github/commit-message?file_path=${encodeURIComponent(filePath)}`);
       const fetchedMessage = typeof response?.commit_message === 'string' ? response.commit_message.trim() : '';
       const fetchedUrl = typeof response?.commit_url === 'string' ? response.commit_url.trim() : '';
+      const fetchedDate = typeof response?.commit_date === 'string' ? response.commit_date.trim() : '';
       setLatestGithubCommitMessage(fetchedMessage);
       setLatestGithubCommitUrl(fetchedUrl);
+      setLatestGithubCommitDate(fetchedDate);
     } catch (err) {
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
+      setLatestGithubCommitDate('');
     } finally {
       setIsLoadingGithubCommitMessage(false);
     }
@@ -1480,6 +1493,9 @@ const runSpannotatorToolMutation = async (toolKey) => {
                 ) : (
                   <span className="font-medium text-slate-800">{latestGithubCommitMessage}</span>
                 )}
+                {latestGithubCommitDate ? (
+                  <span className="text-slate-500"> ({formatGithubCommitTimestamp(latestGithubCommitDate)})</span>
+                ) : null}
               </p>
             ) : null}
           </div>

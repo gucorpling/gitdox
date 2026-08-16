@@ -71,13 +71,15 @@ class GitHubUtility:
         try:
             commits = self.repo.get_commits(path=full_path)
             for latest_commit in commits:
+                commit_date = latest_commit.commit.author.date or latest_commit.commit.committer.date
                 return {
                     "message": latest_commit.commit.message or "",
-                    "url": getattr(latest_commit, "html_url", "") or ""
+                    "url": getattr(latest_commit, "html_url", "") or "",
+                    "date": commit_date.isoformat() if commit_date else ""
                 }
-            return {"message": "", "url": ""}
+            return {"message": "", "url": "", "date": ""}
         except UnknownObjectException:
-            return {"message": "", "url": ""}
+            return {"message": "", "url": "", "date": ""}
 
     def get_file_contents(self, file_path):
         """
