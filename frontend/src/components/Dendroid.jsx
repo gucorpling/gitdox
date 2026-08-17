@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Save, Upload, Download, Search, Settings, X, Plus, ChevronLeft, Info, Users, GitBranch } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { ChevronDown, ChevronRight, Upload, X, ChevronLeft, Info, Users, GitBranch } from 'lucide-react';
 
-const DEFAULT_ANNOTATOR = '<anonymous>';
 const COLORS = ['#94a3b8', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#f43f5e', '#14b8a6', '#d946ef', '#f97316'];
 
 // --- Data Formatting Helpers ---
@@ -360,7 +359,6 @@ export function Dendroid({
       let idCell = colMap.id ? cells[`${r},${colMap.id}`] : null;
       let idVal = idCell ? idCell.v : null;
       const formCell = colMap.form ? cells[`${r},${colMap.form}`] : null;
-      const formVal = formCell ? formCell.v : null;
       const annotatorVal = perUserMode && colMap.annotator && cells[`${r},${colMap.annotator}`] ? cells[`${r},${colMap.annotator}`].v : null;
       
       if (r > currentTokenRowSpanEnd) {
@@ -551,7 +549,7 @@ export function Dendroid({
 
   // --- Exporters ---
 
-  const exportCoNLLU = (sents, preferredMode, globalAnns) => {
+  const exportCoNLLU = (sents, preferredMode) => {
     return sents.map(sent => {
       const exportAnn = preferredMode === 'LATEST' ? sent.activeAnnotator : getFallbackAnnotator(sent, preferredMode, defaultAnnotator);
       let comments = [...sent.comments];
@@ -749,14 +747,11 @@ export function Dendroid({
           if (ann.deps && ann.deps !== '_') {
             const edeps = parseEdeps(ann.deps);
             globalDeps = stringifyEdeps(edeps.map(e => {
-              let eHead = e.head;
-              if (String(e.head).startsWith('ext:')) {
-                const oldG = e.head.substring(4);
-                eHead = oldGlobalToNewGlobal[oldG] || oldG;
-              } else {
-                eHead = localToGlobal[e.head] || e.head;
-              }
-              return { ...e, head: eHead };
+              const eHeadStr = String(e.head);
+              const mappedHead = eHeadStr.startsWith('ext:')
+                ? (oldGlobalToNewGlobal[eHeadStr.substring(4)] || eHeadStr.substring(4))
+                : (localToGlobal[e.head] || e.head);
+              return { ...e, head: mappedHead };
             }));
           }
           const depFieldValues = { head: globalHead, deprel: ann.deprel, deps: globalDeps };
@@ -840,14 +835,17 @@ export function Dendroid({
      return Array.from(set).sort();
   }, [sentences, defaultAnnotator, perUserMode]);
 
-  useEffect(() => {
+  const [prevInitDeps, setPrevInitDeps] = useState(null);
+  const currentInitDeps = `${initialData}|${initialFormat}|${defaultAnnotator}|${perUserMode}`;
+  if (prevInitDeps !== currentInitDeps) {
+    setPrevInitDeps(currentInitDeps);
     try {
       const parsed = initialFormat === 'conllu' ? parseCoNLLU(initialData) : parseSocialCalc(initialData);
       setSentences(parsed);
       setColorMap(generateColorMap(parsed));
       if (parsed.length > 0 && expandedIds.size === 0) setExpandedIds(new Set([parsed[0].id]));
     } catch (e) { alert(e.message); console.error("Failed to parse initial data", e); }
-  }, [initialData, initialFormat, defaultAnnotator, perUserMode]); 
+  }
 
   const applyRawData = () => {
     try {
@@ -957,7 +955,7 @@ export function Dendroid({
             return ann && ann.deps && ann.deps !== '_';
         });
       });
-    }, [sentence.tokens, displayAnnName, features.edeps, isCompareMode, compareUsers]);
+    }, [sentence.tokens, displayAnnName, isCompareMode, compareUsers]);
     
     const showEdepsArea = hasEdepsData || dragState.isEdep;
     const svgHeight = showEdepsArea ? 560 : 380;
@@ -1049,7 +1047,7 @@ export function Dendroid({
       };
   
       return { nodes, nodePositions, mwts, totalWidth: Math.max(800, currentX + 40), standardEdges: processStacking(edges), enhancedEdges: processStacking(edeps) };
-    }, [sentence.tokens, sentence.mwts, displayAnnName, features.edeps, isCompareMode, compareUsers, annotatorColors, colorMap]);
+    }, [sentence.tokens, sentence.mwts, displayAnnName, isCompareMode, compareUsers, annotatorColors]);
   
     const allArrowColors = useMemo(() => {
       const s = new Set(['#94a3b8']);
@@ -1091,7 +1089,7 @@ export function Dendroid({
       }));
     };
   
-    const handleSvgMouseUp = (e) => {
+    const handleSvgMouseUp = () => {
       if (isCompareMode) return;
       if (lassoState.active) {
         const minX = Math.min(lassoState.startX, lassoState.currentX), maxX = Math.max(lassoState.startX, lassoState.currentX);
@@ -1101,7 +1099,7 @@ export function Dendroid({
           const newId = `${selected[0].id}-${selected[selected.length - 1].id}`;
           if (!(sentence.mwts || []).find(m => m.id === newId)) {
             const newMwt = { id: newId, form: selected.map(s => s.form).join(''), lemma: '_', upos: '_', xpos: '_', feats: '_', head: '_', deprel: '_', deps: '_', misc: '_' };
-            handleSaveAction((newTokens) => ({ mwts: [...(sentence.mwts || []), newMwt] }));
+            handleSaveAction(() => ({ mwts: [...(sentence.mwts || []), newMwt] }));
           }
         }
         return setLassoState({ active: false, startX: 0, currentX: 0 });
@@ -1211,7 +1209,7 @@ export function Dendroid({
     const handleSaveInline = (val) => {
       if (!inlineEditor) return;
       if (inlineEditor.isMwt) {
-        handleSaveAction((tokens, user) => {
+        handleSaveAction(() => {
            const newMwts = (sentence.mwts || []).map(m => m.id === inlineEditor.tokenId ? { ...m, [inlineEditor.field]: val || '_' } : m);
            return { mwts: newMwts };
         });
@@ -1552,7 +1550,7 @@ export function Dendroid({
           <div className="flex items-center gap-2">
             <div className="flex bg-indigo-950/50 rounded-lg p-1 mr-4 border border-indigo-800">
               <button onClick={() => setViewMode('editor')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>Tree Editor</button>
-              <button onClick={() => { setRawData(exportCoNLLU(sentences, globalPreferredAnnotator, globalAllAnnotators)); setViewMode('conllu'); }} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'conllu' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>CoNLL-U Source</button>
+              <button onClick={() => { setRawData(exportCoNLLU(sentences, globalPreferredAnnotator)); setViewMode('conllu'); }} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'conllu' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>CoNLL-U Source</button>
               <button onClick={() => { setRawData(exportSocialCalc(sentences, globalAllAnnotators)); setViewMode('socialcalc'); }} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'socialcalc' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>SocialCalc Source</button>
             </div>
           </div>
@@ -1612,7 +1610,7 @@ export function Dendroid({
                     <div className="flex items-center gap-2 mr-4 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
                        <Users size={16} className="text-indigo-500" />
                        <span className="text-sm font-medium text-gray-600">Export mode:</span>
-                       <select value={globalPreferredAnnotator} onChange={e => { const newMode = e.target.value; setGlobalPreferredAnnotator(newMode); setRawData(exportCoNLLU(sentences, newMode, globalAllAnnotators)); }} className="text-sm border-none bg-transparent font-medium text-indigo-700 outline-none cursor-pointer">
+                       <select value={globalPreferredAnnotator} onChange={e => { const newMode = e.target.value; setGlobalPreferredAnnotator(newMode); setRawData(exportCoNLLU(sentences, newMode)); }} className="text-sm border-none bg-transparent font-medium text-indigo-700 outline-none cursor-pointer">
                           <option value="LATEST">Latest Editor (Mixed)</option>
                           {globalAllAnnotators.map(a => <option key={a} value={a}>Force: {a}</option>)}
                        </select>

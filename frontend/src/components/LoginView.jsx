@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function LoginView({ setToken, setUser, onLoginSuccess, apiCall, projectName }) {
   const [username, setUsername] = useState('');
@@ -35,7 +35,9 @@ export default function LoginView({ setToken, setUser, onLoginSuccess, apiCall, 
       if (typeof onLoginSuccess === 'function') {
         onLoginSuccess();
       }
-    } catch (err) { }
+    } catch (err) { 
+      console.warn("Error during login:", err)
+    }
   };
 
   const handleInit = async (e) => {
@@ -50,7 +52,9 @@ export default function LoginView({ setToken, setUser, onLoginSuccess, apiCall, 
       alert('Database initialized! You can now log in.');
       setIsInitMode(false);
       setInitSecret('');
-    } catch (err) { }
+    } catch (err) {
+      console.warn("Error during initialization:", err);
+    }
   };
 
   return (

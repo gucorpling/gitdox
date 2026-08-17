@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Plus, Trash2, Edit, X, Copy, Code } from 'lucide-react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
@@ -57,7 +57,9 @@ export default function DocumentEditor({
   const [isLoadingGithubCommitMessage, setIsLoadingGithubCommitMessage] = useState(false);
   const spreadsheetEditorRef = useRef(null);
   const previousEditorModeRef = useRef(null);
-  const lastReadyValidationRef = useRef(null);
+  
+  const [lastReadyValidation, setLastReadyValidation] = useState(null);
+  const [prevValidation, setPrevValidation] = useState(null);
 
   const cmRef = useRef(null);
   const [xmlTagModalOpen, setXmlTagModalOpen] = useState(false);
@@ -88,6 +90,7 @@ export default function DocumentEditor({
         Object.keys(metaObj).forEach(k => keys.add(k));
       } catch (e) {
         // ignore JSON parse errors for invalid metadata
+        console.warn("Failed to parse document metadata", e);
       }
     });
     return Array.from(keys).sort();
@@ -98,7 +101,6 @@ export default function DocumentEditor({
 
   // OCC / Conflict tracking
   const [lastModifiedAt, setLastModifiedAt] = useState(0);
-  const [lastModifiedBy, setLastModifiedBy] = useState('');
   const [conflictData, setConflictData] = useState(null); 
   const [wakeSyncNotice, setWakeSyncNotice] = useState(null);
   const lastModifiedAtRef = useRef(0);
@@ -118,12 +120,14 @@ export default function DocumentEditor({
   const [metaModalOpen, setMetaModalOpen] = useState(false);
   const [metaForm, setMetaForm] = useState({ k: '', v: '', originalKey: null });
   const canEditAssignee = (user?.adminlevel ?? 0) > 0;
+  
   const statusOptions = useMemo(() => {
     const options = Array.isArray(statusCategories) && statusCategories.length > 0
       ? statusCategories
       : DEFAULT_STATUS_CATEGORIES;
-    if (doc?.status && !options.includes(doc.status)) {
-      return [...options, doc.status];
+    const currentStatus = doc?.status;
+    if (currentStatus && !options.includes(currentStatus)) {
+      return [...options, currentStatus];
     }
     return options;
   }, [statusCategories, doc?.status]);
@@ -141,129 +145,21 @@ export default function DocumentEditor({
     return usernames;
   }, [usersList, doc?.assigned]);
 
-useEffect(() => {
-    const init = async () => {
-      // Fetch users in a separate try/catch so a failure here doesn't break document loading
-      try {
-        const users = await apiCall(`/projects/${projectName}/users`);
-        setUsersList(users);
-      } catch (err) {
-        console.warn("Failed to load users for assignee dropdown", err);
-      }
-      
-      // Fetch the document
-      try {
-        // Find doc metadata 
-        const allDocs = await apiCall(`/projects/${projectName}/documents`);
-        setAllDocuments(allDocs);
-        const targetDoc = allDocs.find(d => d.id === docId);
-        
-        if (targetDoc) {
-          setDoc(targetDoc);
-          // Parse Doc Metadata
-          const metaObj = typeof targetDoc.metadata === 'string' ? JSON.parse(targetDoc.metadata) : (targetDoc.metadata || {});
-          setMetadata(normalizeMetadataObject(metaObj));
-          
-          // Fetch Corpus Metadata
-          if (targetDoc.corpus) {
-            try {
-              const corpusMetaObj = await apiCall(`/corpora/${targetDoc.corpus}/metadata`);
-              const sortedCorpusMetaArray = Object.entries(corpusMetaObj)
-                .map(([k, v]) => ({ k, v }))
-                .sort((a, b) => a.k.localeCompare(b.k));
-              setCorpusMetadata(sortedCorpusMetaArray);
-            } catch (e) {
-              // Backend might not have this endpoint yet, gracefully fallback
-              setCorpusMetadata([]);
-            }
-          }
-        }
-
-        // Fetch doc contents
-        const contentData = await apiCall(`/documents/${docId}/contents`);
-        const fallbackContents = contentData.contents || '';
-        setContentXml(contentData.content_xml ?? (targetDoc?.mode === 'xml' ? fallbackContents : ''));
-        setContentSpreadsheet(contentData.content_spreadsheet ?? (targetDoc?.mode !== 'xml' ? fallbackContents : ''));
-        setHasUnsavedChanges(false);
-        // Tracking variables for Optimistic Concurrency Control
-        const serverTime = contentData.last_modified_at || 0;
-        setLastModifiedAt(serverTime);
-        lastModifiedAtRef.current = serverTime;
-        setLastModifiedBy(contentData.last_modified_by || 'unknown');
-      } catch (err) {}
-    };
-    init();
-  }, [docId, projectName]);
-
-  useEffect(() => {
-    if (!doc || doc.mode !== 'xml' || !isXmlDirty) return;
-
-    const timer = setTimeout(() => {
-      autoSaveXmlContent(contentXml);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [contentXml, doc?.id, doc?.mode, isXmlDirty]);
-
-  useEffect(() => {
-    if (!doc || !(isSpreadsheetBackedMode(doc.mode) || doc.mode === 'dendroid') || !isSpreadsheetDirty) return;
-
-    const timer = setTimeout(() => {
-      autoSaveSpreadsheetContent(contentSpreadsheet);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [contentSpreadsheet, doc?.id, doc?.mode, isSpreadsheetDirty]);
-
-  const handleSpreadsheetContentChange = useCallback((nextValue) => {
-    setContentSpreadsheet((prevValue) => {
-      if (prevValue === nextValue) return prevValue;
-      setHasUnsavedChanges(true);
-      setIsSpreadsheetDirty(true);
-      return nextValue;
-    });
+  // Hoisted helper functions to resolve missing dependencies and variable access before declaration issues
+  const normalizeMetadataObject = useCallback((metaObj = {}) => {
+    const source = metaObj && typeof metaObj === 'object' ? metaObj : {};
+    return Object.entries(source)
+      .map(([k, v]) => ({ k, v }))
+      .sort((a, b) => a.k.localeCompare(b.k));
   }, []);
 
-  const buildMetadataObject = (metaArray) => {
+  const buildMetadataObject = useCallback((metaArray) => {
     const sortedMetaArray = [...metaArray].sort((a, b) => a.k.localeCompare(b.k));
     return sortedMetaArray.reduce((acc, curr) => {
       if (curr.k.trim()) acc[curr.k.trim()] = curr.v;
       return acc;
     }, {});
-  };
-
-  const resolveCarouselMetadataKeys = useCallback((cfg) => {
-    const entitiesCarousel = cfg?.entities?.carousel;
-    const rootCarousel = cfg?.carousel;
-
-    const keyCandidates = [
-      ...(Array.isArray(entitiesCarousel?.keys) ? entitiesCarousel.keys : []),
-      ...(Array.isArray(rootCarousel?.keys) ? rootCarousel.keys : []),
-      ...(Array.isArray(rootCarousel) ? rootCarousel : []),
-      ...(Array.isArray(cfg?.CAROUSEL_KEYS) ? cfg.CAROUSEL_KEYS : []),
-      ...(Array.isArray(cfg?.SUMMARY_KEYS) ? cfg.SUMMARY_KEYS : [])
-    ];
-
-    return [...new Set(
-      keyCandidates
-        .map((key) => String(key || '').trim())
-        .filter((key) => key.length > 0)
-    )];
   }, []);
-
-  const normalizeMetadataObject = (metaObj = {}) => {
-    const source = metaObj && typeof metaObj === 'object' ? metaObj : {};
-    return Object.entries(source)
-      .map(([k, v]) => ({ k, v }))
-      .sort((a, b) => a.k.localeCompare(b.k));
-  };
-
-  const updateDocField = (field, value, markUnsaved = true) => {
-    setDoc(prev => ({ ...prev, [field]: value }));
-    if (markUnsaved) {
-      setHasUnsavedChanges(true);
-    }
-  };
 
   const formatServerEditTime = useCallback((serverTime) => {
     return new Date(serverTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -276,7 +172,6 @@ useEffect(() => {
     const serverTime = data.last_modified_at || 0;
     setLastModifiedAt(serverTime);
     lastModifiedAtRef.current = serverTime;
-    setLastModifiedBy(data.last_modified_by || 'unknown');
 
     setHasUnsavedChanges(false);
     setIsXmlDirty(false);
@@ -316,6 +211,180 @@ useEffect(() => {
     }
   }, [docId, apiCall, applyServerSnapshot, formatServerEditTime]);
 
+  const autoSaveSpreadsheetContent = useCallback(async (spreadsheetValue, timeOverride = null) => {
+    if (!doc) return false;
+    
+    // Prevent overlapping network requests
+    if (isSavingRef.current) {
+      console.warn("Save already in progress, skipping redundant request.");
+      return false; 
+    }
+
+    isSavingRef.current = true;
+    setIsAutoSaving(true);
+    try {
+      const currentTimestamp = timeOverride !== null ? timeOverride : lastModifiedAtRef.current;
+      const response = await apiCall(`/documents/${docId}/contents`, 'PUT', {
+        content_xml: contentXml,
+        content_spreadsheet: spreadsheetValue,
+        last_modified_at: currentTimestamp
+      });
+      
+      if (response?.validation) {
+        setDoc(prev => ({ ...prev, validation: response.validation }));
+      }
+      if (response?.last_modified_at) {
+        setLastModifiedAt(response.last_modified_at);
+        lastModifiedAtRef.current = response.last_modified_at;
+      }
+      
+      setHasUnsavedChanges(false);
+      setIsSpreadsheetDirty(false);
+      return true;
+    } catch (err) {
+      console.error(err);
+      checkForConflicts();
+      setHasUnsavedChanges(true);
+      return false;
+    } finally {
+      isSavingRef.current = false;
+      setIsAutoSaving(false);
+    }
+  }, [apiCall, contentXml, doc, docId, checkForConflicts]);
+
+  const autoSaveXmlContent = useCallback(async (xmlValue, timeOverride = null) => {
+    if (!doc) return;
+
+    setIsAutoSaving(true);
+    try {
+      const currentTimestamp = timeOverride !== null ? timeOverride : lastModifiedAtRef.current;
+      const response = await apiCall(`/documents/${docId}/contents`, 'PUT', {
+        content_xml: xmlValue,
+        content_spreadsheet: contentSpreadsheet,
+        last_modified_at: currentTimestamp
+      });
+      
+      if (response?.validation) {
+        setDoc(prev => ({ ...prev, validation: response.validation }));
+      }
+      if (response?.last_modified_at) {
+        setLastModifiedAt(response.last_modified_at);
+        lastModifiedAtRef.current = response.last_modified_at;
+      }
+
+      setHasUnsavedChanges(false);
+      setIsXmlDirty(false);
+      return true;
+    } catch (err) {
+      console.error(err);
+      checkForConflicts();
+      setHasUnsavedChanges(true);
+      return false;
+    } finally {
+      setIsAutoSaving(false);
+    }
+  }, [apiCall, contentSpreadsheet, doc, docId, checkForConflicts]);
+
+  const saveDocMetadataToBackend = useCallback(async (newMetaArray) => {
+    if (!doc) return;
+    const sortedMetaArray = [...newMetaArray].sort((a, b) => a.k.localeCompare(b.k));
+    const metaObj = buildMetadataObject(sortedMetaArray);
+
+    try {
+      const response = await apiCall(`/documents/${docId}`, 'PUT', {
+        corpus: doc.corpus,
+        docname: doc.docname,
+        repo: doc.repo || '',
+        mode: doc.mode,
+        status: doc.status,
+        assigned: doc.assigned,
+        metadata: metaObj
+      });
+      setMetadata(sortedMetaArray);
+      if (response?.validation) {
+        setDoc(prev => ({ ...prev, validation: response.validation }));
+      }
+    } catch (err) {
+      alert("Failed to save document metadata: " + err.message);
+    }
+  }, [apiCall, buildMetadataObject, doc, docId]);
+
+  useEffect(() => {
+    const init = async () => {
+      // Fetch users in a separate try/catch so a failure here doesn't break document loading
+      try {
+        const users = await apiCall(`/projects/${projectName}/users`);
+        setUsersList(users);
+      } catch (err) {
+        console.warn("Failed to load users for assignee dropdown", err);
+      }
+      
+      // Fetch the document
+      try {
+        // Find doc metadata 
+        const allDocs = await apiCall(`/projects/${projectName}/documents`);
+        setAllDocuments(allDocs);
+        const targetDoc = allDocs.find(d => d.id === docId);
+        
+        if (targetDoc) {
+          setDoc(targetDoc);
+          // Parse Doc Metadata
+          const metaObj = typeof targetDoc.metadata === 'string' ? JSON.parse(targetDoc.metadata) : (targetDoc.metadata || {});
+          setMetadata(normalizeMetadataObject(metaObj));
+          
+          // Fetch Corpus Metadata
+          if (targetDoc.corpus) {
+            try {
+              const corpusMetaObj = await apiCall(`/corpora/${targetDoc.corpus}/metadata`);
+              const sortedCorpusMetaArray = Object.entries(corpusMetaObj)
+                .map(([k, v]) => ({ k, v }))
+                .sort((a, b) => a.k.localeCompare(b.k));
+              setCorpusMetadata(sortedCorpusMetaArray);
+            } catch (e) {
+              console.warn("Failed to fetch corpus metadata", e);
+              // Backend might not have this endpoint yet, gracefully fallback
+              setCorpusMetadata([]);
+            }
+          }
+        }
+
+        // Fetch doc contents
+        const contentData = await apiCall(`/documents/${docId}/contents`);
+        const fallbackContents = contentData.contents || '';
+        setContentXml(contentData.content_xml ?? (targetDoc?.mode === 'xml' ? fallbackContents : ''));
+        setContentSpreadsheet(contentData.content_spreadsheet ?? (targetDoc?.mode !== 'xml' ? fallbackContents : ''));
+        setHasUnsavedChanges(false);
+        // Tracking variables for Optimistic Concurrency Control
+        const serverTime = contentData.last_modified_at || 0;
+        setLastModifiedAt(serverTime);
+        lastModifiedAtRef.current = serverTime;
+      } catch (err) {
+        console.warn("Failed to fetch document contents", err);
+      }
+    };
+    init();
+  }, [docId, projectName, apiCall, normalizeMetadataObject]);
+
+  useEffect(() => {
+    if (!doc || doc.mode !== 'xml' || !isXmlDirty) return;
+
+    const timer = setTimeout(() => {
+      autoSaveXmlContent(contentXml);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [contentXml, doc, doc?.id, doc?.mode, isXmlDirty, autoSaveXmlContent]);
+
+  useEffect(() => {
+    if (!doc || !(isSpreadsheetBackedMode(doc.mode) || doc.mode === 'dendroid') || !isSpreadsheetDirty) return;
+
+    const timer = setTimeout(() => {
+      autoSaveSpreadsheetContent(contentSpreadsheet);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [contentSpreadsheet, doc, doc?.id, doc?.mode, isSpreadsheetDirty, autoSaveSpreadsheetContent]);
+
   useEffect(() => {
     if (!docId) return;
 
@@ -348,10 +417,45 @@ useEffect(() => {
     };
   }, [docId, checkForConflicts]);
 
+  const handleSpreadsheetContentChange = useCallback((nextValue) => {
+    setContentSpreadsheet((prevValue) => {
+      if (prevValue === nextValue) return prevValue;
+      setHasUnsavedChanges(true);
+      setIsSpreadsheetDirty(true);
+      return nextValue;
+    });
+  }, []);
+
+  const resolveCarouselMetadataKeys = useCallback((cfg) => {
+    const entitiesCarousel = cfg?.entities?.carousel;
+    const rootCarousel = cfg?.carousel;
+
+    const keyCandidates = [
+      ...(Array.isArray(entitiesCarousel?.keys) ? entitiesCarousel.keys : []),
+      ...(Array.isArray(rootCarousel?.keys) ? rootCarousel.keys : []),
+      ...(Array.isArray(rootCarousel) ? rootCarousel : []),
+      ...(Array.isArray(cfg?.CAROUSEL_KEYS) ? cfg.CAROUSEL_KEYS : []),
+      ...(Array.isArray(cfg?.SUMMARY_KEYS) ? cfg.SUMMARY_KEYS : [])
+    ];
+
+    return [...new Set(
+      keyCandidates
+        .map((key) => String(key || '').trim())
+        .filter((key) => key.length > 0)
+    )];
+  }, []);
+
+  const updateDocField = (field, value, markUnsaved = true) => {
+    setDoc(prev => ({ ...prev, [field]: value }));
+    if (markUnsaved) {
+      setHasUnsavedChanges(true);
+    }
+  };
+
   const autoSaveDocField = async (field, value) => {
     if (!doc) return;
 
-    const updatedDoc = { ...doc, [field]: value };
+    let updatedDoc = { ...doc, [field]: value };
     setDoc(updatedDoc);
     setIsAutoSaving(true);
     try {
@@ -366,94 +470,20 @@ useEffect(() => {
       });
 
       if (response?.validation) {
-        updatedDoc.validation = response.validation;
+        updatedDoc = { ...updatedDoc, validation: response.validation };
       }
 
       if (response?.last_modified_at) {
         setLastModifiedAt(response.last_modified_at);
         lastModifiedAtRef.current = response.last_modified_at;
-        setLastModifiedBy(response.last_modified_by);
       }
 
       setDoc(updatedDoc);
       setHasUnsavedChanges(false);
       return true;
     } catch (err) {
+      console.error(err);
       alert("Failed to auto-save: " + err.message);
-      setHasUnsavedChanges(true);
-      return false;
-    } finally {
-      setIsAutoSaving(false);
-    }
-  };
-
-  const autoSaveSpreadsheetContent = async (spreadsheetValue, timeOverride = null) => {
-    if (!doc) return false;
-    
-    // Prevent overlapping network requests
-    if (isSavingRef.current) {
-      console.warn("Save already in progress, skipping redundant request.");
-      return false; 
-    }
-
-    isSavingRef.current = true;
-    setIsAutoSaving(true);
-    try {
-      const currentTimestamp = timeOverride !== null ? timeOverride : lastModifiedAtRef.current;
-      const response = await apiCall(`/documents/${docId}/contents`, 'PUT', {
-        content_xml: contentXml,
-        content_spreadsheet: spreadsheetValue,
-        last_modified_at: currentTimestamp
-      });
-      
-      if (response?.validation) {
-        setDoc(prev => ({ ...prev, validation: response.validation }));
-      }
-      if (response?.last_modified_at) {
-        setLastModifiedAt(response.last_modified_at);
-        lastModifiedAtRef.current = response.last_modified_at;
-        setLastModifiedBy(response.last_modified_by);
-      }
-      
-      setHasUnsavedChanges(false);
-      setIsSpreadsheetDirty(false);
-      return true;
-    } catch (err) {
-      checkForConflicts();
-      setHasUnsavedChanges(true);
-      return false;
-    } finally {
-      isSavingRef.current = false;
-      setIsAutoSaving(false);
-    }
-  };
-
-  const autoSaveXmlContent = async (xmlValue, timeOverride = null) => {
-    if (!doc) return;
-
-    setIsAutoSaving(true);
-    try {
-      const currentTimestamp = timeOverride !== null ? timeOverride : lastModifiedAtRef.current;
-      const response = await apiCall(`/documents/${docId}/contents`, 'PUT', {
-        content_xml: xmlValue,
-        content_spreadsheet: contentSpreadsheet,
-        last_modified_at: currentTimestamp
-      });
-      
-      if (response?.validation) {
-        setDoc(prev => ({ ...prev, validation: response.validation }));
-      }
-      if (response?.last_modified_at) {
-        setLastModifiedAt(response.last_modified_at);
-        lastModifiedAtRef.current = response.last_modified_at;
-        setLastModifiedBy(response.last_modified_by);
-      }
-
-      setHasUnsavedChanges(false);
-      setIsXmlDirty(false);
-      return true;
-    } catch (err) {
-      checkForConflicts();
       setHasUnsavedChanges(true);
       return false;
     } finally {
@@ -467,7 +497,6 @@ useEffect(() => {
     setContentSpreadsheet(conflictData.serverSpreadsheet);
     setLastModifiedAt(conflictData.serverTime);
     lastModifiedAtRef.current = conflictData.serverTime;
-    setLastModifiedBy(conflictData.user);
     setHasUnsavedChanges(false);
     setIsXmlDirty(false);
     setIsSpreadsheetDirty(false);
@@ -509,6 +538,7 @@ useEffect(() => {
         setDoc((prev) => (prev ? { ...prev, validation: response.validation } : prev));
       }
     } catch (err) {
+      console.error(err);
     }
   }, [doc, apiCall, autoSaveSpreadsheetContent]);
 
@@ -597,7 +627,6 @@ useEffect(() => {
       if (refreshed?.last_modified_at) {
         setLastModifiedAt(refreshed.last_modified_at);
         lastModifiedAtRef.current = refreshed.last_modified_at;
-        setLastModifiedBy(refreshed.last_modified_by);
       }
 
       handleSpreadsheetImportResult(refreshed);
@@ -672,7 +701,7 @@ useEffect(() => {
     return mode === 'xml' ? `${normalizedDocname}.xml` : `${normalizedDocname}_ether.sgml`;
   };
   
-  const fetchLatestGithubCommitMessage = async ({ modeOverride = null } = {}) => {
+  const fetchLatestGithubCommitMessage = useCallback(async ({ modeOverride = null } = {}) => {
     const isCommitter = (user?.adminlevel ?? 0) >= 1;
     if (!doc || !isCommitter) {
       setLatestGithubCommitMessage('');
@@ -708,13 +737,14 @@ useEffect(() => {
       setLatestGithubCommitUrl(fetchedUrl);
       setLatestGithubCommitDate(fetchedDate);
     } catch (err) {
+      console.error(err);
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
       setLatestGithubCommitDate('');
     } finally {
       setIsLoadingGithubCommitMessage(false);
     }
-  };
+  }, [apiCall, doc, docId, user?.adminlevel]);
 
   const commitCurrentDocumentToGithub = async () => {
     if (!doc) return;
@@ -842,7 +872,7 @@ useEffect(() => {
     const cloneDoc = allDocuments.find(d => d.id === selectedCloneDocId);
     if (!cloneDoc) return;
 
-    let cloneMetaObj = {};
+    let cloneMetaObj;
     try {
       cloneMetaObj = typeof cloneDoc.metadata === 'string' ? JSON.parse(cloneDoc.metadata) : (cloneDoc.metadata || {});
     } catch (e) {
@@ -869,30 +899,6 @@ useEffect(() => {
     await saveDocMetadataToBackend(combinedMetadata);
     alert(`Successfully cloned ${newEntriesToAppend.length} new metadata entries.`);
     setSelectedCloneDocId(''); // reset dropdown
-  };
-
-  const saveDocMetadataToBackend = async (newMetaArray) => {
-    if (!doc) return;
-    const sortedMetaArray = [...newMetaArray].sort((a, b) => a.k.localeCompare(b.k));
-    const metaObj = buildMetadataObject(sortedMetaArray);
-
-    try {
-      const response = await apiCall(`/documents/${docId}`, 'PUT', {
-        corpus: doc.corpus,
-        docname: doc.docname,
-        repo: doc.repo || '',
-        mode: doc.mode,
-        status: doc.status,
-        assigned: doc.assigned,
-        metadata: metaObj
-      });
-      setMetadata(sortedMetaArray);
-      if (response?.validation) {
-        setDoc(prev => ({ ...prev, validation: response.validation }));
-      }
-    } catch (err) {
-      alert("Failed to save document metadata: " + err.message);
-    }
   };
 
   const handleSpannotatorMetadataChange = useCallback(async (incomingMeta) => {
@@ -1053,17 +1059,18 @@ useEffect(() => {
     && hasGithubCommittedVersion
     && !isLoadingGithubCommitMessage
     && !isRestoringFromGithub;
+    
   const modeSelectOptions = useMemo(() => {
-    if (!doc?.mode) return editorOptions;
-    if (editorOptions.some((option) => option.mode === doc.mode)) {
+    const currentMode = doc?.mode;
+    if (!currentMode) return editorOptions;
+    if (editorOptions.some((option) => option.mode === currentMode)) {
       return editorOptions;
     }
-    return [...editorOptions, { key: `legacy-${doc.mode}`, mode: doc.mode, label: doc.mode }];
+    return [...editorOptions, { key: `legacy-${currentMode}`, mode: currentMode, label: currentMode }];
   }, [doc?.mode, editorOptions]);
+  
   const githubModeKind = doc?.mode === 'xml' ? 'xml' : 'spreadsheet';
-  const githubRepoValue = typeof doc?.repo === 'string' ? doc.repo.trim() : '';
-  const githubDocnameValue = typeof doc?.docname === 'string' ? doc.docname.trim() : '';
-  const spannotatorMetaDict = useMemo(() => buildMetadataObject(metadata), [metadata]);
+  const spannotatorMetaDict = useMemo(() => buildMetadataObject(metadata), [metadata, buildMetadataObject]);
   const validationSummary = getValidationSummary(doc?.validation, {
     mode: doc?.mode,
     xmlContent: contentXml,
@@ -1112,19 +1119,22 @@ useEffect(() => {
       extensions.push(xml());
     }
 
-    // Add word wrap if desired usin extensions={[EditorView.lineWrapping]}
+    // Add word wrap if desired using extensions={[EditorView.lineWrapping]}
     if (editorFonts?.xml?.line_wrapping) {
       extensions.push(EditorView.lineWrapping);
     }
 
     return extensions;
-  }, [xmlAutoIndent, xmlTagCompletion]);
+  }, [xmlAutoIndent, xmlTagCompletion, editorFonts?.xml?.line_wrapping]);
 
   const isDocLoaded = doc !== null;
   useEffect(() => {
     if (!doc) return;
-    fetchLatestGithubCommitMessage();
-  }, [docId, githubModeKind, user?.adminlevel, isDocLoaded]);
+    const timer = setTimeout(() => {
+      fetchLatestGithubCommitMessage();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [doc, docId, githubModeKind, user?.adminlevel, isDocLoaded, fetchLatestGithubCommitMessage]);
 
   useEffect(() => {
     if (!isValidationPending || !docId || !projectName) return undefined;
@@ -1143,13 +1153,14 @@ useEffect(() => {
           };
         });
       } catch (err) {
+        console.error(err);
       }
     }, 2500);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [isValidationPending, docId, projectName]);
+  }, [isValidationPending, docId, projectName, apiCall]);
 
   useEffect(() => {
     if (!doc?.id) return undefined;
@@ -1170,6 +1181,7 @@ useEffect(() => {
           setDoc((prev) => (prev ? { ...prev, validation: response.validation } : prev));
         }
       } catch (err) {
+        console.error(err);
       }
     };
 
@@ -1178,14 +1190,18 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [doc?.id, doc?.mode]);
+  }, [doc?.id, doc?.mode, apiCall]);
 
-  if (doc?.validation && doc.validation.status !== 'validating' && Array.isArray(doc.validation.results)) {
-    lastReadyValidationRef.current = doc.validation;
+  // Derived State Pattern: Updating last ready validation directly during render avoids the useEffect flash completely.
+  if (doc?.validation !== prevValidation) {
+    setPrevValidation(doc?.validation);
+    if (doc?.validation && doc.validation.status !== 'validating' && Array.isArray(doc.validation.results)) {
+      setLastReadyValidation(doc.validation);
+    }
   }
 
-  const effectiveSpreadsheetValidation = doc?.validation?.status === 'validating' && lastReadyValidationRef.current
-    ? { ...doc.validation, results: lastReadyValidationRef.current.results }
+  const effectiveSpreadsheetValidation = doc?.validation?.status === 'validating' && lastReadyValidation
+    ? { ...doc.validation, results: lastReadyValidation.results }
     : doc?.validation;
 
   const handleValidationCellReferenceClick = useCallback((cellRef) => {

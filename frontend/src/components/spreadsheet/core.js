@@ -156,6 +156,7 @@ async function ensureExportConfigsLoaded() {
             .filter((name) => typeof name === 'string' && name.trim())
             .map((name) => name.trim());
     } catch (err) {
+        console.warn("Error fetching export configs:", err);
         exportConfigNames = [];
     }
 
@@ -375,6 +376,7 @@ const restoreFocus = (selectionOverride = null, options = {}) => {
                 }
             } catch(e) {
                 window._isSyntheticFocusClick = false;
+                console.warn('Error during synthetic focus click:', e);
             }
         }
     }
@@ -582,7 +584,7 @@ function patchSelector() {
                 if (Math.abs(currentY - targetTop) > 1 && typeof data.scrolly === 'function') {
                     data.scrolly(targetTop, () => {
                         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (e) {}
+                            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (e) {console.warn('Error moving vertical scrollbar during snap:', e);}
                         }
                         if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
                             sheet.selector.resetAreaOffset();
@@ -638,10 +640,10 @@ function patchSelector() {
             if (mySpreadsheet && mySpreadsheet.sheet) {
                 let sheet = mySpreadsheet.sheet;
                 if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                    try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0); } catch(e) {}
+                    try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0); } catch(e) { console.warn('Error moving vertical scrollbar during programmatic jump:', e); }
                 }
                 if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-                    try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : 0); } catch(e) {}
+                    try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : 0); } catch(e) { console.warn('Error moving horizontal scrollbar during programmatic jump:', e); }
                 }
                 if (typeof sheet.render === 'function') {
                     sheet.render();
@@ -701,20 +703,7 @@ function scheduleRestoreFocus(selectionOverride = null, options = {}) {
     }, 0);
 }
 
-let _viewportSyncTimeout = null;
-let _viewportSyncRaf = null;
 let _viewportSyncRequestId = 0;
-
-function scheduleViewportSync(options = {}) {
-    const requestId = Number.isInteger(options.requestId) ? options.requestId : ++_viewportSyncRequestId;
-    if (_viewportSyncTimeout) clearTimeout(_viewportSyncTimeout);
-    if (_viewportSyncRaf) cancelAnimationFrame(_viewportSyncRaf);
-    _viewportSyncTimeout = setTimeout(() => {
-        const syncOptions = { ...options, requestId };
-        syncViewportFromSheetData(syncOptions);
-        _viewportSyncRaf = requestAnimationFrame(() => syncViewportFromSheetData(syncOptions));
-    }, 0);
-}
 
 function syncViewportFromSheetData(options = {}) {
     if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
@@ -733,11 +722,15 @@ function syncViewportFromSheetData(options = {}) {
         
         // 1. Move Scrollbars first before calculating pixel offsets
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0 ); } catch (e) {}
+            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0 ); } catch (e) {
+                console.warn('Error moving vertical scrollbar:', e);
+            }
         }
         if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
             const left = lockedScrollX !== null ? lockedScrollX : (data.scroll ? data.scroll.x : 0);
-            try { sheet.horizontalScrollbar.move( left ); } catch (e) {}
+            try { sheet.horizontalScrollbar.move( left ); } catch (e) {
+                console.warn('Error moving horizontal scrollbar:', e);
+            }
         }
 
         // 2. Now recalculate blue selection box offsets against the new scroll position
@@ -780,7 +773,7 @@ function syncViewportFromSheetData(options = {}) {
                 }
             }
             if (targetLeft !== null && typeof data.scrollx === 'function') {
-                try { data.scrollx(targetLeft, applyViewport); } catch (e) {}
+                try { data.scrollx(targetLeft, applyViewport); } catch (e) {console.warn('Error scrolling horizontally:', e);}
             }
         }
 
@@ -795,7 +788,7 @@ function syncViewportFromSheetData(options = {}) {
                 targetTop = contentTop - 1 - freezeH;
             }
             if (targetTop !== null && typeof data.scrolly === 'function') {
-                try { data.scrolly(targetTop, applyViewport); } catch (e) {}
+                try { data.scrolly(targetTop, applyViewport); } catch (e) {console.warn('Error scrolling vertically:', e);}
             }
         }
         applyViewport();
@@ -1492,16 +1485,6 @@ function saveHistoryState() {
     appHistory.length = appHistoryIndex + 1; 
     appHistory.push(currentState);
     appHistoryIndex++;
-}
-
-function clickNativeToolbarButton(tooltipPattern) {
-    const buttons = Array.from(document.querySelectorAll('.x-spreadsheet-toolbar-btn'));
-    const target = buttons.find((btn) => tooltipPattern.test(btn.getAttribute('data-tooltip') || ''));
-    if (target) {
-        target.click();
-        return true;
-    }
-    return false;
 }
 
 function mergeSelectionSafely() {
@@ -2230,7 +2213,7 @@ function customizeToolbar() {
             activeToolbarSelectionSnapshot = btn._selectionSnapshot;
             e.preventDefault();
         });
-        btn.onclick = (e) => {
+        btn.onclick = () => {
             const selectionSnapshot = btn._selectionSnapshot || getActiveSelectionRange();
             activeToolbarSelectionSnapshot = selectionSnapshot;
             onClick();
@@ -2887,12 +2870,9 @@ function exportSocialCalc() {
 
     let output = preSheetLines.join('\n') + '\n';
 
-    let maxC = 0;
-    let maxR = 0;
-
     let bounds = getMaxBounds(data);
-    maxC = bounds.maxC;
-    maxR = bounds.maxR;
+    const maxC = bounds.maxC;
+    const maxR = bounds.maxR;
 
     for (let y = 0; y <= maxR; y++) {
         if (!rows[y] || !rows[y].cells) continue;
@@ -3115,58 +3095,6 @@ function getViewportScrollPosition() {
     };
 }
 
-function resolveVerticalScrollAnchor(data, targetY, fallbackRi = 0) {
-    const rows = data && data.rows;
-    const freezeRow = Array.isArray(data && data.freeze) && Number.isInteger(data.freeze[0]) ? data.freeze[0] : 0;
-    const maxRows = rows && Number.isInteger(rows.len) ? rows.len : 0;
-    const y = Number.isFinite(targetY) ? Math.max(0, targetY) : 0;
-
-    if (!rows || maxRows <= 0 || y <= 0) {
-        return { y: 0, ri: 0 };
-    }
-
-    let cumulative = 0;
-    let ri = freezeRow;
-    for (let i = freezeRow; i < maxRows; i++) {
-        const h = Number(rows.getHeight(i)) || 0;
-        if (h <= 0) continue;
-        cumulative += h;
-        ri = i;
-        if (y <= cumulative) {
-            return { y: cumulative, ri };
-        }
-    }
-
-    const safeRi = Number.isInteger(fallbackRi) ? Math.max(0, Math.min(fallbackRi, maxRows - 1)) : ri;
-    return { y: cumulative, ri: safeRi };
-}
-
-function resolveHorizontalScrollAnchor(data, targetX, fallbackCi = 0) {
-    const cols = data && data.cols;
-    const freezeCol = Array.isArray(data && data.freeze) && Number.isInteger(data.freeze[1]) ? data.freeze[1] : 0;
-    const maxCols = cols && Number.isInteger(cols.len) ? cols.len : 0;
-    const x = Number.isFinite(targetX) ? Math.max(0, targetX) : 0;
-
-    if (!cols || maxCols <= 0 || x <= 0) {
-        return { x: 0, ci: 0 };
-    }
-
-    let cumulative = 0;
-    let ci = freezeCol;
-    for (let i = freezeCol; i < maxCols; i++) {
-        const w = Number(cols.getWidth(i)) || 0;
-        if (w <= 0) continue;
-        cumulative += w;
-        ci = i;
-        if (x <= cumulative) {
-            return { x: cumulative, ci };
-        }
-    }
-
-    const safeCi = Number.isInteger(fallbackCi) ? Math.max(0, Math.min(fallbackCi, maxCols - 1)) : ci;
-    return { x: cumulative, ci: safeCi };
-}
-
 function restoreViewportScrollPosition(position) {
     if (!position || !mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
 
@@ -3186,10 +3114,10 @@ function restoreViewportScrollPosition(position) {
     const applyViewport = () => {
         // 1. MOVE SCROLLBARS FIRST
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : targetY); } catch (e) {}
+            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : targetY); } catch (e) {console.error('Error moving vertical scrollbar:', e); }
         }
         if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : targetX); } catch (e) {}
+            try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : targetX); } catch (e) {console.error('Error moving horizontal scrollbar:', e); }
         }
 
         // 2. RECALCULATE SELECTION BOX OFFSETS
@@ -3249,7 +3177,7 @@ function replaceOne() {
     const caseSensitive = document.getElementById('find-case-sensitive').checked;
     const useRegex = document.getElementById('find-use-regex').checked;
     let regex;
-    try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { return; }
+    try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { console.error('Error building search regex:', e); return; }
 
     const data = mySpreadsheet.getData()[0];
     const rowsLen = data.rows && typeof data.rows.len === 'number' ? data.rows.len : 100;
@@ -3290,7 +3218,7 @@ function replaceAll() {
     const caseSensitive = document.getElementById('find-case-sensitive').checked;
     const useRegex = document.getElementById('find-use-regex').checked;
     let regex;
-    try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { return; }
+    try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { console.error('Error building search regex:', e); return; }
     
     // Capture focus before mutation
     const activeEl = document.activeElement;
@@ -3396,10 +3324,10 @@ function handleSpreadsheetWheel(e) {
     // Resync UI to match the new scroll coordinates
     if (needsRender) {
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (err) {}
+            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (err) {console.error('Error moving vertical scrollbar:', err); }
         }
         if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            try { sheet.horizontalScrollbar.move(data.scroll.x); } catch (err) {}
+            try { sheet.horizontalScrollbar.move(data.scroll.x); } catch (err) {console.error('Error moving horizontal scrollbar:', err); }
         }
 
         if (sheet.selector) {
@@ -3542,7 +3470,6 @@ function handleSpreadsheetPaste(e) {
     const selection = getActiveSelectionRange();
     const startBounds = getExpandedCellBounds(data, selection.sri, selection.sci);
 
-    let targetHasMerges = false;
     if (hasInternalClipboard) {
         const srcRange = clipboard.range;
         const targetRange = {
@@ -3551,7 +3478,7 @@ function handleSpreadsheetPaste(e) {
             eri: startBounds.sri + (srcRange.eri - srcRange.sri),
             eci: startBounds.sci + (srcRange.eci - srcRange.sci)
         };
-        targetHasMerges = rangeContainsMerges(data, targetRange);
+        const targetHasMerges = rangeContainsMerges(data, targetRange);
         if (!targetHasMerges) {
             // Case 1: internal paste with no merged target => let engine preserve formatting.
             return;
