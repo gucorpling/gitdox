@@ -1291,7 +1291,7 @@ export function Dendroid({
               </g>
             ))}
   
-            {dragState.active && (
+            {dragState.active && (Math.abs(dragState.currentX - dragState.startX) > 5 || Math.abs(dragState.currentY - dragState.startY) > 5) && (
               <g><path d={(() => { const sY = dragState.sourceId === '0' ? dragState.startY : (dragState.isEdep ? BASE_Y + 50 : BASE_Y - 35); const arcQ = dragState.sourceId === '0' ? (sY + dragState.currentY) / 2 : (dragState.isEdep ? Math.max(sY, dragState.currentY) + 60 : Math.min(sY, dragState.currentY) - 60); return `M ${dragState.startX} ${sY} Q ${(dragState.startX + dragState.currentX) / 2} ${arcQ}, ${dragState.currentX} ${dragState.currentY}`; })()} stroke="#ec4899" strokeWidth="2" strokeDasharray="4 4" fill="none" markerEnd="url(#arrowhead-drag)" className="pointer-events-none" /></g>
             )}
   
@@ -1299,17 +1299,32 @@ export function Dendroid({
   
             {layout.nodes.map(node => {
               const isEllipsis = features.ellipsis && String(node.id).includes('.');
+              
+              const bottomProps = [];
+              if (colMappings.upos) bottomProps.push({ key: 'upos', val: node.upos, type: 'select', options: tagsets.upos, className: `text-[12px] fill-indigo-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}` });
+              if (colMappings.xpos) bottomProps.push({ key: 'xpos', val: node.xpos, type: 'select', options: tagsets.xpos, className: `text-[11px] fill-teal-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}` });
+              if (colMappings.lemma) bottomProps.push({ key: 'lemma', val: node.lemma, type: 'text', className: `text-[11px] fill-gray-500 italic select-none ${isCompareMode ? '' : 'cursor-text hover:underline hover:fill-indigo-500'}` });
+              
               return (
                 <g key={`node-${node.id}`} transform={`translate(${node.x}, ${BASE_Y})`} onMouseDown={(e) => handleWordMouseDown(e, node.id)}>
                   {dragState.active && dragState.hoveredTargetId === node.id && <rect x={-(node.width/2) - 10} y={dragState.isEdep ? "-20" : "-45"} width={node.width + 20} height="100" fill="#fbcfe8" opacity="0.4" rx="8" className="pointer-events-none" />}
                   
                   <text y="-15" textAnchor="middle" className={`text-[15px] ${isCompareMode ? '' : 'cursor-text hover:fill-indigo-600 hover:underline'} ${dragState.sourceId === node.id ? 'font-bold fill-pink-600' : (isEllipsis ? 'fill-blue-500 font-medium' : 'fill-gray-900')} transition-colors select-none`} onDoubleClick={(e) => openTextEditor(e, node, 'form', -15)}>{node.form}</text>
-                  <text y="5" textAnchor="middle" className={`text-[12px] fill-indigo-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}`} onClick={(e) => openSelectEditor(e, node, 'upos', 5, tagsets.upos)}>{node.upos}</text>
-                  <text y="20" textAnchor="middle" className={`text-[11px] fill-teal-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}`} onClick={(e) => openSelectEditor(e, node, 'xpos', 20, tagsets.xpos)}>{node.xpos}</text>
-                  <text y="35" textAnchor="middle" className={`text-[11px] fill-gray-500 italic select-none ${isCompareMode ? '' : 'cursor-text hover:underline hover:fill-indigo-500'}`} onDoubleClick={(e) => openTextEditor(e, node, 'lemma', 35)}>{node.lemma}</text>
+                  
+                  {bottomProps.map((prop, idx) => {
+                    const yPos = 5 + (idx * 15);
+                    return (
+                      <text key={prop.key} y={yPos} textAnchor="middle" className={prop.className}
+                            onMouseDown={e => e.stopPropagation()}
+                            onClick={prop.type === 'select' ? (e) => openSelectEditor(e, node, prop.key, yPos, prop.options) : undefined}
+                            onDoubleClick={prop.type === 'text' ? (e) => openTextEditor(e, node, prop.key, yPos) : undefined}>
+                        {prop.val}
+                      </text>
+                    );
+                  })}
                   
                   {(features.feats || features.misc) && !isCompareMode && (
-                    <g transform="translate(0, 48)" className="cursor-pointer opacity-60 hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setFeaturesModalTokenId(node.id); }}>
+                    <g transform={`translate(0, ${5 + bottomProps.length * 15 - 2})`} className="cursor-pointer opacity-60 hover:opacity-100 transition-opacity" onMouseDown={e => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setFeaturesModalTokenId(node.id); }}>
                       <rect x="-14" y="-8" width="28" height="14" rx="4" fill="#cbd5e1" /><circle cx="-6" cy="-1" r="1.5" fill="#475569" /><circle cx="0" cy="-1" r="1.5" fill="#475569" /><circle cx="6" cy="-1" r="1.5" fill="#475569" />
                     </g>
                   )}
@@ -1324,8 +1339,10 @@ export function Dendroid({
                   <input type="text" autoFocus defaultValue={inlineEditor.value} className="w-full px-2 py-1 text-sm bg-white text-gray-900 outline-none rounded-md focus:ring-2 focus:ring-indigo-500 font-medium text-center border border-gray-200 shadow-sm" onBlur={(e) => handleSaveInline(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveInline(e.target.value); if (e.key === 'Escape') setInlineEditor(null); }} />
                 ) : (
                   <select autoFocus size={6} defaultValue={inlineEditor.value} className="w-full px-1 py-1 text-sm outline-none rounded-md bg-white text-gray-700" onBlur={(e) => handleSaveInline(e.target.value)} onClick={(e) => { if (e.target.tagName === 'OPTION') handleSaveInline(e.target.value); }} onKeyDown={(e) => { if (e.key === 'Escape') setInlineEditor(null); if (e.key === 'Enter') handleSaveInline(e.target.value); }}>
-                    <option value="_">_ (remove edge)</option>
                     {[...inlineEditor.options].sort((a, b) => a.localeCompare(b)).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    {!['upos', 'xpos'].includes(inlineEditor.field) && (
+                        <option value="_">_ (remove edge)</option>
+                    )}
                   </select>
                 )}
               </div>
