@@ -1044,7 +1044,7 @@ def list_users(project_name: str, current_user: dict = Depends(require_admin(1))
 
     keys = r.keys(f"user:{project_name}:*")
     users = []
-    for key in keys:
+    for key in sorted(keys):
         user_data = r.hgetall(key)
         user_data.pop("password", None)
         user_data.pop("token_session", None)
