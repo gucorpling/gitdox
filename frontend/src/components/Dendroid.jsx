@@ -161,7 +161,7 @@ export function Dendroid({
   colMappings = {
     id: 'word_id', form: 'word', lemma: 'lemma', upos: 'upos', xpos: 'xpos',
     feats: 'feats', head: 'head', deprel: 'deprel', deps: 'deps', misc: 'misc',
-    annotator: 'dendroid:annotator'
+    annotator: 'dendroid:annotator', mwt: 'mwt'
   },
   features = {
     mwt: true, ellipsis: true, edeps: true, feats: true, misc: true
@@ -342,7 +342,7 @@ export function Dendroid({
   
     const colMap = {
       id: coreCols.id, form: coreCols.form, lemma: coreCols.lemma, upos: coreCols.upos, xpos: coreCols.xpos,
-      feats: coreCols.feats, misc: coreCols.misc, annotator: coreCols.annotator
+      feats: coreCols.feats, misc: coreCols.misc, annotator: coreCols.annotator, mwt: coreCols.mwt
     };
   
     let currentSent = null, lastBoundVal = null, lastSpanOrigin = null, lastBoundCell = null;
@@ -405,9 +405,18 @@ export function Dendroid({
 
         currentSent = { 
           id: `sent_${tempSentences.length}`, metadata: meta, comments: [], 
-          tokens: [], mwts: [], activeAnnotator: annotatorVal || null, globalRows: [] 
+          tokens: [], mwts: [], rawMwts: [], activeAnnotator: annotatorVal || null, globalRows: [] 
         };
         tempSentences.push(currentSent);
+      }
+
+      const mwtCell = colMap.mwt ? cells[`${r},${colMap.mwt}`] : null;
+      if (mwtCell && mwtCell.spanOrigin === r && mwtCell.v && mwtCell.v !== '_') {
+          currentSent.rawMwts.push({
+              startRow: r,
+              endRow: r + (mwtCell.originalRowspan || mwtCell.rowspan || 1) - 1,
+              form: mwtCell.v
+          });
       }
   
       if (idVal && (!currentTokenRow || currentTokenRow.id !== idVal)) {
@@ -433,7 +442,8 @@ export function Dendroid({
           id: idVal, _originalGlobalId: idVal,
           form: safeGet(colMap.form), lemma: safeGet(colMap.lemma), upos: safeGet(colMap.upos), xpos: safeGet(colMap.xpos),
           feats: safeGet(colMap.feats), misc: safeGet(colMap.misc), annotations: rowAnnotations,
-          _rowspan: tokenRowspan, _subRows: []
+          _rowspan: tokenRowspan, _subRows: [],
+          _startRow: r, _endRow: currentTokenRowSpanEnd
         };
         currentSent.globalRows.push(currentTokenRow);
       }
@@ -459,12 +469,32 @@ export function Dendroid({
       if (!sent.activeAnnotator || sent.activeAnnotator === '') sent.activeAnnotator = validAnns.length > 0 ? validAnns[0] : defaultAnnotator;
       const globalToLocal = { '0': '0', '_': '_' };
       let localCounter = 1;
-      const standardTokens = [], ellipsisTokens = [], mwtTokens = [];
+      const standardTokens = [], ellipsisTokens = [];
+      let mwtTokens = [];
   
       sent.globalRows.forEach(row => {
         if (String(row.id).includes('-')) mwtTokens.push(row);
         else if (String(row.id).includes('.')) ellipsisTokens.push(row);
         else standardTokens.push(row);
+      });
+
+      sent.rawMwts.forEach(rawMwt => {
+          // Rely on absolute row intersections to grab tokens mapped in the spreadsheet space
+          const startToken = standardTokens.find(tr => tr._startRow <= rawMwt.startRow && tr._endRow >= rawMwt.startRow);
+          const endToken = standardTokens.find(tr => tr._startRow <= rawMwt.endRow && tr._endRow >= rawMwt.endRow) || standardTokens.find(tr => tr._endRow === rawMwt.endRow);
+
+          if (startToken && endToken && startToken !== endToken) {
+              const mwtId = `${startToken.id}-${endToken.id}`;
+              if (!mwtTokens.some(m => m.id === mwtId)) {
+                  mwtTokens.push({
+                      id: mwtId,
+                      _originalGlobalId: `${startToken._originalGlobalId}-${endToken._originalGlobalId}`,
+                      form: rawMwt.form,
+                      lemma: '_', upos: '_', xpos: '_', feats: '_', misc: '_',
+                      annotations: {}
+                  });
+              }
+          }
       });
   
       standardTokens.forEach(row => {
@@ -510,6 +540,7 @@ export function Dendroid({
         });
       });
       delete sent.globalRows;
+      delete sent.rawMwts;
       
       sent.text = (textCol && sent.metadata[textCol]) ? sent.metadata[textCol] : buildFallbackText(sent.tokens, sent.mwts);
       sents.push(sent);
@@ -560,7 +591,7 @@ export function Dendroid({
     
     const allUnknowns = new Set();
     sents.forEach(s => {
-       const lines = [...(s.tokens || []), ...(s.mwts || [])];
+       const lines = [...(s.tokens || [])];
        lines.forEach(t => {
           (t._subRows || []).forEach(sr => Object.keys(sr.unk || {}).forEach(k => allUnknowns.add(k)));
        });
@@ -570,7 +601,12 @@ export function Dendroid({
     const tokenFields = ['id', 'form', 'lemma', 'upos', 'xpos', 'feats'].filter(f => colMappings[f]);
     const depFields = ['head', 'deprel', 'deps'].filter(f => colMappings[f]);
 
-    const headers = [...tokenFields.map(f => colMappings[f])];
+    const headers = [];
+    tokenFields.forEach(f => {
+        headers.push(colMappings[f]);
+        if (f === 'form' && colMappings.mwt) headers.push(colMappings.mwt);
+    });
+    if (!tokenFields.includes('form') && colMappings.mwt) headers.push(colMappings.mwt);
 
     if (perUserMode) {
       globalAnns.forEach(ann => {
@@ -630,10 +666,16 @@ export function Dendroid({
 
     sents.forEach(sent => {
       const localToGlobal = { '0': '0', '_': '_' };
-      sent.tokens.forEach(t => { localToGlobal[t.id] = t._newGlobalId; });
-      (sent.mwts || []).forEach(mwt => { localToGlobal[mwt.id] = mwt._newGlobalId; });
+      sent.tokens.forEach(t => {
+        localToGlobal[t.id] = t._newGlobalId;
+        if (t._originalGlobalId) localToGlobal[t._originalGlobalId] = t._newGlobalId;
+      });
+      (sent.mwts || []).forEach(mwt => {
+        localToGlobal[mwt.id] = mwt._newGlobalId;
+        if (mwt._originalGlobalId) localToGlobal[mwt._originalGlobalId] = mwt._newGlobalId;
+      });
   
-      const allLines = [...sent.tokens, ...(sent.mwts || [])];
+      const allLines = [...sent.tokens];
       allLines.sort((a, b) => {
         const aNum = parseFloat(String(a.id).split('-')[0]);
         const bNum = parseFloat(String(b.id).split('-')[0]);
@@ -678,9 +720,13 @@ export function Dendroid({
       });
   
       let tokenRowOffset = 0;
+      const tokenToRowMap = {};
+
       allLines.forEach(t => {
         const span = t._rowspan || 1;
         const globalId = localToGlobal[t.id] || t.id;
+        tokenToRowMap[t.id] = { startRow: currentRow + tokenRowOffset, span };
+
         const tokenFieldValues = { id: globalId, form: t.form, lemma: t.lemma, upos: t.upos, xpos: t.xpos, feats: t.feats };
   
         const cellWrites = {};
@@ -722,20 +768,14 @@ export function Dendroid({
           });
         };
 
-        if (String(t.id).includes('-')) {
-          const blankAnn = { head: '_', deprel: '_', deps: '_' };
-          if (perUserMode) globalAnns.forEach(a => pushDepFields(blankAnn, a));
-          else pushDepFields(blankAnn, defaultAnnotator);
+        if (perUserMode) {
+          globalAnns.forEach(annName => {
+            const ann = t.annotations[annName] || { head: '_', deprel: '_', deps: '_' };
+            pushDepFields(ann, annName);
+          });
         } else {
-          if (perUserMode) {
-            globalAnns.forEach(annName => {
-              const ann = t.annotations[annName] || { head: '_', deprel: '_', deps: '_' };
-              pushDepFields(ann, annName);
-            });
-          } else {
-            const ann = t.annotations[defaultAnnotator] || { head: '_', deprel: '_', deps: '_' };
-            pushDepFields(ann, defaultAnnotator);
-          }
+          const ann = t.annotations[defaultAnnotator] || { head: '_', deprel: '_', deps: '_' };
+          pushDepFields(ann, defaultAnnotator);
         }
         
         if (colMappings.misc) {
@@ -752,6 +792,31 @@ export function Dendroid({
         
         tokenRowOffset += span;
       });
+
+      if (colMappings.mwt) {
+        const mwtColIdx = headers.indexOf(colMappings.mwt) + 1;
+        if (mwtColIdx > 0) {
+            (sent.mwts || []).forEach(mwt => {
+                // Robustly get the local parts regardless whether they are already globalized
+                const [startId, endId] = String(mwt.id).split('-');
+                
+                // Match against local or global IDs in the row map 
+                const startData = tokenToRowMap[startId]
+                  || tokenToRowMap[localToGlobal[startId]]
+                  || tokenToRowMap[oldGlobalToNewGlobal[startId]];
+                const endData = tokenToRowMap[endId]
+                  || tokenToRowMap[localToGlobal[endId]]
+                  || tokenToRowMap[oldGlobalToNewGlobal[endId]];
+                
+                if (startData && endData) {
+                    const mwtStartRow = startData.startRow;
+                    const mwtEndRow = endData.startRow + endData.span - 1;
+                    const mwtSpan = mwtEndRow - mwtStartRow + 1;
+                    addCell(mwtStartRow, mwtColIdx, 't', mwt.form, mwtSpan > 1 ? `:rowspan:${mwtSpan}` : '');
+                }
+            });
+        }
+      }
       
       currentRow += rowSpan;
     });
@@ -1582,7 +1647,7 @@ const sampleData = `# newdoc
 # sent_id = 2
 1-2    doesn't    _    _    _    _    _    _    _    _
 1    does    do    AUX    VBZ    Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin    3    aux    _    _
-2    n't    not    PART    RB    _    3    advmod    _    _
+2    not    not    PART    RB    _    3    advmod    _    _
 3    require    require    VERB    VB    VerbForm=Inf    0    root    _    _
 4    spaces    space    NOUN    NNS    Number=Plur    3    obj    _    SpaceAfter=No
 5    .    .    PUNCT    .    _    3    punct    _    _`;

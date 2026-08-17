@@ -1464,7 +1464,8 @@ useEffect(() => {
                   deprel: getTokenAnn('deprel', 'deprel'),
                   deps: getTokenAnn('edeps', 'deps'),
                   misc: getTokenAnn('misc', 'misc'),
-                  annotator: 'annotator'
+                  annotator: 'dendroid:annotator',
+                  mwt: dendroidConfig?.mwt || ''
                 }}
                 features={{
                   mwt: Boolean(dendroidConfig?.mwt),
