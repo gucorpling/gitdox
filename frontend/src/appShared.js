@@ -134,7 +134,8 @@ export const DEFAULT_STATUS_CATEGORIES = ['init', 'review', 'published'];
 const EDITOR_DEFINITIONS = {
   xml: { key: 'xml', mode: 'xml', label: 'xml' },
   spreadsheet: { key: 'spreadsheet', mode: 'spreadsheet', label: 'spreadsheet' },
-  entities: { key: 'entities', mode: 'entities', label: 'entities' }
+  entities: { key: 'entities', mode: 'entities', label: 'entities' },
+  dendroid: { key: 'dendroid', mode: 'dendroid', label: 'dendroid' }
 };
 const DEFAULT_EDITOR_OPTIONS = Object.freeze([
   { key: 'xml', mode: 'xml', label: 'xml' }

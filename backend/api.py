@@ -134,7 +134,7 @@ def get_project_config(project_name: Optional[str] = None) -> dict:
         return {}
 
 
-VALID_DOCUMENT_MODES = {"xml", "spreadsheet", "entities"}
+VALID_DOCUMENT_MODES = {"xml", "spreadsheet", "entities", "dendroid"}
 
 
 def normalize_document_mode(mode: Optional[str]) -> str:

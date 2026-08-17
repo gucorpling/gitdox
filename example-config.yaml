@@ -5,7 +5,7 @@ instance:
   # You can set up a link to your annotation guidelines like this:
   help_message: <span style="color:black">For help getting started see the</span> <a href="https://gucorpling.org/gitdox/">website</a>
   excluded_metadata: []  # Document and corpus metadata keys to always exclude on corpus import
-  editors: {xml: "XML", spreadsheet: "spreadsheet", entities: "entities"}  # Which editors to enable (xml, spreadsheet and/or entities)
+  editors: {xml: "XML", spreadsheet: "spreadsheet", entities: "entities", dendroid: "syntax"}  # Which editors to enable (xml, spreadsheet and/or entities)
 
 
 # Tools live in backend/nlp_modules/
@@ -82,3 +82,26 @@ spreadsheet:
   column_order: [tok, pos, lemma, s_type, entity, infstat, salience, identity]
   font: "Times New Roman"
   copy_paste_level: 0
+
+dendroid:  # Syntax tree editor
+  multiuser: true  # Allow each user to have their own version of each tree
+  mwt: ""  # Name for CoNLL-U multiword token annotation, set to "" to turn off support
+  ellipsis: false  # Support for 'empty' decimal tokens with IDs like 5.1
+  default_annotator: "parser"
+  token_annotations:
+    word: tok
+    xpos: pos
+    upos: ""  # Use empty string to switch off
+    feats: morph
+    head: head
+    deprel: func
+    edeps: ""
+    misc: ""
+  tagsets:
+    upos: []  # Can be [] or "" if not using
+    xpos: ["NN", "IN", "DT", "JJ", "NNP", "PRP", ",", ".", "RB", "NNS", "VB", "CC", "VBP", "VBD", "VBZ", "VBN", "CD", "VBG", "TO", "PRP$", "MD", "UH", ":", "WDT", "-LRB-", "-RRB-", "WRB", "HYPH", "RP", "''", "``", "WP", "POS", "NNPS", "JJR", "RBR", "EX", "JJS", "FW", "SYM", "PDT", "RBS", "LS", "$", "WP$", "GW"]
+    deprels: ["punct", "case", "det", "nsubj", "root", "advmod", "amod", "obj", "obl", "nmod", "conj", "cc", "mark", "compound", "aux", "cop", "advcl", "nmod:poss", "xcomp", "acl:relcl", "flat", "acl", "discourse", "ccomp", "aux:pass", "parataxis", "nsubj:pass", "nummod", "appos", "compound:prt", "obl:unmarked", "fixed", "expl", "dep", "reparandum", "nmod:unmarked", "iobj", "obl:agent", "csubj", "advcl:relcl", "nmod:desc", "det:predet", "vocative", "list", "orphan", "cc:preconj", "dislocated", "goeswith", "csubj:pass"]
+    edeprels: []
+  sentence_annotations: [translation, verse_n]
+  sentence_span: translation
+  sentence_text: ""  # Use empty string to compute from tokens

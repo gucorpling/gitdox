@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown, GitBranch } from 'lucide-react';
 import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath, getDefaultEditorMode } from '../appShared';
 import { EMPTY_DASHBOARD_FILTERS, normalizeDashboardViewState, areColumnFiltersEqual, getValidationSummary, isNavDark } from '../App';
 
@@ -256,6 +256,8 @@ const DocumentRow = React.memo(({
           <span className="inline-flex items-center" title={modeLabel}><Users size={16} /></span>
         ) : doc.mode === 'xml' ? (
           <span className="inline-flex items-center" title={modeLabel}><Code2 size={16} /></span>
+        ) : doc.mode === 'dendroid' ? (
+          <span className="inline-flex items-center" title={modeLabel}><GitBranch size={16} /></span>
         ) : (
           modeLabel
         )}

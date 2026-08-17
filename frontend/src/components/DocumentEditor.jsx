@@ -8,6 +8,7 @@ import { Prec } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import SpreadsheetEditor from './SpreadsheetEditor';
 import Spannotator from './Spannotator';
+import { Dendroid } from './Dendroid';
 import ValidationBadge from './ValidationBadge';
 import {
   DEFAULT_STATUS_CATEGORIES,
@@ -23,7 +24,23 @@ import {
   isSpreadsheetBackedMode
 } from '../App';
 
-export default function DocumentEditor({ apiCall, docId, goBack, goBackToCorpus, user, projectName, mutationTools, spannotatorConfig = {}, editorOptions = [], editorFonts = {}, spreadsheetColumnOrderConfig = [], xmlTagCompletion = null, statusCategories = [], isAppConfigLoaded = false }) {
+export default function DocumentEditor({ 
+  apiCall, 
+  docId, 
+  goBack, 
+  goBackToCorpus, 
+  user, 
+  projectName, 
+  mutationTools, 
+  spannotatorConfig = {}, 
+  dendroidConfig = {}, 
+  editorOptions = [], 
+  editorFonts = {}, 
+  spreadsheetColumnOrderConfig = [], 
+  xmlTagCompletion = null, 
+  statusCategories = [], 
+  isAppConfigLoaded = false 
+}) {
   const [doc, setDoc] = useState(null);
   const [contentXml, setContentXml] = useState('');
   const [contentSpreadsheet, setContentSpreadsheet] = useState('');
@@ -189,7 +206,7 @@ useEffect(() => {
   }, [contentXml, doc?.id, doc?.mode, isXmlDirty]);
 
   useEffect(() => {
-    if (!doc || !isSpreadsheetBackedMode(doc.mode) || !isSpreadsheetDirty) return;
+    if (!doc || !(isSpreadsheetBackedMode(doc.mode) || doc.mode === 'dendroid') || !isSpreadsheetDirty) return;
 
     const timer = setTimeout(() => {
       autoSaveSpreadsheetContent(contentSpreadsheet);
@@ -495,7 +512,7 @@ useEffect(() => {
     }
   }, [doc, apiCall, autoSaveSpreadsheetContent]);
 
-const runSpannotatorToolMutation = async (toolKey) => {
+  const runSpannotatorToolMutation = async (toolKey) => {
     if (!doc || !contentSpreadsheet.trim()) {
       alert('Spreadsheet content is empty.');
       return '';
@@ -988,6 +1005,12 @@ const runSpannotatorToolMutation = async (toolKey) => {
     }
   };
 
+  // Safe Retrieval Helper for configuration fields where empty strings "" are meaningful triggers to disable logic
+  const getTokenAnn = (key, defaultVal) => {
+    const val = dendroidConfig?.token_annotations?.[key];
+    return val !== undefined ? val : defaultVal;
+  };
+
   const currentMetadataArray = activeMetaTab === 'document' ? metadata : corpusMetadata;
   const uiFontFamily = normalizeFontFamily(editorFonts?.ui?.font);
   const uiPanelBackgroundColor = normalizeCssStyleValue(editorFonts?.ui?.panel_background_color);
@@ -1417,6 +1440,46 @@ const runSpannotatorToolMutation = async (toolKey) => {
                 onFetchIdentitySuggestions={fetchIdentitySuggestions}
                 onChange={handleSpreadsheetContentChange}
                 className="h-full overflow-auto"
+              />
+            </div>
+          ) : doc.mode === 'dendroid' ? (
+            <div className="flex-1 w-full h-full pt-10 overflow-hidden border-t border-slate-100 bg-white">
+              <Dendroid
+                initialData={contentSpreadsheet}
+                initialFormat="socialcalc"
+                currentUser={user?.username || 'Anonymous'}
+                defaultAnnotator={dendroidConfig?.default_annotator || 'parser'}
+                perUserMode={dendroidConfig?.multiuser ?? true}
+                textCol={dendroidConfig?.sentence_text ?? ''}
+                sentBoundCol={dendroidConfig?.sentence_span ?? 'sent_id'}
+                sentenceAnnotations={dendroidConfig?.sentence_annotations ?? []}
+                colMappings={{
+                  id: getTokenAnn('word_id', 'word_id'),
+                  form: getTokenAnn('word', 'tok'),
+                  lemma: getTokenAnn('lemma', 'lemma'),
+                  upos: getTokenAnn('upos', 'upos'),
+                  xpos: getTokenAnn('xpos', 'xpos'),
+                  feats: getTokenAnn('feats', 'feats'),
+                  head: getTokenAnn('head', 'head'),
+                  deprel: getTokenAnn('deprel', 'deprel'),
+                  deps: getTokenAnn('edeps', 'deps'),
+                  misc: getTokenAnn('misc', 'misc'),
+                  annotator: 'annotator'
+                }}
+                features={{
+                  mwt: Boolean(dendroidConfig?.mwt),
+                  ellipsis: Boolean(dendroidConfig?.ellipsis),
+                  edeps: Boolean(getTokenAnn('edeps', '')),
+                  feats: Boolean(getTokenAnn('feats', '')),
+                  misc: Boolean(getTokenAnn('misc', ''))
+                }}
+                tagsets={{
+                  upos: dendroidConfig?.tagsets?.upos || [],
+                  xpos: dendroidConfig?.tagsets?.xpos || [],
+                  deprel: dendroidConfig?.tagsets?.deprels || [],
+                  edeprel: dendroidConfig?.tagsets?.edeprels || []
+                }}
+                onChange={handleSpreadsheetContentChange}
               />
             </div>
           ) : (
