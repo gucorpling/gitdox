@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Save, Upload, Download, Search, Settings, X, Plus, ChevronLeft, Info, Users } from 'lucide-react';
+import { ChevronDown, ChevronRight, Save, Upload, Download, Search, Settings, X, Plus, ChevronLeft, Info, Users, GitBranch } from 'lucide-react';
 
 const DEFAULT_ANNOTATOR = '<anonymous>';
 const COLORS = ['#94a3b8', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#f43f5e', '#14b8a6', '#d946ef', '#f97316'];
@@ -161,7 +161,7 @@ export function Dendroid({
   colMappings = {
     id: 'word_id', form: 'word', lemma: 'lemma', upos: 'upos', xpos: 'xpos',
     feats: 'feats', head: 'head', deprel: 'deprel', deps: 'deps', misc: 'misc',
-    annotator: 'annotator'
+    annotator: 'dendroid:annotator'
   },
   features = {
     mwt: true, ellipsis: true, edeps: true, feats: true, misc: true
@@ -239,7 +239,8 @@ export function Dendroid({
       rawTokens.forEach(cols => {
         const id = cols[0];
         const tokenData = {
-          id, form: cols[1], lemma: cols[2], upos: cols[3], xpos: cols[4],
+          id, _originalGlobalId: id,
+          form: cols[1], lemma: cols[2], upos: cols[3], xpos: cols[4],
           feats: cols[5], misc: cols[9], _subRows: [], _rowspan: 1,
           annotations: {
             [sentence.activeAnnotator]: { head: cols[6], deprel: cols[7], deps: cols[8] }
@@ -346,22 +347,37 @@ export function Dendroid({
   
     let currentSent = null, lastBoundVal = null, lastSpanOrigin = null, lastBoundCell = null;
     let currentTokenRow = null;
+    let currentTokenRowSpanEnd = 0;
     const tempSentences = [];
   
     for (let r=2; r<=maxRow; r++) {
-      const idVal = colMap.id && cells[`${r},${colMap.id}`] ? cells[`${r},${colMap.id}`].v : null;
-      const formVal = colMap.form && cells[`${r},${colMap.form}`] ? cells[`${r},${colMap.form}`].v : null;
+      let rowHasData = false;
+      for (let c=1; c<=maxCol; c++) {
+        if (cells[`${r},${c}`]) { rowHasData = true; break; }
+      }
+      if (!rowHasData) continue;
+
+      let idCell = colMap.id ? cells[`${r},${colMap.id}`] : null;
+      let idVal = idCell ? idCell.v : null;
+      const formCell = colMap.form ? cells[`${r},${colMap.form}`] : null;
+      const formVal = formCell ? formCell.v : null;
       const annotatorVal = perUserMode && colMap.annotator && cells[`${r},${colMap.annotator}`] ? cells[`${r},${colMap.annotator}`].v : null;
       
+      if (r > currentTokenRowSpanEnd) {
+        if (!idVal || idVal === '') {
+          idVal = `__TEMP_ID_${r}__`;
+        }
+      }
+
       const boundCell = cells[`${r},${boundColIdx}`];
       const boundVal = boundCell?.v;
       const currentSpanOrigin = boundCell?.spanOrigin;
 
-      if (!idVal && !formVal) continue;
-      if (!boundVal && formVal) throw new Error(`Missing boundary value in column '${sentBoundCol}' at row ${r}. Sentences cannot be reconstructed.`);
+      let effectiveBoundVal = boundVal !== undefined ? boundVal : lastBoundVal;
+      if (!effectiveBoundVal) effectiveBoundVal = 'sent_1';
   
       let isNewSent = false;
-      if (boundVal !== lastBoundVal) {
+      if (boundVal !== undefined && boundVal !== lastBoundVal) {
         isNewSent = true;
       } else if (currentSpanOrigin !== lastSpanOrigin) {
         if ((boundCell && boundCell.originalRowspan > 1) || (lastBoundCell && lastBoundCell.originalRowspan > 1)) {
@@ -370,17 +386,18 @@ export function Dendroid({
       }
 
       if (isNewSent || !currentSent) {
-        lastBoundVal = boundVal;
+        lastBoundVal = boundVal !== undefined ? boundVal : effectiveBoundVal;
         lastSpanOrigin = currentSpanOrigin;
         lastBoundCell = boundCell;
         currentTokenRow = null;
+        currentTokenRowSpanEnd = 0;
         
         const meta = {};
         if (textCol) {
            const textIdx = rawHeaders[Object.keys(rawHeaders).find(k => k.toLowerCase() === textCol.toLowerCase())];
            meta[textCol] = (textIdx && cells[`${r},${textIdx}`]) ? cells[`${r},${textIdx}`].v : '';
         }
-        meta[sentBoundCol] = boundVal;
+        meta[sentBoundCol] = effectiveBoundVal;
         sentenceAnnotations.forEach(sa => {
            const idx = rawHeaders[Object.keys(rawHeaders).find(k => k.toLowerCase() === sa.toLowerCase())];
            if (idx) meta[sa] = cells[`${r},${idx}`]?.v || '';
@@ -394,8 +411,8 @@ export function Dendroid({
       }
   
       if (idVal && (!currentTokenRow || currentTokenRow.id !== idVal)) {
-        const formCell = colMap.form ? cells[`${r},${colMap.form}`] : null;
-        const tokenRowspan = formCell ? (formCell.originalRowspan || 1) : 1;
+        const tokenRowspan = formCell ? (formCell.originalRowspan || 1) : (idCell ? (idCell.originalRowspan || 1) : 1);
+        currentTokenRowSpanEnd = r + tokenRowspan - 1;
 
         const safeGet = (colIndex) => {
           if (!colIndex || !cells[`${r},${colIndex}`]) return '_';
@@ -413,7 +430,8 @@ export function Dendroid({
         });
   
         currentTokenRow = {
-          id: idVal, form: safeGet(colMap.form), lemma: safeGet(colMap.lemma), upos: safeGet(colMap.upos), xpos: safeGet(colMap.xpos),
+          id: idVal, _originalGlobalId: idVal,
+          form: safeGet(colMap.form), lemma: safeGet(colMap.lemma), upos: safeGet(colMap.upos), xpos: safeGet(colMap.xpos),
           feats: safeGet(colMap.feats), misc: safeGet(colMap.misc), annotations: rowAnnotations,
           _rowspan: tokenRowspan, _subRows: []
         };
@@ -452,7 +470,7 @@ export function Dendroid({
       standardTokens.forEach(row => {
         const localId = String(localCounter++);
         globalToLocal[row.id] = localId;
-        sent.tokens.push({ ...row, id: localId });
+        sent.tokens.push({ ...row, id: localId, _originalGlobalId: row._originalGlobalId });
       });
   
       ellipsisTokens.forEach(row => {
@@ -460,8 +478,8 @@ export function Dendroid({
         const localBase = globalToLocal[base] || '1'; 
         const localId = `${localBase}.${sub}`;
         globalToLocal[row.id] = localId;
-        if (features.ellipsis) sent.tokens.push({ ...row, id: localId });
-        else sent.tokens.push({ ...row, id: row.id }); 
+        if (features.ellipsis) sent.tokens.push({ ...row, id: localId, _originalGlobalId: row._originalGlobalId });
+        else sent.tokens.push({ ...row, id: row.id, _originalGlobalId: row._originalGlobalId }); 
       });
   
       mwtTokens.forEach(row => {
@@ -470,16 +488,23 @@ export function Dendroid({
         const localEnd = globalToLocal[end] || end;
         const localId = `${localStart}-${localEnd}`;
         globalToLocal[row.id] = localId;
-        if (features.mwt) sent.mwts.push({ ...row, id: localId });
+        if (features.mwt) sent.mwts.push({ ...row, id: localId, _originalGlobalId: row._originalGlobalId });
       });
   
       sent.tokens.forEach(token => {
         Object.keys(token.annotations).forEach(annName => {
           const ann = token.annotations[annName];
-          if (ann.head !== '0' && ann.head !== '_') ann.head = globalToLocal[ann.head] || '_';
+          if (ann.head !== '0' && ann.head !== '_') {
+            ann._originalGlobalHead = ann.head;
+            ann.head = globalToLocal[ann.head] || `ext:${ann.head}`;
+          }
           if (ann.deps && ann.deps !== '_') {
             const edeps = parseEdeps(ann.deps);
-            const mappedEdeps = edeps.map(e => ({ ...e, head: globalToLocal[e.head] || '_' })).filter(e => e.head !== '_');
+            const mappedEdeps = edeps.map(e => ({ 
+                ...e, 
+                _originalGlobalHead: e.head,
+                head: globalToLocal[e.head] || `ext:${e.head}` 
+            })).filter(e => e.head !== '_');
             ann.deps = stringifyEdeps(mappedEdeps);
           }
         });
@@ -521,7 +546,9 @@ export function Dendroid({
       out += allLines.map(t => {
         if (String(t.id).includes('-')) return [t.id, t.form, t.lemma, t.upos, t.xpos, t.feats, '_', '_', '_', t.misc].join('\t');
         const ann = t.annotations[exportAnn] || { head: '_', deprel: '_', deps: '_' };
-        return [t.id, t.form, t.lemma, t.upos, t.xpos, t.feats, ann.head, ann.deprel, ann.deps, t.misc].join('\t');
+        let outHead = ann.head;
+        if (String(outHead).startsWith('ext:')) outHead = outHead.substring(4);
+        return [t.id, t.form, t.lemma, t.upos, t.xpos, t.feats, outHead, ann.deprel, ann.deps, t.misc].join('\t');
       }).join('\n');
       return out;
     }).join('\n\n') + '\n\n';
@@ -563,7 +590,7 @@ export function Dendroid({
 
     headers.push(...metaCols);
 
-    if (perUserMode) headers.push(colMappings.annotator || 'annotator');
+    if (perUserMode) headers.push(colMappings.annotator || 'dendroid:annotator');
     if (colMappings.misc) headers.push(colMappings.misc);
   
     const generatedCells = [];
@@ -576,19 +603,35 @@ export function Dendroid({
     headers.forEach((h, i) => { addCell(1, i + 1, 't', h, ':f:1'); });
   
     let currentRow = 2, globalIdCounter = 1;
-  
+    const oldGlobalToNewGlobal = {};
+
     sents.forEach(sent => {
-      const localToGlobal = { '0': '0', '_': '_' };
-      
-      sent.tokens.filter(t => !String(t.id).includes('.')).forEach(t => { localToGlobal[t.id] = String(globalIdCounter++); });
+      sent.tokens.filter(t => !String(t.id).includes('.')).forEach(t => { 
+        const newG = String(globalIdCounter++);
+        if (t._originalGlobalId) oldGlobalToNewGlobal[t._originalGlobalId] = newG;
+        t._newGlobalId = newG;
+      });
       sent.tokens.filter(t => String(t.id).includes('.')).forEach(t => {
         const [base, sub] = String(t.id).split('.');
-        localToGlobal[t.id] = `${localToGlobal[base] || base}.${sub}`;
+        const baseG = sent.tokens.find(bt => bt.id === base)?._newGlobalId || base;
+        const newG = `${baseG}.${sub}`;
+        if (t._originalGlobalId) oldGlobalToNewGlobal[t._originalGlobalId] = newG;
+        t._newGlobalId = newG;
       });
       (sent.mwts || []).forEach(mwt => {
         const [start, end] = String(mwt.id).split('-');
-        localToGlobal[mwt.id] = `${localToGlobal[start] || start}-${localToGlobal[end] || end}`;
+        const startG = sent.tokens.find(t => t.id === start)?._newGlobalId || start;
+        const endG = sent.tokens.find(t => t.id === end)?._newGlobalId || end;
+        const newG = `${startG}-${endG}`;
+        if (mwt._originalGlobalId) oldGlobalToNewGlobal[mwt._originalGlobalId] = newG;
+        mwt._newGlobalId = newG;
       });
+    });
+
+    sents.forEach(sent => {
+      const localToGlobal = { '0': '0', '_': '_' };
+      sent.tokens.forEach(t => { localToGlobal[t.id] = t._newGlobalId; });
+      (sent.mwts || []).forEach(mwt => { localToGlobal[mwt.id] = mwt._newGlobalId; });
   
       const allLines = [...sent.tokens, ...(sent.mwts || [])];
       allLines.sort((a, b) => {
@@ -615,7 +658,7 @@ export function Dendroid({
       });
 
       if (perUserMode && rowSpan > 0 && sent.activeAnnotator) {
-        addCell(currentRow, headers.indexOf(colMappings.annotator || 'annotator') + 1, 't', sent.activeAnnotator, rowSpan > 1 ? `:rowspan:${rowSpan}` : '');
+        addCell(currentRow, headers.indexOf(colMappings.annotator || 'dendroid:annotator') + 1, 't', sent.activeAnnotator, rowSpan > 1 ? `:rowspan:${rowSpan}` : '');
       }
   
       unknownList.forEach(colName => {
@@ -648,11 +691,27 @@ export function Dendroid({
 
         const pushDepFields = (ann, annName) => {
           let globalHead = ann.head;
-          if (ann.head !== '0' && ann.head !== '_') globalHead = localToGlobal[ann.head] || '_';
+          if (ann.head !== '0' && ann.head !== '_') {
+            if (String(ann.head).startsWith('ext:')) {
+              const oldG = ann.head.substring(4);
+              globalHead = oldGlobalToNewGlobal[oldG] || oldG;
+            } else {
+              globalHead = localToGlobal[ann.head] || ann.head;
+            }
+          }
           let globalDeps = ann.deps;
           if (ann.deps && ann.deps !== '_') {
             const edeps = parseEdeps(ann.deps);
-            globalDeps = stringifyEdeps(edeps.map(e => ({ ...e, head: localToGlobal[e.head] || e.head })));
+            globalDeps = stringifyEdeps(edeps.map(e => {
+              let eHead = e.head;
+              if (String(e.head).startsWith('ext:')) {
+                const oldG = e.head.substring(4);
+                eHead = oldGlobalToNewGlobal[oldG] || oldG;
+              } else {
+                eHead = localToGlobal[e.head] || e.head;
+              }
+              return { ...e, head: eHead };
+            }));
           }
           const depFieldValues = { head: globalHead, deprel: ann.deprel, deps: globalDeps };
           depFields.forEach(f => {
@@ -1403,7 +1462,7 @@ export function Dendroid({
         <div className="w-full px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-white/10 p-1.5 rounded-lg border border-white/20">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-300"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+              <GitBranch size={24} className="text-indigo-300" />
             </div>
             <h1 className="text-lg font-bold tracking-tight"><span className="text-indigo-300 font-light ml-1">GitDOX</span> Dendroid</h1>
             {perUserMode && <span className="bg-indigo-800 text-xs px-2 py-1 rounded ml-4">Editing as: <strong>{currentUser}</strong></span>}
@@ -1430,6 +1489,7 @@ export function Dendroid({
                 <div className="p-4 text-sm text-gray-700 bg-white grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 animate-in fade-in duration-200">
                   <ul className="list-disc pl-5 space-y-1.5" style={{ textAlign: 'left' }}>
                     <li><b>Assign dependencies:</b> Drag governor to dependent to attach.</li>
+                    <li><b>Assign root:</b> Drag from the top above a word to set it as the root.</li>
                     {features.edeps && <li><b>Enhanced Dependencies:</b> <span className="text-indigo-600 font-semibold">Hold CTRL</span> while dragging.</li>}
                     {features.mwt && <li><b>Multiword Tokens:</b> <span className="text-blue-500 font-semibold">Hold SHIFT</span> & drag to lasso tokens.</li>}
                   </ul>
