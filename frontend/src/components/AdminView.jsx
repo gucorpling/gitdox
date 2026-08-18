@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Plus, Trash2, Edit, X, Upload, Download, Shield, ShieldPlus, ArrowUpFromLine, User } from 'lucide-react';
 import {
   API_ROOT,
@@ -8,7 +8,7 @@ import {
   normalizeCssStyleValue,
   normalizeStatusCategories,
 } from '../appShared';
-import { isNavDark   } from '../App';
+import { isNavDark } from '../App';
 
 export default function AdminView({ apiCall, user, token, projectName, uiConfig = {}, statusCategories = [], refreshStatusCategories }) {
   const adminLevel = user?.adminlevel ?? 0;
@@ -23,6 +23,35 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
   const [activeTab, setActiveTab] = useState(canManageUsers ? 'users' : canManageAssignments ? 'assignments' : 'validations');
   const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ username: '', password: '', realname: '', email: '', adminlevel: 0, git_username: '', token: '' });
+  const [userSort, setUserSort] = useState({ key: 'username', dir: 'asc' });
+
+  const handleUserSort = (key) => {
+    setUserSort((prev) => ({
+      key,
+      dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  const sortedUsers = useMemo(() => {
+  if (!userSort.key) return users;
+  return [...users].sort((a, b) => {
+    let aVal = a[userSort.key] ?? '';
+    let bVal = b[userSort.key] ?? '';
+
+    if (userSort.key === 'adminlevel') {
+      aVal = parseInt(aVal, 10) || 0;
+      bVal = parseInt(bVal, 10) || 0;
+    } else {
+      aVal = String(aVal).toLowerCase();
+      bVal = String(bVal).toLowerCase();
+    }
+
+    if (aVal < bVal) return userSort.dir === 'asc' ? -1 : 1;
+    if (aVal > bVal) return userSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  }, [users, userSort]);
+
   const [isEditing, setIsEditing] = useState(false);
   const [validations, setValidations] = useState([]);
   const [validationSort, setValidationSort] = useState({ key: null, dir: 'asc' });
@@ -67,7 +96,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
   const [statusChangeForm, setStatusChangeForm] = useState({ fromStatus: '', toStatus: '' });
   const [statusChangeResult, setStatusChangeResult] = useState(null);
   
-// State variables for Bulk Status Assignment
+  // State variables for Bulk Status Assignment
   const [bulkStatusForm, setBulkStatusForm] = useState({ corpus: '', document: '', status: '' });
   const [bulkStatusResult, setBulkStatusResult] = useState(null);
   
@@ -79,7 +108,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
   const [statusChangePhase, setStatusChangePhase] = useState('idle'); // 'idle' | 'checking' | 'updating'
   const [bulkStatusPhase, setBulkStatusPhase] = useState('idle');     // 'idle' | 'checking' | 'updating'
   const [metadataPhase, setMetadataPhase] = useState('idle');         // 'idle' | 'checking' | 'updating'
-  const [assignmentPhase, setAssignmentPhase] = useState('idle');       // 'idle' | 'c
+  const [assignmentPhase, setAssignmentPhase] = useState('idle');       // 'idle' | 'checking' | 'updating'
 
   const validationFileInputRef = useRef(null);
   const [isImportingValidations, setIsImportingValidations] = useState(false);
@@ -93,68 +122,86 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     return normalizeStatusCategories(statusCategories);
   }, [statusCategories]);
 
+  // Define resetValidationForm early so it can be safely used in useEffect
+  const resetValidationForm = useCallback(() => {
+    setValidationForm(EMPTY_VALIDATION);
+    setIsEditingValidation(false);
+    setShowValidationForm(false);
+  }, []);
+
   useEffect(() => {
-    setStatusChangeForm((prev) => {
-      if (!availableStatusCategories.length) {
-        if (!prev.fromStatus && !prev.toStatus) return prev;
-        return { fromStatus: '', toStatus: '' };
-      }
+    const timer = setTimeout(() => {
+      setStatusChangeForm((prev) => {
+        if (!availableStatusCategories.length) {
+          if (!prev.fromStatus && !prev.toStatus) return prev;
+          return { fromStatus: '', toStatus: '' };
+        }
 
-      const nextFrom = availableStatusCategories.includes(prev.fromStatus)
-        ? prev.fromStatus
-        : availableStatusCategories[0];
-      const nextTo = availableStatusCategories.find((status) => status !== nextFrom)
-        || availableStatusCategories[0]
-        || '';
+        const nextFrom = availableStatusCategories.includes(prev.fromStatus)
+          ? prev.fromStatus
+          : availableStatusCategories[0];
+        const nextTo = availableStatusCategories.find((status) => status !== nextFrom)
+          || availableStatusCategories[0]
+          || '';
 
-      if (prev.fromStatus === nextFrom && prev.toStatus === nextTo) {
-        return prev;
-      }
+        if (prev.fromStatus === nextFrom && prev.toStatus === nextTo) {
+          return prev;
+        }
 
-      return { fromStatus: nextFrom, toStatus: nextTo };
-    });
+        return { fromStatus: nextFrom, toStatus: nextTo };
+      });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [availableStatusCategories]);
 
   useEffect(() => {
-    setCorpusUploadDefaultStatus((prev) => {
-      if (!availableStatusCategories.length) {
-        return prev || DEFAULT_STATUS_CATEGORIES[0] || 'init';
-      }
-      if (availableStatusCategories.includes(prev)) {
-        return prev;
-      }
-      return availableStatusCategories[0];
-    });
+    const timer = setTimeout(() => {
+      setCorpusUploadDefaultStatus((prev) => {
+        if (!availableStatusCategories.length) {
+          return prev || DEFAULT_STATUS_CATEGORIES[0] || 'init';
+        }
+        if (availableStatusCategories.includes(prev)) {
+          return prev;
+        }
+        return availableStatusCategories[0];
+      });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [availableStatusCategories]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const data = await apiCall(`/projects/${projectName}/users`);
       setUsers(data);
-    } catch (err) {}
-  };
+    } catch (err) {
+      console.warn("Error fetching users:", err);
+    }
+  }, [apiCall, projectName]);
 
-  const fetchValidations = async () => {
+  const fetchValidations = useCallback(async () => {
     try {
       const data = await apiCall(`/projects/${projectName}/validations`);
       setValidations(Array.isArray(data) ? data : []);
-    } catch (err) {}
-  };
+    } catch (err) {
+      console.warn("Error fetching validations:", err);
+    }
+  }, [apiCall, projectName]);
 
-  const fetchCorpora = async () => {
+  const fetchCorpora = useCallback(async () => {
     setIsCorpusListLoading(true);
     try {
       const data = await apiCall(`/projects/${projectName}/corpora`);
       const corporaList = Array.isArray(data?.corpora) ? data.corpora : [];
       setCorpora(corporaList);
     } catch (err) {
+      console.warn("Error fetching corpora:", err);
       setCorpora([]);
     } finally {
       setIsCorpusListLoading(false);
     }
-  };
+  }, [apiCall, projectName]);
 
-  const fetchExportConfigs = async () => {
+  const fetchExportConfigs = useCallback(async () => {
     setIsExportConfigsLoading(true);
     try {
       const data = await apiCall('/configs');
@@ -163,65 +210,88 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
         : [];
       setExportConfigs(configs);
     } catch (err) {
+      console.warn("Error fetching export configs:", err);
       setExportConfigs([]);
     } finally {
       setIsExportConfigsLoading(false);
     }
-  };
+  }, [apiCall]);
 
   useEffect(() => {
-    if (canManageUsers || canManageAssignments) {
-      fetchUsers();
-    }
-    if (canManageValidations) {
-      fetchValidations();
-    }
-    fetchCorpora();
-  }, [canManageUsers, canManageAssignments, canManageValidations, projectName]);
+    const load = async () => {
+      if (canManageUsers || canManageAssignments) {
+        await fetchUsers();
+      }
+      if (canManageValidations) {
+        await fetchValidations();
+      }
+      await fetchCorpora();
+    };
+    load();
+  }, [canManageUsers, canManageAssignments, canManageValidations, fetchUsers, fetchValidations, fetchCorpora]);
 
   useEffect(() => {
-    if (activeTab === 'users' && !canManageUsers) {
-      setActiveTab(canManageAssignments ? 'assignments' : (canManageValidations ? 'validations' : 'corpus-management'));
-      return;
-    }
-    if (activeTab === 'assignments' && !canManageAssignments) {
-      setActiveTab(canManageUsers ? 'users' : (canManageValidations ? 'validations' : 'corpus-management'));
-    }
+    const timer = setTimeout(() => {
+      if (activeTab === 'users' && !canManageUsers) {
+        setActiveTab(canManageAssignments ? 'assignments' : (canManageValidations ? 'validations' : 'corpus-management'));
+        return;
+      }
+      if (activeTab === 'assignments' && !canManageAssignments) {
+        setActiveTab(canManageUsers ? 'users' : (canManageValidations ? 'validations' : 'corpus-management'));
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [activeTab, canManageUsers, canManageAssignments, canManageValidations]);
 
   useEffect(() => {
-    if (!corpora.length) {
-      setSelectedCorpus('');
-      return;
-    }
-    if (!selectedCorpus || !corpora.includes(selectedCorpus)) {
-      setSelectedCorpus(corpora[0]);
-    }
+    const timer = setTimeout(() => {
+      if (!corpora.length) {
+        setSelectedCorpus('');
+        return;
+      }
+      if (!selectedCorpus || !corpora.includes(selectedCorpus)) {
+        setSelectedCorpus(corpora[0]);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [corpora, selectedCorpus]);
 
   useEffect(() => {
-    setRenameCorpusName(selectedCorpus || '');
+    const timer = setTimeout(() => {
+      setRenameCorpusName(selectedCorpus || '');
+    }, 0);
+    return () => clearTimeout(timer);
   }, [selectedCorpus]);
 
   useEffect(() => {
-    if (corpusExportMode !== 'spreadsheet') {
-      setCorpusExportConfig('');
-      return;
-    }
-
-    if (!exportConfigs.length && !isExportConfigsLoading) {
-      fetchExportConfigs();
-    }
+    const timer = setTimeout(() => {
+      if (corpusExportMode !== 'spreadsheet') {
+        setCorpusExportConfig('');
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [corpusExportMode]);
 
   useEffect(() => {
-    if (!exportConfigs.length) {
-      setCorpusExportConfig('');
-      return;
-    }
-    if (!corpusExportConfig || !exportConfigs.includes(corpusExportConfig)) {
-      setCorpusExportConfig(exportConfigs[0]);
-    }
+    const load = async () => {
+      if (corpusExportMode === 'spreadsheet' && !exportConfigs.length && !isExportConfigsLoading) {
+        await fetchExportConfigs();
+      }
+    };
+    load();
+  }, [corpusExportMode, exportConfigs.length, isExportConfigsLoading, fetchExportConfigs]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!exportConfigs.length) {
+        setCorpusExportConfig('');
+        return;
+      }
+      if (!corpusExportConfig || !exportConfigs.includes(corpusExportConfig)) {
+        setCorpusExportConfig(exportConfigs[0]);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [exportConfigs, corpusExportConfig]);
 
   useEffect(() => {
@@ -241,7 +311,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showValidationForm]);
+  }, [showValidationForm, resetValidationForm]);
 
   const handleAddOrUpdateUser = async (e) => {
     e.preventDefault();
@@ -252,9 +322,11 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       } else {
         await apiCall(`/projects/${projectName}/users`, 'POST', newUser);
       }
-      fetchUsers();
+      await fetchUsers();
       setNewUser({ username: '', password: '', realname: '', email: '', adminlevel: 0, git_username: '', token: '' });
-    } catch (err) {}
+    } catch (err) {
+      console.warn("Error adding/updating user:", err);
+    }
   };
 
   const handleEditClick = (u) => {
@@ -272,14 +344,10 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     if (!confirm(`Delete user ${username}?`)) return;
     try {
       await apiCall(`/projects/${projectName}/users/${username}`, 'DELETE');
-      fetchUsers();
-    } catch (err) {}
-  };
-
-  const resetValidationForm = () => {
-    setValidationForm(EMPTY_VALIDATION);
-    setIsEditingValidation(false);
-    setShowValidationForm(false);
+      await fetchUsers();
+    } catch (err) {
+      console.warn("Error deleting user:", err);
+    }
   };
 
   const handleValidationSubmit = async (e) => {
@@ -303,7 +371,9 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       }
       await fetchValidations();
       resetValidationForm();
-    } catch (err) {}
+    } catch (err) {
+      console.warn("Error saving validation:", err);
+    }
   };
 
   const handleValidationDomainChange = (domain) => {
@@ -344,7 +414,9 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       if (validationForm.id === validationId) {
         resetValidationForm();
       }
-    } catch (err) {}
+    } catch (err) {
+      console.warn("Error deleting validation:", err);
+    }
   };
 
   const handleValidationFilterChange = (field, value) => {
@@ -509,7 +581,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     setMetadataPhase('checking');
     setMetadataActionResult(null);
 
-    let docs = [];
+    let docs;
     try {
       docs = await fetchProjectDocuments();
     } catch (err) {
@@ -558,7 +630,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
       }
 
       setMetadataActionResult({ ok: true, message: `Successfully added metadata to ${matchingDocuments.length} document(s).` });
-      setMetadataForm({ corpus: '', document: '', key: '', value: '' });
+      setMetadataForm({ corpus: '', document: '', key: '', value: '', repository: metadataForm.repository });
     } catch (err) {
       setMetadataActionResult({ ok: false, message: err?.message || 'Bulk metadata update failed.' });
     } finally {
@@ -581,7 +653,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     setMetadataPhase('checking');
     setMetadataActionResult(null);
 
-    let docs = [];
+    let docs;
     try {
       docs = await fetchProjectDocuments();
     } catch (err) {
@@ -800,7 +872,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     setAssignmentPhase('checking');
     setAssignmentResult(null);
 
-    let matchingDocuments = [];
+    let matchingDocuments;
     try {
       const docs = await fetchProjectDocuments();
       matchingDocuments = docs.filter((doc) => {
@@ -953,7 +1025,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     setStatusChangePhase('checking');
     setStatusChangeResult(null);
 
-    let docs = [];
+    let docs;
     try {
       docs = await fetchProjectDocuments();
     } catch (err) {
@@ -1003,7 +1075,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
     setBulkStatusPhase('checking');
     setBulkStatusResult(null);
 
-    let docs = [];
+    let docs;
     try {
       docs = await fetchProjectDocuments();
     } catch (err) {
@@ -1084,6 +1156,7 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
           const parsed = responseText ? JSON.parse(responseText) : null;
           detail = parsed?.detail || detail;
         } catch {
+          console.warn("Error parsing response:", responseText);
         }
         throw new Error(detail);
       }
@@ -1212,16 +1285,29 @@ export default function AdminView({ apiCall, user, token, projectName, uiConfig 
           <div className="w-2/3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <table className="w-full text-left">
               <thead className={`border-b ${tableHeaderStyle ? '' : 'bg-slate-50'}`} style={tableHeaderStyle}>
-                <tr>
-                  <th className="p-4 font-medium">Username</th>
-                  <th className="p-4 font-medium">Name</th>
-                  <th className="p-4 font-medium">Level</th>
-                  <th className="p-4 font-medium">Email</th>
-                  <th className="p-4 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(u => {
+                  <tr>
+                    {[
+                      { key: 'username', label: 'Username' },
+                      { key: 'realname', label: 'Name' },
+                      { key: 'adminlevel', label: 'Level' },
+                      { key: 'email', label: 'Email' },
+                    ].map(({ key, label }) => (
+                      <th
+                        key={key}
+                        onClick={() => handleUserSort(key)}
+                        className={`p-4 font-medium select-none cursor-pointer hover:text-indigo-600 ${
+                          userSort.key === key ? 'text-indigo-600' : ''
+                        }`}
+                      >
+                        {label}
+                        {userSort.key === key && (userSort.dir === 'asc' ? ' ▲' : ' ▼')}
+                      </th>
+                    ))}
+                    <th className="p-4 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedUsers.map(u => {
                     // Safely parse the level to an integer, defaulting to 0 if it's missing or invalid
                     const level = parseInt(u.adminlevel) || 0;
 
