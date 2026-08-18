@@ -34,6 +34,7 @@ export default function DocumentEditor({
   mutationTools, 
   spannotatorConfig = {}, 
   dendroidConfig = {}, 
+  spreadsheetConfig = {},
   editorOptions = [], 
   editorFonts = {}, 
   spreadsheetColumnOrderConfig = [], 
@@ -1052,6 +1053,8 @@ export default function DocumentEditor({
     : (panelStyle || undefined);
   const canShowGithubCommitControls = (user?.adminlevel ?? 0) >= 1;
   const canUseDataTransferTools = (user?.adminlevel ?? 0) >= 2;
+  const copyPasteLevel = Number(spreadsheetConfig?.copy_paste_level);
+  const allowExternalSpreadsheetClipboard = (user?.adminlevel ?? 0) >= (Number.isFinite(copyPasteLevel) ? copyPasteLevel : 0);
   const canCommitToGithub = typeof doc?.repo === 'string' && doc.repo.trim().length > 0;
   const hasGithubCommittedVersion = typeof latestGithubCommitMessage === 'string' && latestGithubCommitMessage.trim().length > 0;
   const canRestoreFromGithub = canShowGithubCommitControls
@@ -1507,6 +1510,7 @@ export default function DocumentEditor({
                 preferredColumnOrder={preferredColumnOrder}
                 value={contentSpreadsheet}
                 canDataTransfer={canUseDataTransferTools}
+                allowExternalClipboard={allowExternalSpreadsheetClipboard}
                 validation={effectiveSpreadsheetValidation}
                 onChange={handleSpreadsheetContentChange}
                 onCanonicalized={handleSpreadsheetCanonicalized}

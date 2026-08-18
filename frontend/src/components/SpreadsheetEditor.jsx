@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import createSpreadsheetCore from './spreadsheet/core';
 import './spreadsheet/spreadsheet.css';
 
@@ -30,6 +30,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
   value = '', 
   validation = null, 
   canDataTransfer = true,
+  allowExternalClipboard = true,
   onChange, 
   onCanonicalized,
   onImportResult, 
@@ -72,7 +73,9 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
               activeFormulaStateRef.current.start, 
               activeFormulaStateRef.current.end
             ); 
-          } catch(e) {}
+          } catch(e) {
+            console.warn('Error restoring formula input selection range:', e);
+          }
         }
       });
     });
@@ -103,6 +106,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
       fontFamily,
       preferredColumnOrder,
       allowDataTransfer: Boolean(canDataTransfer),
+      allowExternalClipboard: Boolean(allowExternalClipboard),
       onChange: (nextValue) => {
         if (suppressExternalChangeRef.current) {
           return;
@@ -129,7 +133,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPreferredColumnOrderResolved, canDataTransfer]);
+  }, [isPreferredColumnOrderResolved, canDataTransfer, allowExternalClipboard]);
 
   useEffect(() => {
     if (!coreRef.current || !coreReady || !Array.isArray(preferredColumnOrder)) return;

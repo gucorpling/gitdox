@@ -14,6 +14,7 @@ const MAX_COLUMN_COUNT = 26 * 26;
 let exportConfigNames = [];
 let exportConfigsLoaded = false;
 let allowDataTransfer = true;
+let allowExternalClipboard = true;
 
 const SOCIALCALC_SIGNATURE = '--SocialCalcSpreadsheetControlSave';
 
@@ -387,6 +388,17 @@ function patchSelector() {
     if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector) return;
 
     const sheet = mySpreadsheet.sheet;
+
+    if (sheet.data && typeof sheet.data.copyToSystemClipboard === 'function' && !sheet.data._systemClipboardPatched) {
+        const originalCopyToSystemClipboard = sheet.data.copyToSystemClipboard.bind(sheet.data);
+        sheet.data.copyToSystemClipboard = () => {
+            if (allowExternalClipboard) {
+                return originalCopyToSystemClipboard();
+            }
+            return undefined;
+        };
+        sheet.data._systemClipboardPatched = true;
+    }
     
     // Prevent native browser scroll-jump when library internally focuses the hidden input or editor.
     // By dynamically targeting the specific elements from the instance, we guarantee they exist.
@@ -3449,6 +3461,12 @@ function handleSpreadsheetCopyCut(e) {
     if (!e || !e.clipboardData) return;
     if (!isSpreadsheetClipboardTarget(e.target)) return;
 
+    if (!allowExternalClipboard) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+    }
+
     const data = mySpreadsheet.getData()[0] || {};
     const selection = getActiveSelectionRange();
     const tsv = buildRangeTsv(data, selection);
@@ -3466,6 +3484,12 @@ function handleSpreadsheetPaste(e) {
     const clipboard = data.clipboard;
     const hasInternalClipboard = !!(clipboard && clipboard.state !== 'clear' && clipboard.range);
     const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+
+    if (!allowExternalClipboard && !hasInternalClipboard) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+    }
 
     const selection = getActiveSelectionRange();
     const startBounds = getExpandedCellBounds(data, selection.sri, selection.sci);
@@ -3625,10 +3649,11 @@ function unbindDomEvents() {
     isDomBound = false;
 }
 
-export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], allowDataTransfer: allowTransfer = true, onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null } = {}) {
+export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], allowDataTransfer: allowTransfer = true, allowExternalClipboard: allowClipboard = true, onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null } = {}) {
     configuredSpreadsheetFontFamily = normalizeSpreadsheetFontFamily(fontFamily);
     currentPreferredColumnOrder = Array.isArray(preferredColumnOrder) ? preferredColumnOrder : []; 
     allowDataTransfer = Boolean(allowTransfer);
+    allowExternalClipboard = Boolean(allowClipboard);
     
     onSerializedChange = onChange;
     onCanonicalized = canonicalized;
