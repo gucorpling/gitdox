@@ -14,15 +14,13 @@ import {
   DEFAULT_STATUS_CATEGORIES,
   formatStatusCategoryLabel,
   normalizeCssStyleValue,
-} from '../appShared';
-import {
-  normalizeFontFamily,
+  getMetadataValidationViolationKeys,
+  getValidationSummary,
   normalizePreferredColumnOrder,
   normalizeBackgroundImageValue,
-  getValidationSummary,
-  getMetadataValidationViolationKeys,
+  normalizeFontFamily,
   isSpreadsheetBackedMode
-} from '../App';
+} from '../appShared';
 
 export default function DocumentEditor({ 
   apiCall, 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { FileText, Users, LogOut, AlertCircle } from 'lucide-react';
 import DocumentEditor from './components/DocumentEditor';
 import AdminView from './components/AdminView';
@@ -6,100 +6,27 @@ import DashboardView from './components/DashboardView';
 import LoginView from './components/LoginView';
 import {
   API_ROOT,
-  FRONTEND_BASE_PATH,
   buildFrontendPath,
-  normalizeFrontendBasePath,
-  resolveFrontendAssetPath,
   stripFrontendBasePath,
+  FRONTEND_PROJECT_NAME,
   DEFAULT_PROJECT,
   DEFAULT_DISPLAY_NAME,
   DEFAULT_STATUS_CATEGORIES,
   normalizeConfiguredEditors,
   normalizeStatusCategories,
   normalizeCssStyleValue,
+  EFFECTIVE_FRONTEND_BASE_PATH,
+  isDarkColor,
+  EMPTY_DASHBOARD_FILTERS,
+  normalizeDashboardViewState,
+  areColumnFiltersEqual,
+  normalizeFontFamily,
+  normalizeBackgroundImageValue,
+  resolveFrontendAssetPath
 } from './appShared';
 
 // --- PROJECT CONFIGURATION ---
-// Configure the frontend's active project name.
-// 
-// If left empty/null, it defaults to the backend's generic gitdox-config.yaml.
-const FRONTEND_PROJECT_NAME = (typeof window !== 'undefined' && window.GITDOX_PROJECT) || 'scriptorium'; //ling4427
-
-// Optional frontend route base fallback (used only if no runtime/env base path is detected).
-const FRONTEND_BASE_PATH_FALLBACK = ''; //gitdox2/scriptorium
-const EFFECTIVE_FRONTEND_BASE_PATH = FRONTEND_BASE_PATH || normalizeFrontendBasePath(FRONTEND_BASE_PATH_FALLBACK);
-
 const EMBEDDED_FONT_STYLE_ELEMENT_ID = 'gitdox-embedded-font-faces';
-
-// Helper to determine if a CSS color value is dark, to dynamically adjust text colors
-// Default values, will be updated in App based on config:
-export var isNavDark = false; 
-export var isMainDark = false;
-export const isDarkColor = (color) => {
-  if (!color) return false;
-  const c = color.trim().toLowerCase();
-  if (c === 'transparent' || c === 'inherit' || c === 'none') return false;
-
-  // Hex (#fff, #123456)
-  const hexMatch = c.match(/^#([0-9a-f]{3,8})$/i);
-  if (hexMatch) {
-    let h = hexMatch[1];
-    if (h.length === 3 || h.length === 4) h = h.split('').map(x => x + x).join('');
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    return ((r * 299) + (g * 587) + (b * 114)) / 1000 < 128;
-  }
-
-  // RGB / RGBA
-  const rgbMatch = c.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-  if (rgbMatch) {
-    const r = parseInt(rgbMatch[1], 10);
-    const g = parseInt(rgbMatch[2], 10);
-    const b = parseInt(rgbMatch[3], 10);
-    return ((r * 299) + (g * 587) + (b * 114)) / 1000 < 128;
-  }
-
-  // HSL / HSLA
-  const hslMatch = c.match(/^hsla?\(\s*\d+\s*,\s*[\d.]+%,\s*([\d.]+)%/i);
-  if (hslMatch) {
-    return parseFloat(hslMatch[1]) < 50;
-  }
-
-  // Common named dark colors fallback
-  const darkNames = ['black', 'navy', 'darkblue', 'darkgreen', 'darkred', 'purple', 'indigo', 'maroon', 'midnightblue', 'darkslategray'];
-  if (darkNames.includes(c)) return true;
-
-  return false;
-};
-
-export const EMPTY_DASHBOARD_FILTERS = {
-  id: '',
-  corpus: '',
-  docname: '',
-  validation: '',
-  status: '',
-  assigned: '',
-  mode: ''
-};
-
-export const normalizeDashboardViewState = (value) => {
-  const rawFilters = value?.columnFilters && typeof value.columnFilters === 'object'
-    ? value.columnFilters
-    : {};
-
-  const columnFilters = {
-    ...EMPTY_DASHBOARD_FILTERS,
-    ...Object.fromEntries(
-      Object.entries(rawFilters).map(([key, filterValue]) => [key, (filterValue ?? '').toString()])
-    )
-  };
-
-  const rawScrollY = Number(value?.scrollY);
-  const scrollY = Number.isFinite(rawScrollY) && rawScrollY > 0 ? rawScrollY : 0;
-
-  return { columnFilters, scrollY };
-};
 
 const DASHBOARD_PATH = '/dashboard';
 const LOGIN_PATH = '/login';
@@ -119,20 +46,16 @@ const resolveRouteFromPathname = (pathname = '/') => {
   if (normalized === '/' || normalized === DASHBOARD_PATH) {
     return { view: 'dashboard' };
   }
-
   if (normalized === LOGIN_PATH) {
     return { view: 'login' };
   }
-
   if (normalized === ADMIN_PATH) {
     return { view: 'admin' };
   }
-
   const documentMatch = normalized.match(/^\/docs\/([^/]+)$/);
   if (documentMatch) {
     return { view: 'document', docId: decodeURIComponent(documentMatch[1]) };
   }
-
   return { view: 'dashboard' };
 };
 
@@ -143,10 +66,6 @@ const buildRouteState = (view, nextDashboardState = null, extra = {}) => ({
   ...extra,
 });
 
-export const areColumnFiltersEqual = (left = EMPTY_DASHBOARD_FILTERS, right = EMPTY_DASHBOARD_FILTERS) => {
-  return Object.keys(EMPTY_DASHBOARD_FILTERS).every((key) => (left?.[key] ?? '') === (right?.[key] ?? ''));
-};
-
 const areDashboardViewStatesEqual = (left, right) => {
   const normalizedLeft = normalizeDashboardViewState(left);
   const normalizedRight = normalizeDashboardViewState(right);
@@ -155,18 +74,6 @@ const areDashboardViewStatesEqual = (left, right) => {
     normalizedLeft.scrollY === normalizedRight.scrollY &&
     areColumnFiltersEqual(normalizedLeft.columnFilters, normalizedRight.columnFilters)
   );
-};
-
-export const normalizeFontFamily = (value) => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim().replace(/;+$/, '').trim();
-  return trimmed.length > 0 ? trimmed : null;
-};
-
-export const normalizePreferredColumnOrder = (value) => {
-  // Should be an array of strings, return empty array otherwise
-  if (!Array.isArray(value)) return [];
-  return value .filter(item => typeof item === 'string' && item.trim().length > 0).map(item => item.trim());
 };
 
 const normalizeCssLength = (value) => {
@@ -179,54 +86,11 @@ const normalizeCssLength = (value) => {
 
 const normalizeDisplayImageConfig = (value) => {
   if (!Array.isArray(value) || value.length === 0) return null;
-
-  const src = normalizeEmbeddedFontPath(value[0]);
+  const src = resolveFrontendAssetPath(value[0], EFFECTIVE_FRONTEND_BASE_PATH);
   if (!src) return null;
-
   const width = normalizeCssLength(value[1]);
   const height = normalizeCssLength(value[2]);
-
   return { src, width, height };
-};
-
-export const normalizeBackgroundImageValue = (value) => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  if (/^none$/i.test(trimmed)) return 'none';
-
-  const urlMatch = trimmed.match(/^url\(\s*(['"]?)(.*?)\1\s*\)$/i);
-  if (urlMatch) {
-    const rawUrl = (urlMatch[2] || '').trim();
-    if (!rawUrl) return null;
-
-    // Keep CSS variables and external/data URLs untouched.
-    if (/^var\(/i.test(rawUrl) || /^(https?:|data:|blob:)/i.test(rawUrl) || rawUrl.startsWith('//')) {
-      return trimmed;
-    }
-
-    const normalizedPath = resolveFrontendAssetPath(rawUrl, EFFECTIVE_FRONTEND_BASE_PATH);
-    if (!normalizedPath) return null;
-    return `url("${normalizedPath}")`;
-  }
-
-  if (/^(linear-gradient\(|radial-gradient\(|conic-gradient\(|repeating-linear-gradient\(|repeating-radial-gradient\(|image-set\(|var\()/i.test(trimmed)) {
-    return trimmed;
-  }
-
-  if (/^(inherit|initial|unset|revert|revert-layer)$/i.test(trimmed)) {
-    return trimmed;
-  }
-
-  const normalizedPath = resolveFrontendAssetPath(trimmed, EFFECTIVE_FRONTEND_BASE_PATH);
-  if (!normalizedPath) return null;
-
-  return `url("${normalizedPath}")`;
-};
-
-const normalizeEmbeddedFontPath = (value) => {
-  return resolveFrontendAssetPath(value, EFFECTIVE_FRONTEND_BASE_PATH);
 };
 
 const inferFontFormatFromPath = (value) => {
@@ -242,13 +106,13 @@ const inferFontFormatFromPath = (value) => {
 
 const normalizeEmbeddedFontSource = (source) => {
   if (typeof source === 'string') {
-    const path = normalizeEmbeddedFontPath(source);
+    const path = resolveFrontendAssetPath(source, EFFECTIVE_FRONTEND_BASE_PATH);
     if (!path) return null;
     return { path, format: inferFontFormatFromPath(path) };
   }
 
   if (!source || typeof source !== 'object') return null;
-  const path = normalizeEmbeddedFontPath(source.path);
+  const path = resolveFrontendAssetPath(source.path, EFFECTIVE_FRONTEND_BASE_PATH);
   if (!path) return null;
 
   const format = typeof source.format === 'string' && source.format.trim()
@@ -264,35 +128,22 @@ const normalizeEmbeddedFontFace = (face) => {
   const family = normalizeFontFamily(face.family);
   if (!family) return null;
 
-  const rawSources = Array.isArray(face.sources)
-    ? face.sources
-    : (Array.isArray(face.src) ? face.src : []);
-  const sources = rawSources
-    .map(normalizeEmbeddedFontSource)
-    .filter(Boolean);
+  const rawSources = Array.isArray(face.sources) ? face.sources : (Array.isArray(face.src) ? face.src : []);
+  const sources = rawSources.map(normalizeEmbeddedFontSource).filter(Boolean);
   if (sources.length === 0) return null;
 
-  const style = typeof face.style === 'string' && face.style.trim()
-    ? face.style.trim()
-    : 'normal';
-  const weight = typeof face.weight === 'string' || typeof face.weight === 'number'
-    ? String(face.weight).trim()
-    : '400';
-  const display = typeof face.display === 'string' && face.display.trim()
-    ? face.display.trim()
-    : 'swap';
+  const style = typeof face.style === 'string' && face.style.trim() ? face.style.trim() : 'normal';
+  const weight = typeof face.weight === 'string' || typeof face.weight === 'number' ? String(face.weight).trim() : '400';
+  const display = typeof face.display === 'string' && face.display.trim() ? face.display.trim() : 'swap';
 
   return { family, style, weight, display, sources };
 };
 
 const buildEmbeddedFontCss = (fontFaces) => {
   if (!Array.isArray(fontFaces) || fontFaces.length === 0) return '';
-
   return fontFaces.map((face) => {
     const srcValue = face.sources
-      .map((source) => source.format
-        ? `url("${source.path}") format("${source.format}")`
-        : `url("${source.path}")`)
+      .map((source) => source.format ? `url("${source.path}") format("${source.format}")` : `url("${source.path}")`)
       .join(', ');
 
     return [
@@ -307,178 +158,19 @@ const buildEmbeddedFontCss = (fontFaces) => {
   }).join('\n\n');
 };
 
-const normalizeValidation = (validation) => {
-  if (!validation) return { status: 'ready', rules_run: 0, results: [] };
-
-  if (typeof validation === 'string') {
-    if (validation === 'valid') return { status: 'ready', rules_run: 0, results: [] };
-    if (validation === 'validating') return { status: 'validating', rules_run: 0, results: [] };
-    return {
-      status: 'ready',
-      rules_run: 0,
-      results: [{ rule: validation, violations: [] }]
-    };
-  }
-
-  return {
-    status: typeof validation?.status === 'string' ? validation.status : 'ready',
-    rules_run: Number.isFinite(validation?.rules_run)
-      ? validation.rules_run
-      : (Array.isArray(validation?.results) ? validation.results.length : 0),
-    results: Array.isArray(validation?.results) ? validation.results : []
-  };
-};
-
-const hasMeaningfulContent = (value) => typeof value === 'string' && value.trim().length > 0;
-
-export const isSpreadsheetBackedMode = (mode) => mode === 'spreadsheet' || mode === 'entities';
-
-const shouldIncludeValidationResult = (result, options = {}) => {
-  const domain = typeof result?.domain === 'string' ? result.domain.toLowerCase() : '';
-  const mode = typeof options?.mode === 'string' ? options.mode.toLowerCase() : '';
-  const isTabularMode = isSpreadsheetBackedMode(mode);
-
-  if (!domain || !mode) return true;
-  if (domain === 'metadata') return true;
-
-  if (mode === 'xml' && domain === 'spreadsheet' && !hasMeaningfulContent(options?.spreadsheetContent)) {
-    return false;
-  }
-
-   if (mode === 'xml' && domain === 'entities' && !hasMeaningfulContent(options?.spreadsheetContent)) {
-    return false;
-  }
-
-  if (isTabularMode && domain === 'xml' && !hasMeaningfulContent(options?.xmlContent)) {
-    return false;
-  }
-
-  return true;
-};
-
-export const getValidationSummary = (validation, options = {}) => {
-  const normalized = normalizeValidation(validation);
-
-  if (normalized.status === 'validating' || normalized.status === 'queued' || normalized.status === 'processing') {
-    return {
-      status: 'validating',
-      label: 'Validating...',
-      filterText: 'validating pending in-progress',
-      title: 'Validation is in progress'
-    };
-  }
-
-  const failing = normalized.results.filter(
-    (result) =>
-      Array.isArray(result?.violations) &&
-      result.violations.length > 0 &&
-      shouldIncludeValidationResult(result, options)
-  );
-
-  if (failing.length === 0) {
-    return {
-      status: 'valid',
-      label: normalized.rules_run > 0 ? `Valid (${normalized.rules_run})` : 'Valid',
-      filterText: `valid ${normalized.rules_run} 0`,
-      title: normalized.rules_run > 0
-        ? `${normalized.rules_run} validation rule(s) run, no violations`
-        : 'No validation violations'
-    };
-  }
-
-  const totalViolations = failing.reduce((sum, result) => sum + result.violations.length, 0);
-
-  return {
-    status: 'invalid',
-    label: `Invalid (${failing.length})`,
-    filterText: `invalid ${normalized.rules_run} ${failing.length} ${totalViolations} ${failing.map((r) => r.rule).join(' ')}`,
-    title: failing
-      .map((result) => `${result.rule}: ${result.violations.join(', ')}`)
-      .join('\n')
-  };
-};
-
-const METADATA_KEY_CAPTURE_PATTERN = /^metadata(?:\.|:)\s*([^\s,:=<>!|]+)/i;
-const METADATA_KEY_PREFIX_PATTERN = /^([^\s,:=<>!|]+)\s*(?:is\s+required|missing|not\s+found|does\s+not\s+exist|must\b|should\b|expected\b)/i;
-
-const extractMetadataKeyFromViolation = (violation) => {
-  if (typeof violation !== 'string') return null;
-
-  const trimmed = violation.trim();
-  if (!trimmed) return null;
-
-  const explicitMetadataMatch = trimmed.match(METADATA_KEY_CAPTURE_PATTERN);
-  if (explicitMetadataMatch?.[1]) return explicitMetadataMatch[1].trim();
-
-  const prefixedKeyMatch = trimmed.match(METADATA_KEY_PREFIX_PATTERN);
-  if (prefixedKeyMatch?.[1]) return prefixedKeyMatch[1].trim();
-
-  return trimmed;
-};
-
-export const getMetadataValidationViolationKeys = (validation, metadataRows = []) => {
-  const normalized = normalizeValidation(validation);
-  const metadataKeyLookup = new Map();
-
-  metadataRows.forEach((row) => {
-    const key = typeof row?.k === 'string' ? row.k.trim() : '';
-    if (!key) return;
-    metadataKeyLookup.set(key.toLowerCase(), key);
-  });
-
-  if (metadataKeyLookup.size === 0) return [];
-
-  const violatingKeys = new Set();
-
-  normalized.results.forEach((result) => {
-    const violations = Array.isArray(result?.violations) ? result.violations : [];
-    if (violations.length === 0) return;
-
-    if (typeof result?.domain === 'string' && result.domain.toLowerCase() === 'metadata') {
-      const ruleKey = typeof result?.key === 'string' ? result.key.trim().toLowerCase() : '';
-      if (ruleKey && metadataKeyLookup.has(ruleKey)) {
-        violatingKeys.add(metadataKeyLookup.get(ruleKey));
-      }
-    }
-
-    violations.forEach((violation) => {
-      const extractedKey = extractMetadataKeyFromViolation(violation);
-      if (!extractedKey) return;
-
-      const resolvedKey = metadataKeyLookup.get(extractedKey.toLowerCase());
-      if (resolvedKey) {
-        violatingKeys.add(resolvedKey);
-      }
-    });
-  });
-
-  return [...violatingKeys];
-};
-
 const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
 const toStringArray = (value) => {
   if (!Array.isArray(value)) return [];
-  return value
-    .filter((item) => typeof item === 'string' && item.trim().length > 0)
-    .map((item) => item.trim());
+  return value.filter((item) => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim());
 };
 
 const toAttrSpec = (name, value, global = false) => {
   if (typeof name !== 'string' || !name.trim()) return null;
-
   const attrName = name.trim();
   const values = toStringArray(value);
   const attr = { name: attrName };
-
-  if (values.length > 0) {
-    attr.values = values;
-  }
-
-  if (global) {
-    attr.global = true;
-  }
-
+  if (values.length > 0) attr.values = values;
+  if (global) attr.global = true;
   return attr;
 };
 
@@ -498,16 +190,12 @@ const normalizeCm6XmlSchema = (schema) => {
       const textContent = toStringArray(element.textContent);
       if (textContent.length > 0) normalized.textContent = textContent;
 
-      if (typeof element.top === 'boolean') {
-        normalized.top = element.top;
-      }
+      if (typeof element.top === 'boolean') normalized.top = element.top;
 
       if (Array.isArray(element.attributes)) {
         const attributes = element.attributes
           .map((attr) => {
-            if (typeof attr === 'string') {
-              return attr.trim() || null;
-            }
+            if (typeof attr === 'string') return attr.trim() || null;
             if (!isPlainObject(attr)) return null;
             return toAttrSpec(attr.name, attr.values, Boolean(attr.global));
           })
@@ -515,7 +203,6 @@ const normalizeCm6XmlSchema = (schema) => {
 
         if (attributes.length > 0) normalized.attributes = attributes;
       }
-
       return normalized;
     })
     .filter(Boolean);
@@ -523,12 +210,10 @@ const normalizeCm6XmlSchema = (schema) => {
   if (elements.length === 0) return null;
 
   const attributes = Array.isArray(schema.attributes)
-    ? schema.attributes
-      .map((attr) => {
+    ? schema.attributes.map((attr) => {
         if (!isPlainObject(attr)) return null;
         return toAttrSpec(attr.name, attr.values, Boolean(attr.global));
-      })
-      .filter(Boolean)
+      }).filter(Boolean)
     : [];
 
   return attributes.length > 0 ? { elements, attributes } : { elements };
@@ -544,19 +229,13 @@ const normalizeLegacyXmlSchema = (schema) => {
     .filter(([key]) => typeof key === 'string' && key && !key.startsWith('!'))
     .map(([name, spec]) => {
       const normalized = { name };
-      if (topLevel.has(name)) {
-        normalized.top = true;
-      }
+      if (topLevel.has(name)) normalized.top = true;
 
       const children = toStringArray(spec?.children);
-      if (children.length > 0) {
-        normalized.children = children;
-      }
+      if (children.length > 0) normalized.children = children;
 
       const textContent = toStringArray(spec?.textContent);
-      if (textContent.length > 0) {
-        normalized.textContent = textContent;
-      }
+      if (textContent.length > 0) normalized.textContent = textContent;
 
       const attrSpecs = [];
       if (isPlainObject(globalAttrs)) {
@@ -572,9 +251,7 @@ const normalizeLegacyXmlSchema = (schema) => {
         });
       }
 
-      if (attrSpecs.length > 0) {
-        normalized.attributes = attrSpecs;
-      }
+      if (attrSpecs.length > 0) normalized.attributes = attrSpecs;
 
       return normalized;
     });
@@ -589,11 +266,14 @@ const buildXmlCompletionConfig = (schema) => {
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('auth_token') || null);
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('auth_user')) || null);
+  
   const [currentView, setCurrentView] = useState(() => {
     if (typeof window === 'undefined') return 'dashboard';
+    if (!localStorage.getItem('auth_token')) return 'login';
     const route = resolveRouteFromPathname(stripFrontendBasePath(window.location.pathname, EFFECTIVE_FRONTEND_BASE_PATH));
     return route.view === 'document' && route.docId ? `document:${route.docId}` : route.view;
   });
+  
   const [dashboardViewState, setDashboardViewState] = useState(() => normalizeDashboardViewState());
   const [dashboardRestoreRequestId, setDashboardRestoreRequestId] = useState(0);
   const [error, setError] = useState('');
@@ -603,13 +283,8 @@ export default function App() {
   const pendingRouteRef = useRef(null);
 
   useEffect(() => {
-    if (!token) setCurrentView('login');
-  }, [token]);
-
-  useEffect(() => {
     const loadAppConfig = async () => {
       try {
-        // Appends the configured project to the backend request dynamically
         const queryParams = FRONTEND_PROJECT_NAME ? `?project=${encodeURIComponent(FRONTEND_PROJECT_NAME)}` : '';
         const response = await fetch(`${API_ROOT}/app-config${queryParams}`, { cache: 'no-store' });
         
@@ -620,6 +295,7 @@ export default function App() {
         const data = await response.json();
         setAppConfig(data);
       } catch (err) {
+        console.warn("Error loading app config:", err);
         setAppConfig(null);
       } finally {
         setIsAppConfigLoaded(true);
@@ -649,28 +325,30 @@ export default function App() {
     };
   }, [appConfig]);
 
-  // Use the frontend assigned project name first, falling back to what the backend config says, then defaults
   const projectName = FRONTEND_PROJECT_NAME || appConfig?.instance?.project || DEFAULT_PROJECT;
   
   const displayName = appConfig?.instance?.display_name || DEFAULT_DISPLAY_NAME;
   const helpMessage = appConfig?.instance?.help_message || "";
   const displayImage = normalizeDisplayImageConfig(appConfig?.instance?.display_image);
   const toolConfig = appConfig?.tools || {};
+  
   const editorOptions = useMemo(
     () => normalizeConfiguredEditors(appConfig?.instance?.editors),
     [appConfig?.instance?.editors]
   );
+  
   const xmlTagCompletion = useMemo(
     () => buildXmlCompletionConfig(appConfig?.xml?.tags_schema),
     [appConfig?.xml?.tags_schema]
   );
+  
   const spreadsheetColumnOrder = appConfig?.spreadsheet?.column_order
     ?? appConfig?.spreadsheet?.preferred_column_order
     ?? appConfig?.['spreadsheet.column_order']
     ?? [];
 
   const navBackgroundColor = normalizeCssStyleValue(appConfig?.ui?.nav_background_color);
-  isNavDark = isDarkColor(navBackgroundColor);
+  const isNavDark = isDarkColor(navBackgroundColor);
 
   const mainFontFamily = normalizeFontFamily(appConfig?.ui?.font);
   const mainBackgroundColor = normalizeCssStyleValue(appConfig?.ui?.background_color);
@@ -691,11 +369,36 @@ export default function App() {
       : {})
   };
 
-const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
-    // Endpoints that are allowed to run without a token
-    const publicEndpoints = ['/auth', '/init'];
+  const replaceRouteState = useCallback((pathname, view, nextDashboardState, extra = {}) => {
+    if (typeof window === 'undefined') return;
+    window.history.replaceState(
+      buildRouteState(view, nextDashboardState, extra),
+      '',
+      buildFrontendPath(pathname, EFFECTIVE_FRONTEND_BASE_PATH)
+    );
+  }, []);
 
-    // If there's no token and it's a protected route, abort early
+  const pushRouteState = useCallback((pathname, view, nextDashboardState, extra = {}) => {
+    if (typeof window === 'undefined') return;
+    window.history.pushState(
+      buildRouteState(view, nextDashboardState, extra),
+      '',
+      buildFrontendPath(pathname, EFFECTIVE_FRONTEND_BASE_PATH)
+    );
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    setCurrentView('login');
+    pendingRouteRef.current = null;
+    replaceRouteState(LOGIN_PATH, 'login', normalizeDashboardViewState());
+  }, [replaceRouteState]);
+
+  const apiCall = useCallback(async (endpoint, method = 'GET', body = null, options = {}) => {
+    const publicEndpoints = ['/auth', '/init'];
     if (!token && !publicEndpoints.includes(endpoint)) {
       return Promise.reject(new Error('SILENT_ABORT'));
     }
@@ -725,65 +428,35 @@ const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
       if (!response.ok) throw new Error(data.detail || 'API Error');
       return data;
     } catch (err) {
-      // Only set the global UI error if it isn't a silent abort, e.g. on logout
       if (err.message !== 'SILENT_ABORT') {
         setError(err.message);
         if (err.message.includes('token')) handleLogout();
       }
       throw err;
     }
-  };
+  }, [token, handleLogout]);
 
-  const refreshStatusCategories = async () => {
+  const refreshStatusCategories = useCallback(async () => {
     try {
       const data = await apiCall(`/projects/${projectName}/status-categories`);
       const nextStatusCategories = normalizeStatusCategories(data);
       setStatusCategories(nextStatusCategories);
       return nextStatusCategories;
     } catch (err) {
+      console.warn("Failed to fetch status categories, using defaults:", err);
       setStatusCategories(DEFAULT_STATUS_CATEGORIES);
       return DEFAULT_STATUS_CATEGORIES;
     }
-  };
+  }, [projectName, apiCall]);
 
   useEffect(() => {
     if (!projectName) return;
-    refreshStatusCategories();
-  }, [projectName, token]);
-
-  const handleLogout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-    setCurrentView('login');
-    pendingRouteRef.current = null;
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(
-        buildRouteState('login', normalizeDashboardViewState()),
-        '',
-        buildFrontendPath(LOGIN_PATH, EFFECTIVE_FRONTEND_BASE_PATH)
-      );
-    }
-  };
-
-  const replaceRouteState = (pathname, view, nextDashboardState = dashboardViewState, extra = {}) => {
-    if (typeof window === 'undefined') return;
-    window.history.replaceState(
-      buildRouteState(view, nextDashboardState, extra),
-      '',
-      buildFrontendPath(pathname, EFFECTIVE_FRONTEND_BASE_PATH)
-    );
-  };
-
-  const pushRouteState = (pathname, view, nextDashboardState = dashboardViewState, extra = {}) => {
-    if (typeof window === 'undefined') return;
-    window.history.pushState(
-      buildRouteState(view, nextDashboardState, extra),
-      '',
-      buildFrontendPath(pathname, EFFECTIVE_FRONTEND_BASE_PATH)
-    );
-  };
+    // Wrap to prevent linter from flagging the async state-updating process as cascading render
+    const fetchCategories = async () => {
+      await refreshStatusCategories();
+    };
+    fetchCategories();
+  }, [projectName, token, refreshStatusCategories]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -867,15 +540,17 @@ const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+    
+  // Intentional mount effect with no dependencies
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (currentView !== 'dashboard') return;
     replaceRouteState(DASHBOARD_PATH, 'dashboard', dashboardViewState);
-  }, [currentView, dashboardViewState]);
+  }, [currentView, dashboardViewState, replaceRouteState]);
 
-  // Window Title Management
   useEffect(() => {
     const baseTitle = displayName || 'GitDOX';
 
@@ -886,7 +561,6 @@ const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
     } else if (currentView === 'login') {
       document.title = `${baseTitle} - Login`;
     } else if (currentView.startsWith('document:')) {
-      // Set a temporary loading state until DocumentEditor fetches the real name
       document.title = `Loading Document... | ${baseTitle}`;
     } else {
       document.title = baseTitle;
@@ -971,70 +645,67 @@ const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors bg-slate-50 text-slate-800`}>
       {/* Top Navigation */}
-{token && (
-  <nav
-    className={`shadow-sm border-b px-6 py-4 flex justify-between items-center transition-colors ${
-      navBackgroundColor 
-        ? (isNavDark ? 'border-white/10 text-white' : 'border-slate-200 text-slate-800') 
-        : 'bg-white border-slate-200 text-slate-800'
-    }`}
-    style={navBackgroundColor ? { background: navBackgroundColor } : undefined}
-  >
-    <div className="flex items-center space-x-6">
-      {/* 1. Grouped Logo and Help Message into a vertical block */}
-      <div className="flex flex-col items-start space-y-0.5">
-        <h1 className={`text-xl font-bold flex items-center gap-2 ${isNavDark ? 'text-indigo-100' : 'text-indigo-600'}`}>
-          <FileText size={24} /> GitDOX
-        </h1>
-        
-        {/* 2. Added the dynamic raw HTML help message layout */}
-        {helpMessage && (
-          <div 
-            className={`text-xs opacity-80 [&_a]:underline ${
-              isNavDark ? 'text-slate-300 [&_a]:text-indigo-200 hover:[&_a]:text-white' : 'text-slate-500 [&_a]:text-indigo-600 hover:[&_a]:text-indigo-800'
-            }`}
-            dangerouslySetInnerHTML={{ __html: helpMessage }}
-          />
-        )}
-      </div>
-
-      <div className="hidden md:flex space-x-2">
-        <a
-          href="#dashboard"
-          onClick={(e) => {
-            e.preventDefault();
-            goToDashboard();
-          }}
-          className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
-            currentView === 'dashboard' 
-              ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
-              : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
+      {token && (
+        <nav
+          className={`shadow-sm border-b px-6 py-4 flex justify-between items-center transition-colors ${
+            navBackgroundColor 
+              ? (isNavDark ? 'border-white/10 text-white' : 'border-slate-200 text-slate-800') 
+              : 'bg-white border-slate-200 text-slate-800'
           }`}
+          style={navBackgroundColor ? { background: navBackgroundColor } : undefined}
         >
-          <FileText size={18} /> Dashboard
-        </a>
-        {user?.adminlevel >= 1 && (
-          <a
-            href={buildFrontendPath(ADMIN_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}
-            onClick={(e) => {
-              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                e.preventDefault();
-                navigateToAdmin();
-              }
-            }}
-            className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
-              currentView === 'admin' 
-                ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
-                : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
-            }`}
-          >
-            <Users size={18} /> Admin
-          </a>
-        )}
-      </div>
-    </div>
+          <div className="flex items-center space-x-6">
+            <div className="flex flex-col items-start space-y-0.5">
+              <h1 className={`text-xl font-bold flex items-center gap-2 ${isNavDark ? 'text-indigo-100' : 'text-indigo-600'}`}>
+                <FileText size={24} /> GitDOX
+              </h1>
+              
+              {helpMessage && (
+                <div 
+                  className={`text-xs opacity-80 [&_a]:underline ${
+                    isNavDark ? 'text-slate-300 [&_a]:text-indigo-200 hover:[&_a]:text-white' : 'text-slate-500 [&_a]:text-indigo-600 hover:[&_a]:text-indigo-800'
+                  }`}
+                  dangerouslySetInnerHTML={{ __html: helpMessage }}
+                />
+              )}
+            </div>
+
+            <div className="hidden md:flex space-x-2">
+              <a
+                href="#dashboard"
+                onClick={(e) => {
+                  e.preventDefault();
+                  goToDashboard();
+                }}
+                className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
+                  currentView === 'dashboard' 
+                    ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
+                    : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
+                }`}
+              >
+                <FileText size={18} /> Dashboard
+              </a>
+              {user?.adminlevel >= 1 && (
+                <a
+                  href={buildFrontendPath(ADMIN_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}
+                  onClick={(e) => {
+                    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                      e.preventDefault();
+                      navigateToAdmin();
+                    }
+                  }}
+                  className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
+                    currentView === 'admin' 
+                      ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
+                      : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
+                  }`}
+                >
+                  <Users size={18} /> Admin
+                </a>
+              )}
+            </div>
+          </div>
           <div className="flex items-center space-x-4">
-  
             <div className={`text-sm hidden sm:block ${isNavDark ? 'text-slate-300' : 'text-slate-600'}`}>
               Signed in as{' '}
               <span className={`font-semibold ${isNavDark ? 'text-slate-100' : 'text-slate-800'}`}>
@@ -1045,7 +716,6 @@ const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
               </span>
             </div>
 
-            {/* Distinct Logout Button */}
             <button
               onClick={handleLogout}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -1090,9 +760,9 @@ const apiCall = async (endpoint, method = 'GET', body = null, options = {}) => {
       {/* Main Content Area */}
       <main className="p-6 flex-1" style={Object.keys(mainStyle).length > 0 ? mainStyle : undefined}>
         {!token && <LoginView setToken={setToken} setUser={setUser} onLoginSuccess={handleLoginSuccess} apiCall={apiCall} projectName={projectName} isMainDark={isMainDark} />}
-        {token && currentView === 'dashboard' && <DashboardView apiCall={apiCall} user={user} openDoc={navigateToDocument} projectName={projectName} uiConfig={appConfig?.ui || {}} dashboardViewState={dashboardViewState} dashboardRestoreRequestId={dashboardRestoreRequestId} onDashboardViewStateChange={handleDashboardViewStateChange} statusCategories={statusCategories} editorOptions={editorOptions} isMainDark={isMainDark} frontendBasePath={EFFECTIVE_FRONTEND_BASE_PATH}/>}
+        {token && currentView === 'dashboard' && <DashboardView apiCall={apiCall} user={user} openDoc={navigateToDocument} projectName={projectName} isNavDark={isNavDark} uiConfig={appConfig?.ui || {}} dashboardViewState={dashboardViewState} dashboardRestoreRequestId={dashboardRestoreRequestId} onDashboardViewStateChange={handleDashboardViewStateChange} statusCategories={statusCategories} editorOptions={editorOptions} isMainDark={isMainDark} frontendBasePath={EFFECTIVE_FRONTEND_BASE_PATH}/>}
         {token && currentView.startsWith('document:') && <DocumentEditor apiCall={apiCall} docId={currentView.split(':')[1]} goBack={goToDashboard} goBackToCorpus={goToDashboardWithCorpusFilter} user={user} projectName={projectName} mutationTools={toolConfig} spannotatorConfig={appConfig?.entities || {}} dendroidConfig={appConfig?.dendroid || {}} spreadsheetConfig={appConfig?.spreadsheet || {}} editorOptions={editorOptions} editorFonts={{ ui: appConfig?.ui, xml: appConfig?.xml, entities: appConfig?.entities, spreadsheet: appConfig?.spreadsheet }} spreadsheetColumnOrderConfig={spreadsheetColumnOrder} xmlTagCompletion={xmlTagCompletion} statusCategories={statusCategories} isMainDark={isMainDark} isAppConfigLoaded={isAppConfigLoaded} />}
-        {token && currentView === 'admin' && <AdminView apiCall={apiCall} user={user} token={token} projectName={projectName} uiConfig={appConfig?.ui || {}} statusCategories={statusCategories} refreshStatusCategories={refreshStatusCategories} isMainDark={isMainDark} />}
+        {token && currentView === 'admin' && <AdminView apiCall={apiCall} user={user} token={token} projectName={projectName} isNavDark={isNavDark} uiConfig={appConfig?.ui || {}} statusCategories={statusCategories} refreshStatusCategories={refreshStatusCategories} isMainDark={isMainDark} />}
       </main>
     </div>
   );

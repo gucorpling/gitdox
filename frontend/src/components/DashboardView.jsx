@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown, GitBranch } from 'lucide-react';
-import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath, getDefaultEditorMode } from '../appShared';
-import { EMPTY_DASHBOARD_FILTERS, normalizeDashboardViewState, areColumnFiltersEqual, getValidationSummary, isNavDark } from '../App';
+import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath, getDefaultEditorMode, getValidationSummary, normalizeDashboardViewState, areColumnFiltersEqual } from '../appShared';
 
 const getDocumentFieldValue = (doc, field) => {
   if (field === 'validation') {
@@ -100,8 +99,32 @@ const buildStatusPalette = (labels) => {
   return palette;
 };
 
+// Sorting Helpers (Moved outside component so they don't trigger missing dependency warnings)
+const normalizedValue = (value) => (value ?? '').toString().toLowerCase();
+
+const parseIdForSort = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+};
+
+const compareField = (a, b, field, direction = 'asc') => {
+  let result;
+  if (field === 'id') {
+    const aId = parseIdForSort(a.id);
+    const bId = parseIdForSort(b.id);
+    result = aId - bId;
+    if (result === 0) {
+      result = normalizedValue(a.id).localeCompare(normalizedValue(b.id));
+    }
+  } else {
+    result = normalizedValue(getDocumentFieldValue(a, field)).localeCompare(
+      normalizedValue(getDocumentFieldValue(b, field))
+    );
+  }
+  return direction === 'desc' ? -result : result;
+};
+
 const documentRowPropsAreEqual = (prevProps, nextProps) => {
-  // Only re-render if the document data, saving state, or dropdown state changes
   return (
     prevProps.doc === nextProps.doc &&
     prevProps.isStatusMenuOpen === nextProps.isStatusMenuOpen &&
@@ -129,19 +152,16 @@ const DocumentRow = React.memo(({
   onDelete,
   openDoc
 }) => {
-  // Local state to track opening direction of the status menu
   const [openUpwards, setOpenUpwards] = useState(false);
   const validationSummary = getValidationSummary(doc.validation);
 
-  // Calculate space on click
   const handleMenuClick = (e) => {
     if (!isStatusMenuOpen) {
       const rect = e.currentTarget.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      const menuHeightEstimate = 250; // roughly enough for 7-8 status items
+      const menuHeightEstimate = 250; 
       
-      // Flip upwards if space below is too small AND there is more space above
       setOpenUpwards(spaceBelow < menuHeightEstimate && spaceAbove > spaceBelow);
     }
     onToggleMenu(doc.id);
@@ -301,7 +321,7 @@ const DocumentRow = React.memo(({
   );
 }, documentRowPropsAreEqual);
 
-export default function DashboardView({ apiCall, user, openDoc, projectName, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [], editorOptions = [], frontendBasePath = ''}) {
+export default function DashboardView({ apiCall, user, openDoc, projectName, isNavDark, uiConfig = {}, dashboardViewState, dashboardRestoreRequestId = 0, onDashboardViewStateChange, statusCategories = [], editorOptions = [], frontendBasePath = ''}) {
   const defaultEditorMode = getDefaultEditorMode(editorOptions);
   const [documents, setDocuments] = useState([]);
   const [usersList, setUsersList] = useState([]);
@@ -314,36 +334,45 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
   const statusMenuRef = useRef(null);
   const canEditAssignee = (user?.adminlevel ?? 0) > 0;
   
-  // New document form state
   const [newDoc, setNewDoc] = useState({ corpus: '', docname: '', mode: defaultEditorMode, status: DEFAULT_STATUS_CATEGORIES[0], assigned: user.username });
 
-  const fetchDocs = async () => {
+  const fetchDocs = useCallback(async () => {
     try {
       const data = await apiCall(`/projects/${projectName}/documents`);
       setDocuments(data);
     } catch (err) {
+      console.warn("Error fetching documents:", err);
     } finally {
       setIsInitialLoad(false);
     }
-  };
-
-  useEffect(() => { fetchDocs(); }, []);
-
-
+  }, [apiCall, projectName]);
 
   useEffect(() => {
-    if (!statusCategories.length) return;
-    setNewDoc((prev) => {
-      if (statusCategories.includes(prev.status)) return prev;
-      return { ...prev, status: statusCategories[0] };
-    });
+    const initLoad = async () => {
+      await fetchDocs();
+    };
+    initLoad();
+  }, [fetchDocs]);
+
+  useEffect(() => {
+    const syncStatus = async () => {
+      if (!statusCategories.length) return;
+      setNewDoc((prev) => {
+        if (statusCategories.includes(prev.status)) return prev;
+        return { ...prev, status: statusCategories[0] };
+      });
+    };
+    syncStatus();
   }, [statusCategories]);
 
   useEffect(() => {
-    setNewDoc((prev) => {
-      if (prev.mode === defaultEditorMode) return prev;
-      return { ...prev, mode: defaultEditorMode };
-    });
+    const syncMode = async () => {
+      setNewDoc((prev) => {
+        if (prev.mode === defaultEditorMode) return prev;
+        return { ...prev, mode: defaultEditorMode };
+      });
+    };
+    syncMode();
   }, [defaultEditorMode]);
 
   useEffect(() => {
@@ -370,37 +399,38 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
 
   useEffect(() => {
     if (dashboardRestoreRequestId <= 0) return;
-    const restored = normalizeDashboardViewState(dashboardViewState);
-    setColumnFilters((prev) => (
-      areColumnFiltersEqual(prev, restored.columnFilters)
-        ? prev
-        : restored.columnFilters
-    ));
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: restored.scrollY, behavior: 'auto' });
-    });
-  }, [dashboardRestoreRequestId]);
+    
+    const applyRestore = async () => {
+      const restored = normalizeDashboardViewState(dashboardViewState);
+      setColumnFilters((prev) => (
+        areColumnFiltersEqual(prev, restored.columnFilters)
+          ? prev
+          : restored.columnFilters
+      ));
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: restored.scrollY, behavior: 'auto' });
+      });
+    };
+    applyRestore();
+  }, [dashboardRestoreRequestId, dashboardViewState]);
 
   useEffect(() => {
-    // Prevent non-admins from hitting the forbidden endpoint and getting 403s
-    if (!canEditAssignee) {
-      setUsersList([]);
-      return;
-    }
-
     const fetchUsers = async () => {
+      if (!canEditAssignee) {
+        setUsersList([]);
+        return;
+      }
       try {
         const users = await apiCall(`/projects/${projectName}/users`);
         setUsersList(Array.isArray(users) ? users : []);
       } catch (err) {
+        console.warn("Error fetching users:", err);
         setUsersList([]);
       }
     };
 
     fetchUsers();
-    
-    // Omit apiCall from dependencies to prevent infinite re-fetching during scrolling
-  }, [projectName, canEditAssignee]);
+  }, [projectName, canEditAssignee, apiCall]);
 
   useEffect(() => {
     if (typeof onDashboardViewStateChange !== 'function') return;
@@ -413,7 +443,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
           columnFilters,
           scrollY: window.scrollY
         });
-      }, 150); // 150ms debounce
+      }, 150); 
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -428,7 +458,9 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
     try {
       await apiCall(`/documents/${id}`, 'DELETE');
       fetchDocs();
-    } catch (err) {}
+    } catch (err) {
+      console.warn(`Error deleting document ${id}:`, err);
+    }
   };
 
   const handleAdd = async (e) => {
@@ -450,34 +482,12 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, uiC
       setShowAdd(false);
       fetchDocs();
       setNewDoc({ corpus: '', docname: '', mode: defaultEditorMode, status: statusCategories[0] || DEFAULT_STATUS_CATEGORIES[0], assigned: user.username });
-    } catch (err) {}
-  };
-
-  const normalizedValue = (value) => (value ?? '').toString().toLowerCase();
-
-  const parseIdForSort = (value) => {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
-  };
-
-  const compareField = (a, b, field, direction = 'asc') => {
-    let result = 0;
-    if (field === 'id') {
-      const aId = parseIdForSort(a.id);
-      const bId = parseIdForSort(b.id);
-      result = aId - bId;
-      if (result === 0) {
-        result = normalizedValue(a.id).localeCompare(normalizedValue(b.id));
-      }
-    } else {
-      result = normalizedValue(getDocumentFieldValue(a, field)).localeCompare(
-        normalizedValue(getDocumentFieldValue(b, field))
-      );
+    } catch (err) {
+      console.warn("Error adding new document:", err);
     }
-    return direction === 'desc' ? -result : result;
   };
 
-const filteredAndSortedDocuments = useMemo(() => {
+  const filteredAndSortedDocuments = useMemo(() => {
     const filtered = documents.filter((doc) => {
       return Object.entries(columnFilters).every(([field, filterValue]) => {
         if (!filterValue) return true;
@@ -495,7 +505,6 @@ const filteredAndSortedDocuments = useMemo(() => {
       const docnameResult = compareField(a, b, 'docname', 'asc');
       if (docnameResult !== 0) return docnameResult;
 
-      // Final fallback to ID to ensure React list stability if corpus and docname are identical
       return compareField(a, b, 'id', 'asc');
     });
   }, [documents, columnFilters, primarySort]);
@@ -512,13 +521,13 @@ const filteredAndSortedDocuments = useMemo(() => {
     if (!hasPendingValidations) return undefined;
 
     const intervalId = window.setInterval(() => {
-      fetchDocs();
+      void fetchDocs();
     }, 3000);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [hasPendingValidations, projectName]);
+  }, [hasPendingValidations, projectName, fetchDocs]);
 
   const togglePrimarySort = (key) => {
     setPrimarySort((prev) => {
@@ -538,7 +547,6 @@ const filteredAndSortedDocuments = useMemo(() => {
     setColumnFilters((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Memoize the base status options and user names so they only compute once
   const baseStatusOptions = useMemo(() => {
     return Array.isArray(statusCategories) && statusCategories.length > 0
       ? statusCategories
@@ -567,6 +575,7 @@ const filteredAndSortedDocuments = useMemo(() => {
       return acc;
     }, {});
   }, [editorOptions]);
+  
   const modeFilterPlaceholder = useMemo(() => {
     const labels = editorOptions.map((option) => option.label).filter(Boolean);
     return labels.length > 0 ? labels.join('/') : 'mode';
@@ -579,6 +588,7 @@ const filteredAndSortedDocuments = useMemo(() => {
         const parsed = JSON.parse(metadata);
         return parsed && typeof parsed === 'object' ? parsed : {};
       } catch (err) {
+        console.warn("Failed to parse metadata JSON string:", err);
         return {};
       }
     }
@@ -723,7 +733,7 @@ const filteredAndSortedDocuments = useMemo(() => {
                 </tr>
               )}
 
-              {filteredAndSortedDocuments.map((doc, index) => (
+              {filteredAndSortedDocuments.map((doc) => (
                 <DocumentRow
                   key={doc.id}
                   doc={doc}

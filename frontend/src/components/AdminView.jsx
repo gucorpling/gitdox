@@ -6,11 +6,10 @@ import {
   EMPTY_VALIDATION,
   formatStatusCategoryLabel,
   normalizeCssStyleValue,
-  normalizeStatusCategories,
+  normalizeStatusCategories
 } from '../appShared';
-import { isNavDark } from '../App';
 
-export default function AdminView({ apiCall, user, token, projectName, uiConfig = {}, statusCategories = [], refreshStatusCategories }) {
+export default function AdminView({ apiCall, user, token, projectName, isNavDark, uiConfig = {}, statusCategories = [], refreshStatusCategories }) {
   const adminLevel = user?.adminlevel ?? 0;
   const canManageUsers = adminLevel >= 2;
   const canManageAssignments = adminLevel >= 1;
