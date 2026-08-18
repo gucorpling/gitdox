@@ -2420,7 +2420,8 @@ def get_github_commit_message(
         return {
             "commit_message": (latest_commit or {}).get("message", "") or "",
             "commit_url": (latest_commit or {}).get("url", "") or "",
-            "commit_date": (latest_commit or {}).get("date", "") or ""
+            "commit_date": (latest_commit or {}).get("date", "") or "",
+            "commit_author": (latest_commit or {}).get("author", "") or ""
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GitHub API Error: {str(e)}")

@@ -53,6 +53,7 @@ export default function DocumentEditor({
   const [latestGithubCommitMessage, setLatestGithubCommitMessage] = useState('');
   const [latestGithubCommitUrl, setLatestGithubCommitUrl] = useState('');
   const [latestGithubCommitDate, setLatestGithubCommitDate] = useState('');
+  const [latestGithubCommitAuthor, setLatestGithubCommitAuthor] = useState('');
   const [isLoadingGithubCommitMessage, setIsLoadingGithubCommitMessage] = useState(false);
   const spreadsheetEditorRef = useRef(null);
   const previousEditorModeRef = useRef(null);
@@ -706,6 +707,7 @@ export default function DocumentEditor({
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
       setLatestGithubCommitDate('');
+      setLatestGithubCommitAuthor('');
       return;
     }
 
@@ -714,6 +716,7 @@ export default function DocumentEditor({
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
       setLatestGithubCommitDate('');
+      setLatestGithubCommitAuthor('');
       return;
     }
 
@@ -723,6 +726,7 @@ export default function DocumentEditor({
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
       setLatestGithubCommitDate('');
+      setLatestGithubCommitAuthor('');
       return;
     }
 
@@ -732,14 +736,17 @@ export default function DocumentEditor({
       const fetchedMessage = typeof response?.commit_message === 'string' ? response.commit_message.trim() : '';
       const fetchedUrl = typeof response?.commit_url === 'string' ? response.commit_url.trim() : '';
       const fetchedDate = typeof response?.commit_date === 'string' ? response.commit_date.trim() : '';
+      const fetchedAuthor = typeof response?.commit_author === 'string' ? response.commit_author.trim() : '';
       setLatestGithubCommitMessage(fetchedMessage);
       setLatestGithubCommitUrl(fetchedUrl);
       setLatestGithubCommitDate(fetchedDate);
+      setLatestGithubCommitAuthor(fetchedAuthor);
     } catch (err) {
       console.error(err);
       setLatestGithubCommitMessage('');
       setLatestGithubCommitUrl('');
       setLatestGithubCommitDate('');
+      setLatestGithubCommitAuthor('');
     } finally {
       setIsLoadingGithubCommitMessage(false);
     }
@@ -1577,6 +1584,9 @@ export default function DocumentEditor({
                 )}
                 {latestGithubCommitDate ? (
                   <span className="text-slate-500"> ({formatGithubCommitTimestamp(latestGithubCommitDate)})</span>
+                ) : null}
+                {latestGithubCommitAuthor ? (
+                  <span className="text-slate-500"> by <span className="font-medium text-slate-800">{latestGithubCommitAuthor}</span></span>
                 ) : null}
               </p>
             ) : null}
