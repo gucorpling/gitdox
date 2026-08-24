@@ -1479,14 +1479,13 @@ def update_document(
     old_corpus = old_doc_data.get("corpus")
     project = old_doc_data.get("project")
 
-    # Level-0 users can update status only.
+    # Level-0 users can update status and mode only.
     if int(current_user.get("adminlevel", 0)) < 1:
         protected_field_checks = [
             ("corpus", old_doc_data.get("corpus", "")),
             ("docname", old_doc_data.get("docname", "")),
-            ("repo", old_doc_data.get("repo", "")),
-            ("mode", old_doc_data.get("mode", "")),
             ("assigned", old_doc_data.get("assigned", "")),
+            ("repo", old_doc_data.get("repo", "")),
         ]
 
         for field_name, old_value in protected_field_checks:
