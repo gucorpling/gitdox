@@ -16,3 +16,26 @@
 }
 
 .p-4{padding: 0.8rem !important}
+
+/* Force physical scrollbars in WebKit (Mac Chrome/Safari) */
+.x-spreadsheet-scrollbar::-webkit-scrollbar {
+    width: 14px !important;
+    height: 14px !important;
+    background: transparent;
+}
+
+.x-spreadsheet-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #c1c1c1;
+    border-radius: 8px !important;
+    border: 3px solid #fff !important; /* Creates padding effect */
+}
+
+.x-spreadsheet-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #a8a8a8;
+}
+
+/* Ensure the scrollbar tracks don't block canvas clicks */
+.x-spreadsheet-scrollbar.horizontal, 
+.x-spreadsheet-scrollbar.vertical {
+    pointer-events: auto;
+}
