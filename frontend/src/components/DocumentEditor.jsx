@@ -666,7 +666,7 @@ export default function DocumentEditor({
         await autoSaveXmlContent(transformedXml);
       } 
       // Handle returning Spreadsheet or Entities
-      else if (returnMode === 'spreadsheet' || returnMode === 'entities') {
+      else if (returnMode === 'spreadsheet' || returnMode === 'entities' || returnMode === 'dendroid') {
         const transformedSpreadsheet = response?.content_spreadsheet;
         if (typeof transformedSpreadsheet !== 'string' || transformedSpreadsheet.length === 0) {
           throw new Error(`${toolConfig.caption} returned no spreadsheet content.`);
@@ -681,6 +681,61 @@ export default function DocumentEditor({
 
         // Switch the editor to the new mode ("spreadsheet" or "entities")
         await autoSaveDocField('mode', returnMode);
+      }
+    } catch (err) {
+      alert(`Failed to execute ${toolConfig.caption || toolKey}: ${err.message}`);
+    } finally {
+      setActiveMutationTool('');
+    }
+  };
+
+  const runSpreadsheetMutationTool = async (toolKey, toolConfig) => {
+    if (!doc || !contentSpreadsheet.trim()) {
+      alert('Spreadsheet content is empty.');
+      return;
+    }
+
+    setActiveMutationTool(toolKey);
+    try {
+      const response = await apiCall('/documents/mutate', 'POST', {
+        tool: toolKey,
+        content_spreadsheet: contentSpreadsheet
+      });
+
+      const returnMode = toolConfig.return;
+
+      // Handle returning XML
+      if (returnMode === 'xml') {
+        const transformedXml = response?.content_xml;
+        if (typeof transformedXml !== 'string' || transformedXml.length === 0) {
+          throw new Error(`${toolConfig.caption} returned no XML content.`);
+        }
+
+        setContentXml(transformedXml);
+        setHasUnsavedChanges(true);
+        setIsXmlDirty(true);
+        await autoSaveXmlContent(transformedXml);
+        await autoSaveDocField('mode', 'xml');
+      }
+      // Handle returning Spreadsheet or Entities
+      else if (returnMode === 'spreadsheet' || returnMode === 'entities' || returnMode === 'dendroid') {
+        const transformedSpreadsheet = response?.content_spreadsheet;
+        if (typeof transformedSpreadsheet !== 'string' || transformedSpreadsheet.length === 0) {
+          throw new Error(`${toolConfig.caption} returned no spreadsheet content.`);
+        }
+
+        setContentSpreadsheet(transformedSpreadsheet);
+        setHasUnsavedChanges(true);
+        setIsSpreadsheetDirty(true);
+
+        const spreadsheetSaved = await autoSaveSpreadsheetContent(transformedSpreadsheet);
+        if (!spreadsheetSaved) return;
+
+        if (returnMode === 'entities') {
+          await autoSaveDocField('mode', 'entities');
+        } else if (returnMode === 'dendroid') {
+          await autoSaveDocField('mode', 'dendroid');
+        }
       }
     } catch (err) {
       alert(`Failed to execute ${toolConfig.caption || toolKey}: ${err.message}`);
@@ -1508,23 +1563,53 @@ export default function DocumentEditor({
               />
             </div>
           ) : (
-            <div className="flex-1 w-full h-full pt-10 overflow-hidden border-t border-slate-100 bg-white">
-              <SpreadsheetEditor
-                ref={spreadsheetEditorRef}
-                fontFamily={spreadsheetFontFamily}
-                preferredColumnOrder={preferredColumnOrder}
-                value={contentSpreadsheet}
-                canDataTransfer={canUseDataTransferTools}
-                allowExternalClipboard={allowExternalSpreadsheetClipboard}
-                validation={effectiveSpreadsheetValidation}
-                onChange={handleSpreadsheetContentChange}
-                onCanonicalized={handleSpreadsheetCanonicalized}
-                onImportResult={handleSpreadsheetImportResult}
-                onImportSgml={importSpreadsheetSgml}
-                docId={docId}
-                apiCall={apiCall}
-                className="h-full"
-              />
+            <div className="flex-1 w-full h-full pt-10 overflow-hidden border-t border-slate-100 bg-white flex flex-col">
+              
+              <div className="flex-1 min-h-0">
+                <SpreadsheetEditor
+                  ref={spreadsheetEditorRef}
+                  fontFamily={spreadsheetFontFamily}
+                  preferredColumnOrder={preferredColumnOrder}
+                  value={contentSpreadsheet}
+                  canDataTransfer={canUseDataTransferTools}
+                  allowExternalClipboard={allowExternalSpreadsheetClipboard}
+                  validation={effectiveSpreadsheetValidation}
+                  onChange={handleSpreadsheetContentChange}
+                  onCanonicalized={handleSpreadsheetCanonicalized}
+                  onImportResult={handleSpreadsheetImportResult}
+                  onImportSgml={importSpreadsheetSgml}
+                  docId={docId}
+                  apiCall={apiCall}
+                  className="h-full"
+                />
+              </div>
+              {Object.entries(mutationTools || {}).some(([, config]) => config.editor === 'spreadsheet') && (
+                <div className="border-b border-slate-100 px-4 py-3 flex items-center gap-2 bg-slate-50">
+                  {Object.entries(mutationTools || {}).map(([toolKey, config]) => {
+                    // 1. Check if the tool belongs to the spreadsheet editor
+                    if (config.editor !== 'spreadsheet') return null;
+
+                    // 2. Check if the user has the required admin level
+                    const requiredLevel = config.level || 0;
+                    const userLevel = user?.adminlevel || 0;
+                    if (userLevel < requiredLevel) return null;
+
+                    // 3. Render the dynamic button
+                    return (
+                      <button
+                        key={toolKey}
+                        type="button"
+                        style={config.color ? { backgroundColor: config.color } : undefined}
+                        onClick={() => runSpreadsheetMutationTool(toolKey, config)}
+                        disabled={!!activeMutationTool}
+                        className="px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {activeMutationTool === toolKey ? `${config.caption}...` : config.caption}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
