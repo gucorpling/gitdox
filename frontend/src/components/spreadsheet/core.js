@@ -2649,18 +2649,114 @@ function reorderSocialCalcColumns(socialCalcData, preferredOrder) {
         compactedGroups[header] = virtualCols;
     }
 
-    // 4. Sort the unique headers based on preferredOrder, falling back to original order
-    const sortedHeaders = [...originalHeaderOrder].sort((a, b) => {
-        const idxA = prefOrder.indexOf(a);
-        const idxB = prefOrder.indexOf(b);
-        const hasA = idxA !== -1;
-        const hasB = idxB !== -1;
+    // 4. Sort the unique headers respecting prefix-based ordering and suffix-batching
+    const headerDetails = originalHeaderOrder.map(header => {
+        const colonIdx = header.indexOf(':');
+        const rawPrefix = colonIdx !== -1 ? header.substring(0, colonIdx) : header;
+        
+        // 1. Check for an exact full header match first
+        const isExactMatch = prefOrder.indexOf(header) !== -1;
+        
+        let idx;
+        let prefix = rawPrefix;
+        let suffix;
 
-        if (hasA && hasB) return idxA - idxB;
-        if (hasA && !hasB) return -1;
-        if (!hasA && hasB) return 1;
-        return originalHeaderOrder.indexOf(a) - originalHeaderOrder.indexOf(b);
+        if (isExactMatch) {
+            // EXACT MATCH: Treat as a standalone column. 
+            idx = prefOrder.indexOf(header);
+            prefix = header; 
+            suffix = '';     
+        } else {
+            // DYNAMIC MATCH: Split into prefix and suffix
+            idx = prefOrder.indexOf(rawPrefix);
+            suffix = colonIdx !== -1 ? header.substring(colonIdx + 1) : '';
+        }
+
+        const isKnown = idx !== -1;
+
+        // Give unknown columns a mathematically high secondary rank (though they are separated later)
+        if (!isKnown) {
+            idx = prefOrder.length + originalHeaderOrder.indexOf(header);
+        }
+
+        return { header, prefix, suffix, secondaryRank: idx, isKnown };
     });
+
+    // Determine the min and max rank bounds for every suffix group (excluding the empty base suffix)
+    const suffixBounds = {};
+    headerDetails.forEach(details => {
+        if (details.isKnown && details.suffix !== '') {
+            if (!suffixBounds[details.suffix]) {
+                suffixBounds[details.suffix] = { min: details.secondaryRank, max: details.secondaryRank };
+            } else {
+                suffixBounds[details.suffix].min = Math.min(suffixBounds[details.suffix].min, details.secondaryRank);
+                suffixBounds[details.suffix].max = Math.max(suffixBounds[details.suffix].max, details.secondaryRank);
+            }
+        }
+    });
+
+    // Merge overlapping intervals to create contiguous "cluster blocks"
+    const rawIntervals = Object.values(suffixBounds).sort((a, b) => a.min - b.min);
+    const mergedIntervals = [];
+    if (rawIntervals.length > 0) {
+        let current = rawIntervals[0];
+        for (let i = 1; i < rawIntervals.length; i++) {
+            if (rawIntervals[i].min <= current.max) {
+                current.max = Math.max(current.max, rawIntervals[i].max); // Extend interval
+            } else {
+                mergedIntervals.push(current);
+                current = rawIntervals[i]; // Start new interval
+            }
+        }
+        mergedIntervals.push(current);
+    }
+
+    // Assign final primary rank: 
+    // If a column's rank falls inside a cluster block, it anchors to the start of that block.
+    headerDetails.forEach(details => {
+        let pRank = details.secondaryRank;
+        if (details.isKnown) {
+            for (const interval of mergedIntervals) {
+                if (details.secondaryRank >= interval.min && details.secondaryRank <= interval.max) {
+                    pRank = interval.min;
+                    break;
+                }
+            }
+        }
+        details.primaryRank = pRank;
+    });
+
+    // Sort the headers using the composite parameters
+    const sortedHeaders = headerDetails.sort((a, b) => {
+        // 0. Known columns ALWAYS come before unknown columns
+        if (a.isKnown !== b.isKnown) {
+            return a.isKnown ? -1 : 1;
+        }
+        
+        // 1. If both are completely unknown, simply sort them alphabetically
+        if (!a.isKnown && !b.isKnown) {
+            return a.header.localeCompare(b.header);
+        }
+        
+        // 2. Primary rank keeps suffix batches in the correct relative global location
+        if (a.primaryRank !== b.primaryRank) {
+            return a.primaryRank - b.primaryRank;
+        }
+        
+        // 3. Suffix (alphabetical) handles instances where two batches share the same anchor rank.
+        // The empty suffix '' naturally sorts before '2', keeping base columns first within a cluster.
+        if (a.suffix !== b.suffix) {
+            return a.suffix < b.suffix ? -1 : 1;
+        }
+        
+        // 4. Secondary rank orders prefixes INTERNALLY within the identical suffix batch
+        if (a.secondaryRank !== b.secondaryRank) {
+            return a.secondaryRank - b.secondaryRank;
+        }
+        
+        // 5. Fallback to original arrival order to guarantee stable sorts
+        return originalHeaderOrder.indexOf(a.header) - originalHeaderOrder.indexOf(b.header);
+    }).map(d => d.header);
 
     // 5. Rebuild the SocialCalc string with the new coordinates
     const finalCells = [];
