@@ -424,7 +424,10 @@ version:1.5
                         if attr[0] == "xml\\clang":
                             anno_name = "lang"  # TODO: de-hardwire fix for xml:lang
                         else:
-                            anno_name = element + "_" + attr[0]
+                            if element == "_":  # Tags like <_ anno="val"> become anno="val" instead of __anno="val"
+                                anno_name = attr[0]
+                            else:
+                                anno_name = element + "_" + attr[0]
                     else:
                         anno_name = attr[0]
                     anno_value = attr[1]
