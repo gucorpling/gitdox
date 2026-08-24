@@ -202,6 +202,25 @@ body {
   width: 1px;
   background: #ddd;
 }
+.x-spreadsheet-scrollbar.vertical,
+.x-spreadsheet-scrollbar.horizontal {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(0, 0, 0, 0.35) transparent;
+}
+.x-spreadsheet-scrollbar.vertical::-webkit-scrollbar,
+.x-spreadsheet-scrollbar.horizontal::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+}
+.x-spreadsheet-scrollbar.vertical::-webkit-scrollbar-track,
+.x-spreadsheet-scrollbar.horizontal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.x-spreadsheet-scrollbar.vertical::-webkit-scrollbar-thumb,
+.x-spreadsheet-scrollbar.horizontal::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.35);
+  border-radius: 5px;
+}
 /* @{css-prefix}-overlayer */
 .x-spreadsheet-overlayer {
   position: absolute;
