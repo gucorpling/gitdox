@@ -146,6 +146,699 @@ const getColorForLabel = (label, colorMap) => {
 };
 
 
+// --- Sub-components (Extracted from Dendroid to prevent re-mounting) ---
+
+const FeaturesModal = ({ token, onClose, onSave, config }) => {
+  const { features } = config;
+  const [activeTab, setActiveTab] = useState('feats');
+  const [data, setData] = useState({ feats: [...parseFeatures(token.feats), { key: '', value: '' }], misc: [...parseFeatures(token.misc), { key: '', value: '' }] });
+  
+  const cleanupRows = (rows) => {
+    const filtered = rows.filter((r, i) => r.key.trim() !== '' || r.value.trim() !== '' || i === rows.length - 1);
+    const last = filtered[filtered.length - 1];
+    if (!last || last.key.trim() !== '' || last.value.trim() !== '') filtered.push({ key: '', value: '' });
+    return filtered;
+  };
+  
+  const handleChange = (tab, index, field, val) => { const newData = [...data[tab]]; newData[index][field] = val; setData({ ...data, [tab]: cleanupRows(newData) }); };
+  const handleDelete = (tab, index) => { const newData = [...data[tab]]; newData.splice(index, 1); setData({ ...data, [tab]: cleanupRows(newData) }); };
+  
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Enter') { e.preventDefault(); onSave(stringifyFeatures(data.feats), stringifyFeatures(data.misc)); }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [data, onClose, onSave]);
+  
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-[520px] max-w-[95vw] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <h3 className="font-semibold text-gray-800">Edit Annotations <span className="text-gray-400 font-mono text-xs ml-2">[{token.form}]</span></h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={20} /></button>
+        </div>
+        
+        <div className="flex border-b border-gray-200 px-5 pt-3 gap-6 bg-white">
+          {features.feats && <button className={`pb-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'feats' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`} onClick={() => setActiveTab('feats')}>Features (FEATS)</button>}
+          {features.misc && <button className={`pb-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'misc' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`} onClick={() => setActiveTab('misc')}>Miscellaneous (MISC)</button>}
+        </div>
+  
+        <div className="p-5 bg-white max-h-[50vh] overflow-y-auto">
+          <div className="grid grid-cols-[1fr_1fr_32px] gap-2 px-1 mb-2">
+            <div className="text-xs font-semibold text-gray-500 uppercase">Key</div>
+            <div className="text-xs font-semibold text-gray-500 uppercase">Value (Optional)</div>
+            <div className="text-xs font-semibold text-gray-500 uppercase"></div>
+          </div>
+          {data[activeTab].map((row, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_32px] gap-2 items-center mb-2">
+              <input type="text" value={row.key} onChange={(e) => handleChange(activeTab, i, 'key', e.target.value)} className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded outline-none focus:border-indigo-500 transition-all font-mono" />
+              <input type="text" value={row.value} onChange={(e) => handleChange(activeTab, i, 'value', e.target.value)} className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded outline-none focus:border-indigo-500 transition-all font-mono" />
+              <button onClick={() => handleDelete(activeTab, i)} disabled={i === data[activeTab].length - 1 && row.key === '' && row.value === ''} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-0"><X size={16} /></button>
+            </div>
+          ))}
+        </div>
+  
+        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+          <button onClick={() => onSave(stringifyFeatures(data.feats), stringifyFeatures(data.misc))} className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">Save</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode, compareUsers, annotatorColors, config }) => {
+  const { features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap } = config;
+  
+  const containerRef = useRef(null);
+  const scrollRef = useRef(null);
+  const scrollInterval = useRef(null);
+  const latestMousePos = useRef({ x: 0, y: 0 });
+  
+  const BASE_Y = 260; 
+  const WORD_SPACING = 30; 
+  const CHAR_WIDTH_ESTIMATE = 8.5; 
+  const MAX_ARC_HEIGHT = 160;
+  
+  const [dragState, setDragState] = useState({ active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, hoveredTargetId: null, isEdep: false });
+  const [lassoState, setLassoState] = useState({ active: false, startX: 0, currentX: 0 });
+  const [inlineEditor, setInlineEditor] = useState(null);
+  const [featuresModalTokenId, setFeaturesModalTokenId] = useState(null);
+  
+  const displayAnnName = activeAnn;
+  
+  const skipScrollReset = useRef(false); // Distinguish between explicit annotator/mode changes and internal updates that shouldn't trigger scroll reset
+  
+  useEffect(() => {
+    if (skipScrollReset.current) {
+      // The annotator changed because of an edit, so we consume the flag and do NOT scroll like we would for clicking a 
+      // different annotator or switching compare mode. This prevents the scroll from jumping back to the left when the user is editing.
+      skipScrollReset.current = false;
+      return;
+    }
+    
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = 0;
+    }
+  }, [displayAnnName, isCompareMode, compareUsers]);
+  
+  const hasEdepsData = useMemo(() => {
+    if (!features.edeps) return false;
+    return sentence.tokens.some(t => {
+      const usersToCheck = isCompareMode ? compareUsers : [displayAnnName];
+      return usersToCheck.some(u => {
+          const ann = t.annotations[u];
+          return ann && ann.deps && ann.deps !== '_';
+      });
+    });
+  }, [sentence.tokens, displayAnnName, isCompareMode, compareUsers, features.edeps]);
+  
+  const showEdepsArea = hasEdepsData || dragState.isEdep;
+  const svgHeight = showEdepsArea ? 560 : 380;
+  
+  const layout = useMemo(() => {
+    let currentX = 40; 
+    const nodePositions = {};
+    const nodes = sentence.tokens.map(token => {
+      const wordWidth = token.form.length * CHAR_WIDTH_ESTIMATE;
+      const posWidth = Math.max((token.upos || '').length, (token.xpos || '').length) * CHAR_WIDTH_ESTIMATE * 0.8;
+      const totalWidth = Math.max(30, Math.max(wordWidth, posWidth)) + 20;
+      const node = { ...token, x: currentX + (totalWidth / 2), y: BASE_Y, width: totalWidth };
+      nodePositions[token.id] = node;
+      currentX += totalWidth + WORD_SPACING;
+      return node;
+    });
+  
+    const activeUsers = isCompareMode ? compareUsers : [displayAnnName];
+    const edgesMap = new Map();
+    const edepsMap = new Map();
+
+    nodes.forEach(node => {
+      activeUsers.forEach(user => {
+        const ann = node.annotations[user] || { head: '_', deprel: '_', deps: '_' };
+        if (!String(node.id).includes('.') && ann.head && ann.head !== '_') {
+          const key = `${ann.head}->${node.id}`;
+          if (!edgesMap.has(key)) edgesMap.set(key, { source: ann.head, target: node.id, labels: [] });
+          edgesMap.get(key).labels.push({ user, rel: ann.deprel });
+        }
+        if (features.edeps) {
+          parseEdeps(ann.deps).forEach(edep => {
+            const key = `${edep.head}->${node.id}`;
+            if (!edepsMap.has(key)) edepsMap.set(key, { source: edep.head, target: node.id, labels: [] });
+            edepsMap.get(key).labels.push({ user, rel: edep.deprel });
+          });
+        }
+      });
+    });
+
+    const processEdgesMap = (map) => {
+      const arr = [];
+      map.forEach((data) => {
+          const isUniversal = isCompareMode && activeUsers.length > 1 &&
+                              data.labels.length === activeUsers.length &&
+                              data.labels.every(l => l.rel === data.labels[0].rel);
+
+          if (isUniversal) {
+              arr.push({ ...data, isUniversal: true, rels: [{ rel: data.labels[0].rel, color: '#94a3b8' }] });
+          } else {
+              const rels = data.labels.map(l => ({ 
+                  rel: l.rel, 
+                  color: isCompareMode ? annotatorColors[l.user] : getColorForLabel(l.rel, colorMap), 
+                  user: l.user 
+              }));
+              arr.push({ ...data, isUniversal: false, rels });
+          }
+      });
+      return arr;
+    };
+
+    const edges = processEdgesMap(edgesMap);
+    const edeps = processEdgesMap(edepsMap);
+    
+    const mwts = (sentence.mwts || []).map(mwt => {
+      const [startId, endId] = String(mwt.id).split('-');
+      const startNode = nodePositions[startId], endNode = nodePositions[endId];
+      if (!startNode || !endNode) return null;
+      const left = startNode.x - (startNode.width / 2) - 5, right = endNode.x + (endNode.width / 2) + 5;
+      return { ...mwt, left, right, top: BASE_Y - 55, width: right - left };
+    }).filter(Boolean);
+  
+    const processStacking = (edgeList) => {
+      const incoming = {}, processed = [];
+      edgeList.forEach(e => {
+        const tNode = nodePositions[e.target];
+        const sNode = e.source === '0' ? { x: tNode.x } : nodePositions[e.source];
+        if (!sNode || !tNode) return;
+        const distance = Math.abs(tNode.x - sNode.x);
+        if (!incoming[e.target]) incoming[e.target] = [];
+        incoming[e.target].push({ ...e, distance, isLeft: sNode.x < tNode.x, sNode, tNode });
+      });
+      Object.values(incoming).forEach(list => {
+        list.sort((a, b) => a.distance !== b.distance ? a.distance - b.distance : (b.isLeft ? 1 : 0) - (a.isLeft ? 1 : 0));
+        list.forEach((e, i) => processed.push({ ...e, stackIndex: i }));
+      });
+      return processed;
+    };
+  
+    return { nodes, nodePositions, mwts, totalWidth: Math.max(800, currentX + 40), standardEdges: processStacking(edges), enhancedEdges: processStacking(edeps) };
+  }, [sentence.tokens, sentence.mwts, displayAnnName, isCompareMode, compareUsers, annotatorColors, features.edeps, colorMap]);
+  
+  const allArrowColors = useMemo(() => {
+    const s = new Set(['#94a3b8']);
+    layout.standardEdges.forEach(e => e.rels.forEach(r => {
+        if (r.color) s.add(r.color);
+    }));
+    layout.enhancedEdges.forEach(e => e.rels.forEach(r => {
+        if (r.color) s.add(r.color);
+    }));
+    return Array.from(s);
+  }, [layout]);
+
+  const startAutoScroll = (direction) => { if (scrollInterval.current) return; scrollInterval.current = setInterval(() => { if (scrollRef.current) { scrollRef.current.scrollLeft += direction * 10; if (dragState.active || lassoState.active) updateDragPos(latestMousePos.current.x, latestMousePos.current.y); } }, 16); };
+  const stopAutoScroll = () => { if (scrollInterval.current) { clearInterval(scrollInterval.current); scrollInterval.current = null; } };
+  useEffect(() => () => stopAutoScroll(), []);
+  
+  const updateDragPos = (clientX, clientY, e = null) => {
+    latestMousePos.current = { x: clientX, y: clientY };
+    if (!dragState.active && !lassoState.active) return;
+    if (e) e.preventDefault(); 
+    if (!containerRef.current) return;
+  
+    const svgRect = containerRef.current.getBoundingClientRect();
+    const x = clientX - svgRect.left, y = clientY - svgRect.top;
+  
+    if (lassoState.active) return setLassoState(prev => ({ ...prev, currentX: x }));
+  
+    let hoveredId = null;
+    if (dragState.sourceId) {
+        const hoveredNode = layout.nodes.find(n => {
+            return x >= (n.x - (n.width / 2) - 10) && x <= (n.x + (n.width / 2) + 10) && y >= (BASE_Y - 60) && y <= (BASE_Y + 80);
+        });
+        if (hoveredNode && hoveredNode.id !== dragState.sourceId) hoveredId = hoveredNode.id;
+    }
+  
+    setDragState(prev => ({
+      ...prev, currentX: x, currentY: y, hoveredTargetId: hoveredId,
+      isEdep: features.edeps && (prev.sourceId === '0' ? prev.startY > BASE_Y : ((e ? e.ctrlKey : prev.isEdep) || String(prev.sourceId).includes('.')))
+    }));
+  };
+  
+  const handleSvgMouseUp = () => {
+    if (isCompareMode) return;
+    if (lassoState.active) {
+      const minX = Math.min(lassoState.startX, lassoState.currentX), maxX = Math.max(lassoState.startX, lassoState.currentX);
+      const selected = layout.nodes.filter(n => !String(n.id).includes('.') && n.x >= minX && n.x <= maxX);
+      
+      if (selected.length >= 2) {
+        const newId = `${selected[0].id}-${selected[selected.length - 1].id}`;
+        if (!(sentence.mwts || []).find(m => m.id === newId)) {
+          const newMwt = { id: newId, form: selected.map(s => s.form).join(''), lemma: '_', upos: '_', xpos: '_', feats: '_', head: '_', deprel: '_', deps: '_', misc: '_' };
+          handleSaveAction(() => ({ mwts: [...(sentence.mwts || []), newMwt] }));
+        }
+      }
+      return setLassoState({ active: false, startX: 0, currentX: 0 });
+    }
+  
+    if (dragState.active) {
+      if (dragState.hoveredTargetId) {
+        const targetId = dragState.hoveredTargetId;
+        if (!dragState.isEdep && (String(targetId).includes('.') || String(dragState.sourceId).includes('.'))) {
+            return setDragState({ active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, hoveredTargetId: null, isEdep: false });
+        }
+  
+        const targetNode = layout.nodePositions[targetId];
+        const currentToken = sentence.tokens.find(t => t.id === targetId);
+        const sourceNode = dragState.sourceId === '0' ? {x: targetNode.x} : layout.nodePositions[dragState.sourceId];
+        
+        let existingVal = '';
+        const ann = currentToken.annotations[displayAnnName] || { head: '_', deprel: '_', deps: '_' };
+  
+        // Issue 2 Fix: Read the previous deprel regardless of whether the head has changed
+        if (dragState.isEdep) {
+          const edeps = parseEdeps(ann.deps);
+          const existing = edeps.find(ed => ed.head === dragState.sourceId);
+          if (existing) existingVal = existing.deprel;
+        } else {
+          existingVal = ann.deprel !== '_' ? ann.deprel : '';
+        }
+  
+        setInlineEditor({
+          active: true, type: 'select', field: dragState.isEdep ? 'edeprel' : 'deprel', tokenId: targetId, sourceId: dragState.sourceId, value: existingVal,
+          x: dragState.sourceId === '0' ? targetNode.x : (sourceNode.x + targetNode.x) / 2,
+          y: dragState.sourceId === '0' ? (dragState.isEdep ? (BASE_Y + MAX_ARC_HEIGHT/2 + 10) : (BASE_Y / 2)) : (dragState.isEdep ? BASE_Y + 50 + (Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetNode.x - sourceNode.x) * 0.2)) * 0.75) + 12 : BASE_Y - 35 - (Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetNode.x - sourceNode.x) * 0.2)) * 0.75) - 5),
+          options: dragState.isEdep ? tagsets.edeprel : tagsets.deprel
+        });
+      }
+      setDragState({ active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, hoveredTargetId: null, isEdep: false });
+    }
+  };
+  
+  const handleWordMouseDown = (e, tokenId) => {
+    e.stopPropagation(); e.preventDefault();
+    if (isCompareMode) return;
+    if (inlineEditor) setInlineEditor(null);
+    
+    const isEllipsis = String(tokenId).includes('.');
+    const svgRect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - svgRect.left;
+    const y = e.clientY - svgRect.top;
+    
+    setDragState({
+      active: true, sourceId: tokenId, startX: layout.nodePositions[tokenId]?.x || x, startY: y,
+      currentX: x, currentY: y, hoveredTargetId: null, isEdep: features.edeps && (e.ctrlKey || isEllipsis)
+    });
+  };
+  
+  const handleRootMouseDown = (e, isBottomRoot = false) => {
+    e.stopPropagation(); e.preventDefault();
+    if (isCompareMode) return;
+    if (inlineEditor) setInlineEditor(null);
+    
+    const svgRect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - svgRect.left;
+    const y = e.clientY - svgRect.top;
+    
+    setDragState({
+      active: true, sourceId: '0', startX: x, startY: isBottomRoot ? svgHeight - 20 : 20,
+      currentX: x, currentY: y, hoveredTargetId: null, isEdep: features.edeps && (e.ctrlKey || isBottomRoot)
+    });
+  };
+  
+  const openTextEditor = (e, entity, field, yOffset, isMwt = false) => {
+    e.stopPropagation();
+    if (isCompareMode) return;
+    const x = isMwt ? entity.left + entity.width/2 : layout.nodePositions[entity.id].x;
+    setInlineEditor({
+      active: true, type: 'text', field: field, tokenId: entity.id, isMwt,
+      value: entity[field] || '', x: x, y: BASE_Y + yOffset
+    });
+  };
+  
+  const openSelectEditor = (e, token, field, yOffset, options) => {
+    e.stopPropagation();
+    if (isCompareMode) return;
+    setInlineEditor({
+      active: true, type: 'select', field: field, tokenId: token.id,
+      value: token[field] || '', x: layout.nodePositions[token.id].x, y: BASE_Y + yOffset, options: options
+    });
+  };
+  
+  const handleSaveAction = (applyUpdatesToSent) => {
+    let newTokens = [...sentence.tokens];
+    const targetUser = perUserMode ? currentUser : defaultAnnotator;
+    
+    const availableAnns = getAvailableAnns(sentence, defaultAnnotator);
+    if (perUserMode && (!availableAnns.includes(targetUser) || !hasAnnotationData(sentence, targetUser))) {
+       newTokens = newTokens.map(t => {
+         const updatedAnns = { ...t.annotations };
+         updatedAnns[targetUser] = t.annotations[displayAnnName] ? { ...t.annotations[displayAnnName] } : { head: '_', deprel: '_', deps: '_' };
+         return { ...t, annotations: updatedAnns };
+       });
+    }
+  
+    const updates = applyUpdatesToSent(newTokens, targetUser);
+    
+    // Prevent horizontal scroll jump when this edit triggers a user switch
+    skipScrollReset.current = true; 
+    
+    onUpdateSentence({ ...sentence, tokens: newTokens, activeAnnotator: targetUser, ...updates }, false);
+    setInlineEditor(null);
+  };
+  
+  const handleSaveInline = (val) => {
+    if (!inlineEditor) return;
+    if (inlineEditor.isMwt) {
+      handleSaveAction(() => {
+         const newMwts = (sentence.mwts || []).map(m => m.id === inlineEditor.tokenId ? { ...m, [inlineEditor.field]: val || '_' } : m);
+         return { mwts: newMwts };
+      });
+      return;
+    }
+  
+    handleSaveAction((tokens, user) => {
+      const tokenIdx = tokens.findIndex(t => t.id === inlineEditor.tokenId);
+      const t = tokens[tokenIdx];
+      
+      if (inlineEditor.field === 'edeprel' || inlineEditor.field === 'deprel') {
+        const updatedAnns = { ...t.annotations };
+        const currentAnn = updatedAnns[user] || { head: '_', deprel: '_', deps: '_' };
+        
+        if (inlineEditor.field === 'edeprel') {
+          let edeps = parseEdeps(currentAnn.deps);
+          if (val === '_') edeps = edeps.filter(e => e.head !== inlineEditor.sourceId);
+          else {
+            const existing = edeps.find(e => e.head === inlineEditor.sourceId);
+            if (existing) existing.deprel = val; else edeps.push({ head: inlineEditor.sourceId, deprel: val });
+          }
+          updatedAnns[user] = { ...currentAnn, deps: stringifyEdeps(edeps) };
+        } else {
+          updatedAnns[user] = { ...currentAnn, head: val === '_' ? '_' : inlineEditor.sourceId, deprel: val || '_' };
+        }
+        tokens[tokenIdx] = { ...t, annotations: updatedAnns };
+      } else {
+        tokens[tokenIdx] = { ...t, [inlineEditor.field]: val || '_' }; 
+      }
+      return {};
+    });
+  };
+  
+  const getArcPath = (sourceX, targetX, isRoot, stackIndex, isEdep) => {
+    const startOffset = isEdep ? 50 : -35, stackSpacing = 10; 
+    if (isRoot) return `M ${targetX} ${isEdep ? BASE_Y + MAX_ARC_HEIGHT : 20} L ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
+    const distance = Math.abs(targetX - sourceX), direction = targetX > sourceX ? 1 : -1, heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (distance * 0.2)); 
+    return `M ${sourceX + (direction * 5)} ${BASE_Y + startOffset} C ${sourceX + (direction * 5) + (direction * distance * 0.25)} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
+  };
+  
+  return (
+    <div className="relative w-full border border-gray-200 rounded-lg bg-gray-50 shadow-inner overflow-hidden group/graph" onMouseLeave={handleSvgMouseUp} onMouseUp={handleSvgMouseUp} onMouseMove={(e) => updateDragPos(e.clientX, e.clientY, e)}>
+      <div className="absolute left-0 top-0 bottom-0 w-12 z-20 opacity-0 group-hover/graph:opacity-100 transition-opacity flex items-center justify-start cursor-pointer" onPointerDown={() => startAutoScroll(-1)} onPointerUp={stopAutoScroll} onPointerLeave={stopAutoScroll} onMouseEnter={() => { if (dragState.active || lassoState.active) startAutoScroll(-1); }} onMouseLeave={stopAutoScroll}><div className="bg-white/90 h-full w-8 shadow-[2px_0_8px_rgba(0,0,0,0.15)] flex items-center justify-center hover:bg-gray-100"><ChevronLeft size={24} className="text-gray-500" /></div></div>
+      <div className="absolute right-0 top-0 bottom-0 w-12 z-20 opacity-0 group-hover/graph:opacity-100 transition-opacity flex items-center justify-end cursor-pointer" onPointerDown={() => startAutoScroll(1)} onPointerUp={stopAutoScroll} onPointerLeave={stopAutoScroll} onMouseEnter={() => { if (dragState.active || lassoState.active) startAutoScroll(1); }} onMouseLeave={stopAutoScroll}><div className="bg-white/90 h-full w-8 shadow-[-2px_0_8px_rgba(0,0,0,0.15)] flex items-center justify-center hover:bg-gray-100"><ChevronRight size={24} className="text-gray-500" /></div></div>
+  
+      <div ref={scrollRef} className="w-full overflow-x-auto hide-scrollbar relative">
+        <div className="relative transition-all duration-300" style={{ height: `${svgHeight}px`, width: layout.totalWidth }}>
+          <svg ref={containerRef} className="absolute inset-0 select-none w-full h-full" onMouseDown={(e) => { setInlineEditor(null); if (e.shiftKey && features.mwt && !isCompareMode) setLassoState({ active: true, startX: e.clientX - containerRef.current.getBoundingClientRect().left, currentX: e.clientX - containerRef.current.getBoundingClientRect().left }); }}>
+          <defs>
+            {allArrowColors.map(color => (
+                <marker key={`arrow-${color}`} id={`arrowhead-${color.replace(/[^a-zA-Z0-9]/g, '')}`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                    <polygon points="0 0, 8 3, 0 6" fill={color} />
+                </marker>
+            ))}
+            <marker id="arrowhead-drag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ec4899" /></marker>
+          </defs>
+  
+          <rect x="0" y="0" width="100%" height="40" fill="white" fillOpacity="0" className={isCompareMode ? '' : 'cursor-crosshair'} onMouseDown={e => handleRootMouseDown(e, false)} />
+          {!isCompareMode && <text x="60" y="25" className="text-[11px] fill-gray-400 font-medium pointer-events-none">Drag from here to assign ROOT</text>}
+  
+          {showEdepsArea && (
+            <><rect x="0" y={svgHeight - 40} width="100%" height="40" fill="white" fillOpacity="0" className={isCompareMode ? '' : 'cursor-crosshair'} onMouseDown={e => handleRootMouseDown(e, true)} />
+            {!isCompareMode && <text x="60" y={svgHeight - 15} className="text-[11px] fill-indigo-400/80 font-medium pointer-events-none">Drag from here to assign E-ROOT</text>}</>
+          )}
+  
+          {/* PASS 1: Render all arcs first so they stay in the background under the deprel labels */}
+          {[...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))].map((edge, idx) => {
+            const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
+            if (!isRoot && !headNode) return null;
+            
+            const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
+            const pathD = getArcPath(sourceX, targetX, isRoot, edge.stackIndex, edge.isEdep);
+
+            return (
+              <g key={`arc-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group">
+                <path d={pathD} stroke="transparent" strokeWidth="15" fill="none" />
+                
+                {edge.isUniversal ? (
+                    <path d={pathD} stroke="#94a3b8" strokeWidth="1.5" fill="none" markerEnd={`url(#arrowhead-94a3b8)`} className="transition-all duration-200" />
+                ) : (
+                    edge.rels.map((relObj, i) => {
+                        const arcColor = relObj.color;
+                        const dashLength = 10;
+                        const gapLength = dashLength * (edge.rels.length - 1);
+                        const dashArray = edge.rels.length > 1 ? `${dashLength} ${gapLength}` : 'none';
+                        const dashOffset = edge.rels.length > 1 ? `-${i * dashLength}` : '0';
+
+                        return (
+                            <path key={`path-${i}`} d={pathD} stroke={arcColor} strokeWidth="1.5" fill="none" strokeDasharray={dashArray} strokeDashoffset={dashOffset} markerEnd={`url(#arrowhead-${arcColor.replace(/[^a-zA-Z0-9]/g, '')})`} className="transition-all duration-200" />
+                        );
+                    })
+                )}
+              </g>
+            );
+          })}
+
+          {/* PASS 2: Render all labels second so they sit above all arcs and remain clickable */}
+          {[...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))].map((edge, idx) => {
+            const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
+            if (!isRoot && !headNode) return null;
+            
+            const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
+            const textX = isRoot ? targetX + 5 : (sourceX + targetX) / 2;
+            const heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetX - sourceX) * 0.2));
+            const baseTextY = isRoot ? (edge.isEdep ? BASE_Y + (MAX_ARC_HEIGHT / 2) + 10 : (BASE_Y / 2)) : (edge.isEdep ? BASE_Y + 50 + (heightOffset * 0.75) + 12 : BASE_Y - 35 - (heightOffset * 0.75) - 5);
+
+            return (
+              <g key={`labels-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group">
+                {edge.rels.map((relObj, i) => {
+                    const stackOffset = (i - (edge.rels.length - 1) / 2) * 16;
+                    const textY = baseTextY + stackOffset;
+                    const displayColor = edge.isUniversal ? '#64748b' : relObj.color;
+
+                    return (
+                        <g key={`label-${i}`}>
+                            <rect x={textX - (relObj.rel.length * 4)} y={textY - 10} width={relObj.rel.length * 8} height="14" fill="#f9fafb" rx="4" className={isCompareMode ? '' : 'cursor-pointer'} onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCompareMode) return;
+                                setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
+                            }} />
+                            <text x={textX} y={textY} textAnchor="middle" fill={displayColor} className={`text-[11px] font-semibold ${isCompareMode ? '' : 'cursor-pointer hover:font-bold hover:underline'} transition-all`} onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCompareMode) return;
+                                setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
+                            }}>{relObj.rel}</text>
+                        </g>
+                    )
+                })}
+              </g>
+            );
+          })}
+  
+          {layout.mwts.map(mwt => (
+            <g key={`mwt-${mwt.id}`} className="group">
+              <rect x={mwt.left} y={mwt.top} width={mwt.width} height="110" stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4" fill="transparent" rx="6" className="pointer-events-none" />
+              <text x={mwt.left + mwt.width/2} y={mwt.top - 5} textAnchor="middle" className={`text-xs font-semibold fill-gray-500 ${isCompareMode ? '' : 'cursor-text hover:fill-indigo-600'} transition-colors`} onDoubleClick={(e) => openTextEditor(e, mwt, 'form', -70, true)}>{mwt.form}</text>
+              {!isCompareMode && (
+                <g onClick={() => handleSaveAction(() => ({ mwts: sentence.mwts.filter(m => m.id !== mwt.id) }))} className="cursor-pointer opacity-70 hover:opacity-100 transition-opacity">
+                  <circle cx={mwt.left + mwt.width} cy={mwt.top} r="8" fill="#ef4444" className="hover:fill-red-600" /><text x={mwt.left + mwt.width} y={mwt.top + 3} textAnchor="middle" fill="white" fontSize="9" className="pointer-events-none font-bold">X</text>
+                </g>
+              )}
+            </g>
+          ))}
+  
+          {dragState.active && (Math.abs(dragState.currentX - dragState.startX) > 5 || Math.abs(dragState.currentY - dragState.startY) > 5) && (
+            <g><path d={(() => { const sY = dragState.sourceId === '0' ? dragState.startY : (dragState.isEdep ? BASE_Y + 50 : BASE_Y - 35); const arcQ = dragState.sourceId === '0' ? (sY + dragState.currentY) / 2 : (dragState.isEdep ? Math.max(sY, dragState.currentY) + 60 : Math.min(sY, dragState.currentY) - 60); return `M ${dragState.startX} ${sY} Q ${(dragState.startX + dragState.currentX) / 2} ${arcQ}, ${dragState.currentX} ${dragState.currentY}`; })()} stroke="#ec4899" strokeWidth="2" strokeDasharray="4 4" fill="none" markerEnd="url(#arrowhead-drag)" className="pointer-events-none" /></g>
+          )}
+  
+          {lassoState.active && <rect x={Math.min(lassoState.startX, lassoState.currentX)} y={BASE_Y - 60} width={Math.abs(lassoState.currentX - lassoState.startX)} height="120" fill="#818cf8" fillOpacity="0.2" stroke="#6366f1" strokeWidth="1.5" strokeDasharray="4 4" className="pointer-events-none" />}
+  
+          {layout.nodes.map(node => {
+            const isEllipsis = features.ellipsis && String(node.id).includes('.');
+            
+            const bottomProps = [];
+            if (colMappings.upos) bottomProps.push({ key: 'upos', val: node.upos, type: 'select', options: tagsets.upos, className: `text-[12px] fill-indigo-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}` });
+            if (colMappings.xpos) bottomProps.push({ key: 'xpos', val: node.xpos, type: 'select', options: tagsets.xpos, className: `text-[11px] fill-teal-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}` });
+            if (colMappings.lemma) bottomProps.push({ key: 'lemma', val: node.lemma, type: 'text', className: `text-[11px] fill-gray-500 italic select-none ${isCompareMode ? '' : 'cursor-text hover:underline hover:fill-indigo-500'}` });
+            
+            return (
+              <g key={`node-${node.id}`} transform={`translate(${node.x}, ${BASE_Y})`} onMouseDown={(e) => handleWordMouseDown(e, node.id)}>
+                {dragState.active && dragState.hoveredTargetId === node.id && <rect x={-(node.width/2) - 10} y={dragState.isEdep ? "-20" : "-45"} width={node.width + 20} height="100" fill="#fbcfe8" opacity="0.4" rx="8" className="pointer-events-none" />}
+                
+                <text y="-15" textAnchor="middle" className={`text-[15px] ${isCompareMode ? '' : 'cursor-text hover:fill-indigo-600 hover:underline'} ${dragState.sourceId === node.id ? 'font-bold fill-pink-600' : (isEllipsis ? 'fill-blue-500 font-medium' : 'fill-gray-900')} transition-colors select-none`} onDoubleClick={(e) => openTextEditor(e, node, 'form', -15)}>{node.form}</text>
+                
+                {bottomProps.map((prop, idx) => {
+                  const yPos = 5 + (idx * 15);
+                  return (
+                    <text key={prop.key} y={yPos} textAnchor="middle" className={prop.className}
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={prop.type === 'select' ? (e) => openSelectEditor(e, node, prop.key, yPos, prop.options) : undefined}
+                          onDoubleClick={prop.type === 'text' ? (e) => openTextEditor(e, node, prop.key, yPos) : undefined}>
+                      {prop.val}
+                    </text>
+                  );
+                })}
+                
+                {(features.feats || features.misc) && !isCompareMode && (
+                  <g transform={`translate(0, ${5 + bottomProps.length * 15 - 2})`} className="cursor-pointer opacity-60 hover:opacity-100 transition-opacity" onMouseDown={e => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setFeaturesModalTokenId(node.id); }}>
+                    <rect x="-14" y="-8" width="28" height="14" rx="4" fill="#cbd5e1" /><circle cx="-6" cy="-1" r="1.5" fill="#475569" /><circle cx="0" cy="-1" r="1.5" fill="#475569" /><circle cx="6" cy="-1" r="1.5" fill="#475569" />
+                  </g>
+                )}
+              </g>
+            );
+          })}
+          </svg>
+  
+          {inlineEditor && (
+            <div className="absolute z-50 flex flex-col shadow-xl bg-white rounded-md border border-indigo-200" style={{ left: inlineEditor.x, top: inlineEditor.y, transform: 'translate(-50%, -50%)', minWidth: inlineEditor.type === 'select' ? '140px' : '100px' }} onMouseDown={(e) => e.stopPropagation()} onMouseMove={(e) => e.stopPropagation()}>
+              {inlineEditor.type === 'text' ? (
+                <input type="text" autoFocus defaultValue={inlineEditor.value} className="w-full px-2 py-1 text-sm bg-white text-gray-900 outline-none rounded-md focus:ring-2 focus:ring-indigo-500 font-medium text-center border border-gray-200 shadow-sm" onBlur={(e) => handleSaveInline(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveInline(e.target.value); if (e.key === 'Escape') setInlineEditor(null); }} />
+              ) : (
+                <select autoFocus size={6} defaultValue={inlineEditor.value} className="w-full px-1 py-1 text-sm outline-none rounded-md bg-white text-gray-700" onBlur={(e) => handleSaveInline(e.target.value)} onClick={(e) => { if (e.target.tagName === 'OPTION') handleSaveInline(e.target.value); }} onKeyDown={(e) => { if (e.key === 'Escape') setInlineEditor(null); if (e.key === 'Enter') handleSaveInline(e.target.value); }}>
+                  {[...inlineEditor.options].sort((a, b) => a.localeCompare(b)).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  {!['upos', 'xpos'].includes(inlineEditor.field) && (
+                      <option value="_">_ (remove edge)</option>
+                  )}
+                </select>
+              )}
+            </div>
+          )}
+  
+          {featuresModalTokenId && (
+            <FeaturesModal 
+               token={sentence.tokens.find(t => t.id === featuresModalTokenId)}
+               onClose={() => setFeaturesModalTokenId(null)}
+               onSave={(feats, misc) => { handleSaveAction((tokens) => { const idx = tokens.findIndex(t => t.id === featuresModalTokenId); tokens[idx] = { ...tokens[idx], feats, misc }; return {}; }); setFeaturesModalTokenId(null); }}
+               config={config}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+  
+const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentence, config }) => {
+  const { defaultAnnotator, perUserMode } = config;
+  const availableAnns = getAvailableAnns(sentence, defaultAnnotator);
+  
+  const displayableAnns = useMemo(() => {
+      return availableAnns.filter(ann => {
+          if (!hasAnnotationData(sentence, ann)) return false;
+          if (ann === defaultAnnotator) return true;
+          if (!hasAnnotationData(sentence, defaultAnnotator)) return true;
+
+          return sentence.tokens.some(t => {
+              const a = t.annotations[ann] || { head: '_', deprel: '_', deps: '_' };
+              const d = t.annotations[defaultAnnotator] || { head: '_', deprel: '_', deps: '_' };
+              return a.head !== d.head || a.deprel !== d.deprel || a.deps !== d.deps;
+          });
+      });
+  }, [sentence, availableAnns, defaultAnnotator]);
+
+  let activeAnn = perUserMode ? (sentence.activeAnnotator || defaultAnnotator) : defaultAnnotator;
+  if (perUserMode && !displayableAnns.includes(activeAnn)) {
+      activeAnn = displayableAnns.includes(defaultAnnotator) ? defaultAnnotator : (displayableAnns[0] || defaultAnnotator);
+  }
+
+  const showAnnotators = perUserMode && displayableAnns.length > 1;
+  
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareUsers, setCompareUsers] = useState([]);
+
+  const annotatorColors = useMemo(() => {
+      const map = {};
+      const palette = COLORS.slice(1);
+      displayableAnns.forEach((ann, i) => map[ann] = palette[i % palette.length]);
+      return map;
+  }, [displayableAnns]);
+
+  useEffect(() => {
+      if (isCompareMode && compareUsers.length === 0) {
+          setCompareUsers([activeAnn]);
+      }
+  }, [isCompareMode, activeAnn, compareUsers.length]);
+
+  return (
+    <div className="border border-gray-200 bg-white rounded-xl shadow-sm overflow-hidden transition-all duration-300">
+      <div className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-indigo-50/30' : ''}`} onClick={onToggle}>
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className={`p-1 rounded-md transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400'}`}>
+            {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+          </div>
+          <span className="font-mono text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md shrink-0">{index + 1}</span>
+          <h3 className={`text-base truncate font-medium ${isExpanded ? 'text-indigo-900' : 'text-gray-800'}`}>
+            {sentence.text}
+          </h3>
+        </div>
+        
+        {showAnnotators && (
+          <div className="flex items-center gap-2 ml-auto shrink-0 bg-gray-100 p-1.5 rounded-lg" onClick={e => e.stopPropagation()}>
+            {displayableAnns.length > 1 && (
+              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-600 mr-2 border-r border-gray-300 pr-3 cursor-pointer">
+                <input type="checkbox" checked={isCompareMode} onChange={(e) => {
+                  setIsCompareMode(e.target.checked);
+                  if (e.target.checked) setCompareUsers([activeAnn]);
+                }} className="rounded text-indigo-600 focus:ring-indigo-500" />
+                Compare
+              </label>
+            )}
+
+            {displayableAnns.map(ann => {
+              const isActive = isCompareMode ? compareUsers.includes(ann) : activeAnn === ann;
+              const userColor = annotatorColors[ann] || '#6b7280';
+              const style = isCompareMode && isActive 
+                  ? { backgroundColor: userColor, color: 'white' } 
+                  : (isActive ? { backgroundColor: 'white', color: '#4338ca' } : { color: isCompareMode ? userColor : undefined });
+
+              return (
+                 <button
+                    key={ann}
+                    onClick={(e) => {
+                       e.stopPropagation();
+                       if (isCompareMode) {
+                          setCompareUsers(prev => prev.includes(ann) ? prev.filter(u => u !== ann) : [...prev, ann]);
+                       } else {
+                          onUpdateSentence({ ...sentence, activeAnnotator: ann }, true);
+                       }
+                    }}
+                    style={style}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${!isActive ? 'hover:bg-gray-200 opacity-70 hover:opacity-100' : 'shadow-sm opacity-100'}`}
+                 >
+                    {ann}
+                 </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+  
+      {isExpanded && (
+        <div className="p-4 bg-white animate-in fade-in slide-in-from-top-2 duration-200">
+          <DependencyGraph 
+             sentence={sentence}
+             activeAnn={activeAnn}
+             onUpdateSentence={onUpdateSentence} 
+             isCompareMode={isCompareMode}
+             compareUsers={compareUsers}
+             annotatorColors={annotatorColors}
+             config={config}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // --- Embeddable Tree Editor Component ---
 
 export function Dendroid({
@@ -181,6 +874,11 @@ export function Dendroid({
   const [showHelp, setShowHelp] = useState(false);
   const [globalPreferredAnnotator, setGlobalPreferredAnnotator] = useState('LATEST');
   const [colorMap, setColorMap] = useState({});
+
+  // Bundle the context necessary for the extracted components
+  const editorConfig = useMemo(() => ({
+    features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap
+  }), [features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap]);
 
   // --- GitDOX Integration Helper ---
   const notifyChange = (nextSents) => {
@@ -314,21 +1012,29 @@ export function Dendroid({
       let base = lower;
       let ann = defaultAnnotator;
       
-      if (h.includes(':') && perUserMode) {
+      // 1. Reserved Keyword Check - most recent annotator column is reserved: 'dendroid:annotator'
+      if (lower === 'dendroid:annotator') {
+        base = 'annotator';
+      } 
+      // 2. Exact match in colMappings
+      else if (invMap[lower]) {
+        base = invMap[lower];
+      } 
+      // 3. Dependency column with a user attached (e.g., parent:Kim)
+      else if (h.includes(':') && perUserMode) {
         const parts = h.split(':');
         const candidateBase = parts[0].toLowerCase();
+        // invMap translates the custom name back to internal 'head'/'deprel'/'deps'
         if (['head', 'deprel', 'deps'].includes(invMap[candidateBase])) {
           base = invMap[candidateBase];
           ann = parts.slice(1).join(':');
         }
-      } else {
-        if (invMap[lower]) base = invMap[lower];
       }
-  
+
       if (['head', 'deprel', 'deps'].includes(base)) {
         if (!annotationCols[ann]) annotationCols[ann] = {};
         annotationCols[ann][base] = rawHeaders[h];
-      } else if (Object.keys(colMappings).includes(base)) {
+      } else if (Object.keys(colMappings).includes(base) || base === 'annotator') {
         coreCols[base] = rawHeaders[h];
       } else {
         if (!metaColNamesLower.has(lower)) unknownColsList.push(h);      
@@ -464,7 +1170,19 @@ export function Dendroid({
     const validAnns = Object.keys(annotationCols).sort();
   
     tempSentences.forEach(sent => {
-      if (!sent.activeAnnotator || sent.activeAnnotator === '') sent.activeAnnotator = validAnns.length > 0 ? validAnns[0] : defaultAnnotator;
+      // Only fallback to a user if they actually have dependency data in this sentence
+      if (!sent.activeAnnotator || sent.activeAnnotator === '') {
+         let found = defaultAnnotator;
+         for (let ann of validAnns) {
+            const hasData = sent.globalRows.some(row => {
+               const a = row.annotations[ann];
+               return a && (a.head !== '_' || a.deprel !== '_' || (a.deps && a.deps !== '_'));
+            });
+            if (hasData) { found = ann; break; }
+         }
+         sent.activeAnnotator = found;
+      }
+      
       const globalToLocal = { '0': '0', '_': '_' };
       let localCounter = 1;
       const standardTokens = [], ellipsisTokens = [];
@@ -866,674 +1584,6 @@ export function Dendroid({
     if (!isViewOnly) notifyChange(next);
   };
 
-  // --- Sub-components ---
-
-  const FeaturesModal = ({ token, onClose, onSave }) => {
-    const [activeTab, setActiveTab] = useState('feats');
-    const [data, setData] = useState({ feats: [...parseFeatures(token.feats), { key: '', value: '' }], misc: [...parseFeatures(token.misc), { key: '', value: '' }] });
-  
-    const cleanupRows = (rows) => {
-      const filtered = rows.filter((r, i) => r.key.trim() !== '' || r.value.trim() !== '' || i === rows.length - 1);
-      const last = filtered[filtered.length - 1];
-      if (!last || last.key.trim() !== '' || last.value.trim() !== '') filtered.push({ key: '', value: '' });
-      return filtered;
-    };
-  
-    const handleChange = (tab, index, field, val) => { const newData = [...data[tab]]; newData[index][field] = val; setData({ ...data, [tab]: cleanupRows(newData) }); };
-    const handleDelete = (tab, index) => { const newData = [...data[tab]]; newData.splice(index, 1); setData({ ...data, [tab]: cleanupRows(newData) }); };
-  
-    useEffect(() => {
-      const handleKeyDown = (e) => {
-        if (e.key === 'Escape') onClose();
-        if (e.key === 'Enter') { e.preventDefault(); onSave(stringifyFeatures(data.feats), stringifyFeatures(data.misc)); }
-      };
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [data, onClose, onSave]);
-  
-    return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" onClick={onClose}>
-        <div className="bg-white rounded-xl shadow-2xl w-[520px] max-w-[95vw] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-            <h3 className="font-semibold text-gray-800">Edit Annotations <span className="text-gray-400 font-mono text-xs ml-2">[{token.form}]</span></h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={20} /></button>
-          </div>
-          
-          <div className="flex border-b border-gray-200 px-5 pt-3 gap-6 bg-white">
-            {features.feats && <button className={`pb-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'feats' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`} onClick={() => setActiveTab('feats')}>Features (FEATS)</button>}
-            {features.misc && <button className={`pb-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'misc' ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`} onClick={() => setActiveTab('misc')}>Miscellaneous (MISC)</button>}
-          </div>
-  
-          <div className="p-5 bg-white max-h-[50vh] overflow-y-auto">
-            <div className="grid grid-cols-[1fr_1fr_32px] gap-2 px-1 mb-2">
-              <div className="text-xs font-semibold text-gray-500 uppercase">Key</div>
-              <div className="text-xs font-semibold text-gray-500 uppercase">Value (Optional)</div>
-              <div></div>
-            </div>
-            {data[activeTab].map((row, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_32px] gap-2 items-center mb-2">
-                <input type="text" value={row.key} onChange={(e) => handleChange(activeTab, i, 'key', e.target.value)} className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded outline-none focus:border-indigo-500 transition-all font-mono" />
-                <input type="text" value={row.value} onChange={(e) => handleChange(activeTab, i, 'value', e.target.value)} className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded outline-none focus:border-indigo-500 transition-all font-mono" />
-                <button onClick={() => handleDelete(activeTab, i)} disabled={i === data[activeTab].length - 1 && row.key === '' && row.value === ''} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-0"><X size={16} /></button>
-              </div>
-            ))}
-          </div>
-  
-          <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-            <button onClick={() => onSave(stringifyFeatures(data.feats), stringifyFeatures(data.misc))} className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">Save</button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode, compareUsers, annotatorColors }) => {
-    const containerRef = useRef(null);
-    const scrollRef = useRef(null);
-    const scrollInterval = useRef(null);
-    const latestMousePos = useRef({ x: 0, y: 0 });
-    
-    const BASE_Y = 260; 
-    const WORD_SPACING = 30; 
-    const CHAR_WIDTH_ESTIMATE = 8.5; 
-    const MAX_ARC_HEIGHT = 160;
-    
-    const [dragState, setDragState] = useState({ active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, hoveredTargetId: null, isEdep: false });
-    const [lassoState, setLassoState] = useState({ active: false, startX: 0, currentX: 0 });
-    const [inlineEditor, setInlineEditor] = useState(null);
-    const [featuresModalTokenId, setFeaturesModalTokenId] = useState(null);
-  
-    const displayAnnName = activeAnn;
-  
-    const hasEdepsData = useMemo(() => {
-      if (!features.edeps) return false;
-      return sentence.tokens.some(t => {
-        const usersToCheck = isCompareMode ? compareUsers : [displayAnnName];
-        return usersToCheck.some(u => {
-            const ann = t.annotations[u];
-            return ann && ann.deps && ann.deps !== '_';
-        });
-      });
-    }, [sentence.tokens, displayAnnName, isCompareMode, compareUsers]);
-    
-    const showEdepsArea = hasEdepsData || dragState.isEdep;
-    const svgHeight = showEdepsArea ? 560 : 380;
-  
-    const layout = useMemo(() => {
-      let currentX = 40; 
-      const nodePositions = {};
-      const nodes = sentence.tokens.map(token => {
-        const wordWidth = token.form.length * CHAR_WIDTH_ESTIMATE;
-        const posWidth = Math.max((token.upos || '').length, (token.xpos || '').length) * CHAR_WIDTH_ESTIMATE * 0.8;
-        const totalWidth = Math.max(30, Math.max(wordWidth, posWidth)) + 20;
-        const node = { ...token, x: currentX + (totalWidth / 2), y: BASE_Y, width: totalWidth };
-        nodePositions[token.id] = node;
-        currentX += totalWidth + WORD_SPACING;
-        return node;
-      });
-  
-      const activeUsers = isCompareMode ? compareUsers : [displayAnnName];
-      const edgesMap = new Map();
-      const edepsMap = new Map();
-
-      nodes.forEach(node => {
-        activeUsers.forEach(user => {
-          const ann = node.annotations[user] || { head: '_', deprel: '_', deps: '_' };
-          if (!String(node.id).includes('.') && ann.head && ann.head !== '_') {
-            const key = `${ann.head}->${node.id}`;
-            if (!edgesMap.has(key)) edgesMap.set(key, { source: ann.head, target: node.id, labels: [] });
-            edgesMap.get(key).labels.push({ user, rel: ann.deprel });
-          }
-          if (features.edeps) {
-            parseEdeps(ann.deps).forEach(edep => {
-              const key = `${edep.head}->${node.id}`;
-              if (!edepsMap.has(key)) edepsMap.set(key, { source: edep.head, target: node.id, labels: [] });
-              edepsMap.get(key).labels.push({ user, rel: edep.deprel });
-            });
-          }
-        });
-      });
-
-      const processEdgesMap = (map) => {
-        const arr = [];
-        map.forEach((data) => {
-            const isUniversal = isCompareMode && activeUsers.length > 1 &&
-                                data.labels.length === activeUsers.length &&
-                                data.labels.every(l => l.rel === data.labels[0].rel);
-
-            if (isUniversal) {
-                arr.push({ ...data, isUniversal: true, rels: [{ rel: data.labels[0].rel, color: '#94a3b8' }] });
-            } else {
-                // Do not deduplicate since each annotator can have partially overlapping annotations. 
-                // Identical labels should stack and identical paths generate dashed stripe arcs.
-                const rels = data.labels.map(l => ({ 
-                    rel: l.rel, 
-                    color: isCompareMode ? annotatorColors[l.user] : getColorForLabel(l.rel, colorMap), 
-                    user: l.user 
-                }));
-                arr.push({ ...data, isUniversal: false, rels });
-            }
-        });
-        return arr;
-      };
-
-      const edges = processEdgesMap(edgesMap);
-      const edeps = processEdgesMap(edepsMap);
-      
-      const mwts = (sentence.mwts || []).map(mwt => {
-        const [startId, endId] = String(mwt.id).split('-');
-        const startNode = nodePositions[startId], endNode = nodePositions[endId];
-        if (!startNode || !endNode) return null;
-        const left = startNode.x - (startNode.width / 2) - 5, right = endNode.x + (endNode.width / 2) + 5;
-        return { ...mwt, left, right, top: BASE_Y - 55, width: right - left };
-      }).filter(Boolean);
-  
-      const processStacking = (edgeList) => {
-        const incoming = {}, processed = [];
-        edgeList.forEach(e => {
-          const tNode = nodePositions[e.target];
-          const sNode = e.source === '0' ? { x: tNode.x } : nodePositions[e.source];
-          if (!sNode || !tNode) return;
-          const distance = Math.abs(tNode.x - sNode.x);
-          if (!incoming[e.target]) incoming[e.target] = [];
-          incoming[e.target].push({ ...e, distance, isLeft: sNode.x < tNode.x, sNode, tNode });
-        });
-        Object.values(incoming).forEach(list => {
-          list.sort((a, b) => a.distance !== b.distance ? a.distance - b.distance : (b.isLeft ? 1 : 0) - (a.isLeft ? 1 : 0));
-          list.forEach((e, i) => processed.push({ ...e, stackIndex: i }));
-        });
-        return processed;
-      };
-  
-      return { nodes, nodePositions, mwts, totalWidth: Math.max(800, currentX + 40), standardEdges: processStacking(edges), enhancedEdges: processStacking(edeps) };
-    }, [sentence.tokens, sentence.mwts, displayAnnName, isCompareMode, compareUsers, annotatorColors]);
-  
-    const allArrowColors = useMemo(() => {
-      const s = new Set(['#94a3b8']);
-      layout.standardEdges.forEach(e => e.rels.forEach(r => {
-          if (r.color) s.add(r.color);
-      }));
-      layout.enhancedEdges.forEach(e => e.rels.forEach(r => {
-          if (r.color) s.add(r.color);
-      }));
-      return Array.from(s);
-    }, [layout]);
-
-    const startAutoScroll = (direction) => { if (scrollInterval.current) return; scrollInterval.current = setInterval(() => { if (scrollRef.current) { scrollRef.current.scrollLeft += direction * 10; if (dragState.active || lassoState.active) updateDragPos(latestMousePos.current.x, latestMousePos.current.y); } }, 16); };
-    const stopAutoScroll = () => { if (scrollInterval.current) { clearInterval(scrollInterval.current); scrollInterval.current = null; } };
-    useEffect(() => () => stopAutoScroll(), []);
-  
-    const updateDragPos = (clientX, clientY, e = null) => {
-      latestMousePos.current = { x: clientX, y: clientY };
-      if (!dragState.active && !lassoState.active) return;
-      if (e) e.preventDefault(); 
-      if (!containerRef.current) return;
-  
-      const svgRect = containerRef.current.getBoundingClientRect();
-      const x = clientX - svgRect.left, y = clientY - svgRect.top;
-  
-      if (lassoState.active) return setLassoState(prev => ({ ...prev, currentX: x }));
-  
-      let hoveredId = null;
-      if (dragState.sourceId) {
-          const hoveredNode = layout.nodes.find(n => {
-             return x >= (n.x - (n.width / 2) - 10) && x <= (n.x + (n.width / 2) + 10) && y >= (BASE_Y - 60) && y <= (BASE_Y + 80);
-          });
-          if (hoveredNode && hoveredNode.id !== dragState.sourceId) hoveredId = hoveredNode.id;
-      }
-  
-      setDragState(prev => ({
-        ...prev, currentX: x, currentY: y, hoveredTargetId: hoveredId,
-        isEdep: features.edeps && (prev.sourceId === '0' ? prev.startY > BASE_Y : ((e ? e.ctrlKey : prev.isEdep) || String(prev.sourceId).includes('.')))
-      }));
-    };
-  
-    const handleSvgMouseUp = () => {
-      if (isCompareMode) return;
-      if (lassoState.active) {
-        const minX = Math.min(lassoState.startX, lassoState.currentX), maxX = Math.max(lassoState.startX, lassoState.currentX);
-        const selected = layout.nodes.filter(n => !String(n.id).includes('.') && n.x >= minX && n.x <= maxX);
-        
-        if (selected.length >= 2) {
-          const newId = `${selected[0].id}-${selected[selected.length - 1].id}`;
-          if (!(sentence.mwts || []).find(m => m.id === newId)) {
-            const newMwt = { id: newId, form: selected.map(s => s.form).join(''), lemma: '_', upos: '_', xpos: '_', feats: '_', head: '_', deprel: '_', deps: '_', misc: '_' };
-            handleSaveAction(() => ({ mwts: [...(sentence.mwts || []), newMwt] }));
-          }
-        }
-        return setLassoState({ active: false, startX: 0, currentX: 0 });
-      }
-  
-      if (dragState.active) {
-        if (dragState.hoveredTargetId) {
-          const targetId = dragState.hoveredTargetId;
-          if (!dragState.isEdep && (String(targetId).includes('.') || String(dragState.sourceId).includes('.'))) {
-             return setDragState({ active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, hoveredTargetId: null, isEdep: false });
-          }
-  
-          const targetNode = layout.nodePositions[targetId];
-          const currentToken = sentence.tokens.find(t => t.id === targetId);
-          const sourceNode = dragState.sourceId === '0' ? {x: targetNode.x} : layout.nodePositions[dragState.sourceId];
-          
-          let existingVal = '';
-          const ann = currentToken.annotations[displayAnnName] || { head: '_', deprel: '_', deps: '_' };
-  
-          if (dragState.isEdep) {
-            const edeps = parseEdeps(ann.deps);
-            const existing = edeps.find(ed => ed.head === dragState.sourceId);
-            if (existing) existingVal = existing.deprel;
-          } else {
-            if (ann.head === dragState.sourceId) existingVal = ann.deprel;
-          }
-  
-          setInlineEditor({
-            active: true, type: 'select', field: dragState.isEdep ? 'edeprel' : 'deprel', tokenId: targetId, sourceId: dragState.sourceId, value: existingVal,
-            x: dragState.sourceId === '0' ? targetNode.x : (sourceNode.x + targetNode.x) / 2,
-            y: dragState.sourceId === '0' ? (dragState.isEdep ? (BASE_Y + MAX_ARC_HEIGHT/2 + 10) : (BASE_Y / 2)) : (dragState.isEdep ? BASE_Y + 50 + (Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetNode.x - sourceNode.x) * 0.2)) * 0.75) + 12 : BASE_Y - 35 - (Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetNode.x - sourceNode.x) * 0.2)) * 0.75) - 5),
-            options: dragState.isEdep ? tagsets.edeprel : tagsets.deprel
-          });
-        }
-        setDragState({ active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, hoveredTargetId: null, isEdep: false });
-      }
-    };
-  
-    const handleWordMouseDown = (e, tokenId) => {
-      e.stopPropagation(); e.preventDefault();
-      if (isCompareMode) return;
-      if (inlineEditor) setInlineEditor(null);
-      
-      const isEllipsis = String(tokenId).includes('.');
-      const svgRect = containerRef.current.getBoundingClientRect();
-      const x = e.clientX - svgRect.left;
-      const y = e.clientY - svgRect.top;
-      
-      setDragState({
-        active: true, sourceId: tokenId, startX: layout.nodePositions[tokenId]?.x || x, startY: y,
-        currentX: x, currentY: y, hoveredTargetId: null, isEdep: features.edeps && (e.ctrlKey || isEllipsis)
-      });
-    };
-  
-    const handleRootMouseDown = (e, isBottomRoot = false) => {
-      e.stopPropagation(); e.preventDefault();
-      if (isCompareMode) return;
-      if (inlineEditor) setInlineEditor(null);
-      
-      const svgRect = containerRef.current.getBoundingClientRect();
-      const x = e.clientX - svgRect.left;
-      const y = e.clientY - svgRect.top;
-      
-      setDragState({
-        active: true, sourceId: '0', startX: x, startY: isBottomRoot ? svgHeight - 20 : 20,
-        currentX: x, currentY: y, hoveredTargetId: null, isEdep: features.edeps && (e.ctrlKey || isBottomRoot)
-      });
-    };
-  
-    const openTextEditor = (e, entity, field, yOffset, isMwt = false) => {
-      e.stopPropagation();
-      if (isCompareMode) return;
-      const x = isMwt ? entity.left + entity.width/2 : layout.nodePositions[entity.id].x;
-      setInlineEditor({
-        active: true, type: 'text', field: field, tokenId: entity.id, isMwt,
-        value: entity[field] || '', x: x, y: BASE_Y + yOffset
-      });
-    };
-  
-    const openSelectEditor = (e, token, field, yOffset, options) => {
-      e.stopPropagation();
-      if (isCompareMode) return;
-      setInlineEditor({
-        active: true, type: 'select', field: field, tokenId: token.id,
-        value: token[field] || '', x: layout.nodePositions[token.id].x, y: BASE_Y + yOffset, options: options
-      });
-    };
-  
-    const handleSaveAction = (applyUpdatesToSent) => {
-      let newTokens = [...sentence.tokens];
-      const targetUser = perUserMode ? currentUser : defaultAnnotator;
-      
-      const availableAnns = getAvailableAnns(sentence, defaultAnnotator);
-      if (perUserMode && (!availableAnns.includes(targetUser) || !hasAnnotationData(sentence, targetUser))) {
-         newTokens = newTokens.map(t => {
-           const updatedAnns = { ...t.annotations };
-           updatedAnns[targetUser] = t.annotations[displayAnnName] ? { ...t.annotations[displayAnnName] } : { head: '_', deprel: '_', deps: '_' };
-           return { ...t, annotations: updatedAnns };
-         });
-      }
-  
-      const updates = applyUpdatesToSent(newTokens, targetUser);
-      onUpdateSentence({ ...sentence, tokens: newTokens, activeAnnotator: targetUser, ...updates }, false);
-      setInlineEditor(null);
-    };
-  
-    const handleSaveInline = (val) => {
-      if (!inlineEditor) return;
-      if (inlineEditor.isMwt) {
-        handleSaveAction(() => {
-           const newMwts = (sentence.mwts || []).map(m => m.id === inlineEditor.tokenId ? { ...m, [inlineEditor.field]: val || '_' } : m);
-           return { mwts: newMwts };
-        });
-        return;
-      }
-  
-      handleSaveAction((tokens, user) => {
-        const tokenIdx = tokens.findIndex(t => t.id === inlineEditor.tokenId);
-        const t = tokens[tokenIdx];
-        
-        if (inlineEditor.field === 'edeprel' || inlineEditor.field === 'deprel') {
-          const updatedAnns = { ...t.annotations };
-          const currentAnn = updatedAnns[user] || { head: '_', deprel: '_', deps: '_' };
-          
-          if (inlineEditor.field === 'edeprel') {
-            let edeps = parseEdeps(currentAnn.deps);
-            if (val === '_') edeps = edeps.filter(e => e.head !== inlineEditor.sourceId);
-            else {
-              const existing = edeps.find(e => e.head === inlineEditor.sourceId);
-              if (existing) existing.deprel = val; else edeps.push({ head: inlineEditor.sourceId, deprel: val });
-            }
-            updatedAnns[user] = { ...currentAnn, deps: stringifyEdeps(edeps) };
-          } else {
-            updatedAnns[user] = { ...currentAnn, head: val === '_' ? '_' : inlineEditor.sourceId, deprel: val || '_' };
-          }
-          tokens[tokenIdx] = { ...t, annotations: updatedAnns };
-        } else {
-          tokens[tokenIdx] = { ...t, [inlineEditor.field]: val || '_' }; 
-        }
-        return {};
-      });
-    };
-  
-    const getArcPath = (sourceX, targetX, isRoot, stackIndex, isEdep) => {
-      const startOffset = isEdep ? 50 : -35, stackSpacing = 10; 
-      if (isRoot) return `M ${targetX} ${isEdep ? BASE_Y + MAX_ARC_HEIGHT : 20} L ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
-      const distance = Math.abs(targetX - sourceX), direction = targetX > sourceX ? 1 : -1, heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (distance * 0.2)); 
-      return `M ${sourceX + (direction * 5)} ${BASE_Y + startOffset} C ${sourceX + (direction * 5) + (direction * distance * 0.25)} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
-    };
-  
-    return (
-      <div className="relative w-full border border-gray-200 rounded-lg bg-gray-50 shadow-inner overflow-hidden group/graph" onMouseLeave={handleSvgMouseUp} onMouseUp={handleSvgMouseUp} onMouseMove={(e) => updateDragPos(e.clientX, e.clientY, e)}>
-        <div className="absolute left-0 top-0 bottom-0 w-12 z-20 opacity-0 group-hover/graph:opacity-100 transition-opacity flex items-center justify-start cursor-pointer" onPointerDown={() => startAutoScroll(-1)} onPointerUp={stopAutoScroll} onPointerLeave={stopAutoScroll} onMouseEnter={() => { if (dragState.active || lassoState.active) startAutoScroll(-1); }} onMouseLeave={stopAutoScroll}><div className="bg-white/90 h-full w-8 shadow-[2px_0_8px_rgba(0,0,0,0.15)] flex items-center justify-center hover:bg-gray-100"><ChevronLeft size={24} className="text-gray-500" /></div></div>
-        <div className="absolute right-0 top-0 bottom-0 w-12 z-20 opacity-0 group-hover/graph:opacity-100 transition-opacity flex items-center justify-end cursor-pointer" onPointerDown={() => startAutoScroll(1)} onPointerUp={stopAutoScroll} onPointerLeave={stopAutoScroll} onMouseEnter={() => { if (dragState.active || lassoState.active) startAutoScroll(1); }} onMouseLeave={stopAutoScroll}><div className="bg-white/90 h-full w-8 shadow-[-2px_0_8px_rgba(0,0,0,0.15)] flex items-center justify-center hover:bg-gray-100"><ChevronRight size={24} className="text-gray-500" /></div></div>
-  
-        <div ref={scrollRef} className="w-full overflow-x-auto hide-scrollbar relative">
-          <div className="relative transition-all duration-300" style={{ height: `${svgHeight}px`, width: layout.totalWidth }}>
-            <svg ref={containerRef} className="absolute inset-0 select-none w-full h-full" onMouseDown={(e) => { setInlineEditor(null); if (e.shiftKey && features.mwt && !isCompareMode) setLassoState({ active: true, startX: e.clientX - containerRef.current.getBoundingClientRect().left, currentX: e.clientX - containerRef.current.getBoundingClientRect().left }); }}>
-            <defs>
-              {allArrowColors.map(color => (
-                  <marker key={`arrow-${color}`} id={`arrowhead-${color.replace(/[^a-zA-Z0-9]/g, '')}`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                      <polygon points="0 0, 8 3, 0 6" fill={color} />
-                  </marker>
-              ))}
-              <marker id="arrowhead-drag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ec4899" /></marker>
-            </defs>
-  
-            <rect x="0" y="0" width="100%" height="40" fill="white" fillOpacity="0" className={isCompareMode ? '' : 'cursor-crosshair'} onMouseDown={e => handleRootMouseDown(e, false)} />
-            {!isCompareMode && <text x="60" y="25" className="text-[11px] fill-gray-400 font-medium pointer-events-none">Drag from here to assign ROOT</text>}
-  
-            {showEdepsArea && (
-              <><rect x="0" y={svgHeight - 40} width="100%" height="40" fill="white" fillOpacity="0" className={isCompareMode ? '' : 'cursor-crosshair'} onMouseDown={e => handleRootMouseDown(e, true)} />
-              {!isCompareMode && <text x="60" y={svgHeight - 15} className="text-[11px] fill-indigo-400/80 font-medium pointer-events-none">Drag from here to assign E-ROOT</text>}</>
-            )}
-  
-            {/* PASS 1: Render all arcs first so they stay in the background under the deprel labels */}
-            {[...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))].map((edge, idx) => {
-              const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
-              if (!isRoot && !headNode) return null;
-              
-              const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
-              const pathD = getArcPath(sourceX, targetX, isRoot, edge.stackIndex, edge.isEdep);
-
-              return (
-                <g key={`arc-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group">
-                  <path d={pathD} stroke="transparent" strokeWidth="15" fill="none" />
-                  
-                  {edge.isUniversal ? (
-                      <path d={pathD} stroke="#94a3b8" strokeWidth="1.5" fill="none" markerEnd={`url(#arrowhead-94a3b8)`} className="transition-all duration-200" />
-                  ) : (
-                      edge.rels.map((relObj, i) => {
-                          const arcColor = relObj.color;
-                          const dashLength = 10;
-                          const gapLength = dashLength * (edge.rels.length - 1);
-                          const dashArray = edge.rels.length > 1 ? `${dashLength} ${gapLength}` : 'none';
-                          const dashOffset = edge.rels.length > 1 ? `-${i * dashLength}` : '0';
-
-                          return (
-                              <path key={`path-${i}`} d={pathD} stroke={arcColor} strokeWidth="1.5" fill="none" strokeDasharray={dashArray} strokeDashoffset={dashOffset} markerEnd={`url(#arrowhead-${arcColor.replace(/[^a-zA-Z0-9]/g, '')})`} className="transition-all duration-200" />
-                          );
-                      })
-                  )}
-                </g>
-              );
-            })}
-
-            {/* PASS 2: Render all labels second so they sit above all arcs and remain clickable */}
-            {[...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))].map((edge, idx) => {
-              const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
-              if (!isRoot && !headNode) return null;
-              
-              const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
-              const textX = isRoot ? targetX + 5 : (sourceX + targetX) / 2;
-              const heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetX - sourceX) * 0.2));
-              const baseTextY = isRoot ? (edge.isEdep ? BASE_Y + (MAX_ARC_HEIGHT / 2) + 10 : (BASE_Y / 2)) : (edge.isEdep ? BASE_Y + 50 + (heightOffset * 0.75) + 12 : BASE_Y - 35 - (heightOffset * 0.75) - 5);
-
-              return (
-                <g key={`labels-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group">
-                  {edge.rels.map((relObj, i) => {
-                      const stackOffset = (i - (edge.rels.length - 1) / 2) * 16;
-                      const textY = baseTextY + stackOffset;
-                      const displayColor = edge.isUniversal ? '#64748b' : relObj.color;
-
-                      return (
-                          <g key={`label-${i}`}>
-                              <rect x={textX - (relObj.rel.length * 4)} y={textY - 10} width={relObj.rel.length * 8} height="14" fill="#f9fafb" rx="4" className={isCompareMode ? '' : 'cursor-pointer'} onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCompareMode) return;
-                                  setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
-                              }} />
-                              <text x={textX} y={textY} textAnchor="middle" fill={displayColor} className={`text-[11px] font-semibold ${isCompareMode ? '' : 'cursor-pointer hover:font-bold hover:underline'} transition-all`} onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCompareMode) return;
-                                  setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
-                              }}>{relObj.rel}</text>
-                          </g>
-                      )
-                  })}
-                </g>
-              );
-            })}
-  
-            {layout.mwts.map(mwt => (
-              <g key={`mwt-${mwt.id}`} className="group">
-                <rect x={mwt.left} y={mwt.top} width={mwt.width} height="110" stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4" fill="transparent" rx="6" className="pointer-events-none" />
-                <text x={mwt.left + mwt.width/2} y={mwt.top - 5} textAnchor="middle" className={`text-xs font-semibold fill-gray-500 ${isCompareMode ? '' : 'cursor-text hover:fill-indigo-600'} transition-colors`} onDoubleClick={(e) => openTextEditor(e, mwt, 'form', -70, true)}>{mwt.form}</text>
-                {!isCompareMode && (
-                  <g onClick={() => handleSaveAction(() => ({ mwts: sentence.mwts.filter(m => m.id !== mwt.id) }))} className="cursor-pointer opacity-70 hover:opacity-100 transition-opacity">
-                    <circle cx={mwt.left + mwt.width} cy={mwt.top} r="8" fill="#ef4444" className="hover:fill-red-600" /><text x={mwt.left + mwt.width} y={mwt.top + 3} textAnchor="middle" fill="white" fontSize="9" className="pointer-events-none font-bold">X</text>
-                  </g>
-                )}
-              </g>
-            ))}
-  
-            {dragState.active && (Math.abs(dragState.currentX - dragState.startX) > 5 || Math.abs(dragState.currentY - dragState.startY) > 5) && (
-              <g><path d={(() => { const sY = dragState.sourceId === '0' ? dragState.startY : (dragState.isEdep ? BASE_Y + 50 : BASE_Y - 35); const arcQ = dragState.sourceId === '0' ? (sY + dragState.currentY) / 2 : (dragState.isEdep ? Math.max(sY, dragState.currentY) + 60 : Math.min(sY, dragState.currentY) - 60); return `M ${dragState.startX} ${sY} Q ${(dragState.startX + dragState.currentX) / 2} ${arcQ}, ${dragState.currentX} ${dragState.currentY}`; })()} stroke="#ec4899" strokeWidth="2" strokeDasharray="4 4" fill="none" markerEnd="url(#arrowhead-drag)" className="pointer-events-none" /></g>
-            )}
-  
-            {lassoState.active && <rect x={Math.min(lassoState.startX, lassoState.currentX)} y={BASE_Y - 60} width={Math.abs(lassoState.currentX - lassoState.startX)} height="120" fill="#818cf8" fillOpacity="0.2" stroke="#6366f1" strokeWidth="1.5" strokeDasharray="4 4" className="pointer-events-none" />}
-  
-            {layout.nodes.map(node => {
-              const isEllipsis = features.ellipsis && String(node.id).includes('.');
-              
-              const bottomProps = [];
-              if (colMappings.upos) bottomProps.push({ key: 'upos', val: node.upos, type: 'select', options: tagsets.upos, className: `text-[12px] fill-indigo-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}` });
-              if (colMappings.xpos) bottomProps.push({ key: 'xpos', val: node.xpos, type: 'select', options: tagsets.xpos, className: `text-[11px] fill-teal-600 font-medium select-none ${isCompareMode ? '' : 'cursor-pointer hover:underline'}` });
-              if (colMappings.lemma) bottomProps.push({ key: 'lemma', val: node.lemma, type: 'text', className: `text-[11px] fill-gray-500 italic select-none ${isCompareMode ? '' : 'cursor-text hover:underline hover:fill-indigo-500'}` });
-              
-              return (
-                <g key={`node-${node.id}`} transform={`translate(${node.x}, ${BASE_Y})`} onMouseDown={(e) => handleWordMouseDown(e, node.id)}>
-                  {dragState.active && dragState.hoveredTargetId === node.id && <rect x={-(node.width/2) - 10} y={dragState.isEdep ? "-20" : "-45"} width={node.width + 20} height="100" fill="#fbcfe8" opacity="0.4" rx="8" className="pointer-events-none" />}
-                  
-                  <text y="-15" textAnchor="middle" className={`text-[15px] ${isCompareMode ? '' : 'cursor-text hover:fill-indigo-600 hover:underline'} ${dragState.sourceId === node.id ? 'font-bold fill-pink-600' : (isEllipsis ? 'fill-blue-500 font-medium' : 'fill-gray-900')} transition-colors select-none`} onDoubleClick={(e) => openTextEditor(e, node, 'form', -15)}>{node.form}</text>
-                  
-                  {bottomProps.map((prop, idx) => {
-                    const yPos = 5 + (idx * 15);
-                    return (
-                      <text key={prop.key} y={yPos} textAnchor="middle" className={prop.className}
-                            onMouseDown={e => e.stopPropagation()}
-                            onClick={prop.type === 'select' ? (e) => openSelectEditor(e, node, prop.key, yPos, prop.options) : undefined}
-                            onDoubleClick={prop.type === 'text' ? (e) => openTextEditor(e, node, prop.key, yPos) : undefined}>
-                        {prop.val}
-                      </text>
-                    );
-                  })}
-                  
-                  {(features.feats || features.misc) && !isCompareMode && (
-                    <g transform={`translate(0, ${5 + bottomProps.length * 15 - 2})`} className="cursor-pointer opacity-60 hover:opacity-100 transition-opacity" onMouseDown={e => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setFeaturesModalTokenId(node.id); }}>
-                      <rect x="-14" y="-8" width="28" height="14" rx="4" fill="#cbd5e1" /><circle cx="-6" cy="-1" r="1.5" fill="#475569" /><circle cx="0" cy="-1" r="1.5" fill="#475569" /><circle cx="6" cy="-1" r="1.5" fill="#475569" />
-                    </g>
-                  )}
-                </g>
-              );
-            })}
-            </svg>
-  
-            {inlineEditor && (
-              <div className="absolute z-50 flex flex-col shadow-xl bg-white rounded-md border border-indigo-200" style={{ left: inlineEditor.x, top: inlineEditor.y, transform: 'translate(-50%, -50%)', minWidth: inlineEditor.type === 'select' ? '140px' : '100px' }} onMouseDown={(e) => e.stopPropagation()} onMouseMove={(e) => e.stopPropagation()}>
-                {inlineEditor.type === 'text' ? (
-                  <input type="text" autoFocus defaultValue={inlineEditor.value} className="w-full px-2 py-1 text-sm bg-white text-gray-900 outline-none rounded-md focus:ring-2 focus:ring-indigo-500 font-medium text-center border border-gray-200 shadow-sm" onBlur={(e) => handleSaveInline(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveInline(e.target.value); if (e.key === 'Escape') setInlineEditor(null); }} />
-                ) : (
-                  <select autoFocus size={6} defaultValue={inlineEditor.value} className="w-full px-1 py-1 text-sm outline-none rounded-md bg-white text-gray-700" onBlur={(e) => handleSaveInline(e.target.value)} onClick={(e) => { if (e.target.tagName === 'OPTION') handleSaveInline(e.target.value); }} onKeyDown={(e) => { if (e.key === 'Escape') setInlineEditor(null); if (e.key === 'Enter') handleSaveInline(e.target.value); }}>
-                    {[...inlineEditor.options].sort((a, b) => a.localeCompare(b)).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    {!['upos', 'xpos'].includes(inlineEditor.field) && (
-                        <option value="_">_ (remove edge)</option>
-                    )}
-                  </select>
-                )}
-              </div>
-            )}
-  
-            {featuresModalTokenId && (
-              <FeaturesModal 
-                 token={sentence.tokens.find(t => t.id === featuresModalTokenId)}
-                 onClose={() => setFeaturesModalTokenId(null)}
-                 onSave={(feats, misc) => { handleSaveAction((tokens) => { const idx = tokens.findIndex(t => t.id === featuresModalTokenId); tokens[idx] = { ...tokens[idx], feats, misc }; return {}; }); setFeaturesModalTokenId(null); }}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentence }) => {
-    const availableAnns = getAvailableAnns(sentence, defaultAnnotator);
-    
-    const displayableAnns = useMemo(() => {
-        return availableAnns.filter(ann => {
-            if (!hasAnnotationData(sentence, ann)) return false;
-            if (ann === defaultAnnotator) return true;
-            if (!hasAnnotationData(sentence, defaultAnnotator)) return true;
-
-            return sentence.tokens.some(t => {
-                const a = t.annotations[ann] || { head: '_', deprel: '_', deps: '_' };
-                const d = t.annotations[defaultAnnotator] || { head: '_', deprel: '_', deps: '_' };
-                return a.head !== d.head || a.deprel !== d.deprel || a.deps !== d.deps;
-            });
-        });
-    }, [sentence, availableAnns]);
-
-    let activeAnn = perUserMode ? (sentence.activeAnnotator || defaultAnnotator) : defaultAnnotator;
-    if (perUserMode && !displayableAnns.includes(activeAnn)) {
-        activeAnn = displayableAnns.includes(defaultAnnotator) ? defaultAnnotator : (displayableAnns[0] || defaultAnnotator);
-    }
-
-    const showAnnotators = perUserMode && displayableAnns.length > 1;
-  
-    const [isCompareMode, setIsCompareMode] = useState(false);
-    const [compareUsers, setCompareUsers] = useState([]);
-
-    const annotatorColors = useMemo(() => {
-        const map = {};
-        const palette = COLORS.slice(1);
-        displayableAnns.forEach((ann, i) => map[ann] = palette[i % palette.length]);
-        return map;
-    }, [displayableAnns]);
-
-    useEffect(() => {
-        if (isCompareMode && compareUsers.length === 0) {
-            setCompareUsers([activeAnn]);
-        }
-    }, [isCompareMode, activeAnn, compareUsers.length]);
-
-    return (
-      <div className="border border-gray-200 bg-white rounded-xl shadow-sm overflow-hidden transition-all duration-300">
-        <div className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-indigo-50/30' : ''}`} onClick={onToggle}>
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className={`p-1 rounded-md transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400'}`}>
-              {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-            </div>
-            <span className="font-mono text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md shrink-0">{index + 1}</span>
-            <h3 className={`text-base truncate font-medium ${isExpanded ? 'text-indigo-900' : 'text-gray-800'}`}>
-              {sentence.text}
-            </h3>
-          </div>
-          
-          {showAnnotators && (
-            <div className="flex items-center gap-2 ml-auto shrink-0 bg-gray-100 p-1.5 rounded-lg" onClick={e => e.stopPropagation()}>
-              {displayableAnns.length > 1 && (
-                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-600 mr-2 border-r border-gray-300 pr-3 cursor-pointer">
-                  <input type="checkbox" checked={isCompareMode} onChange={(e) => {
-                    setIsCompareMode(e.target.checked);
-                    if (e.target.checked) setCompareUsers([activeAnn]);
-                  }} className="rounded text-indigo-600 focus:ring-indigo-500" />
-                  Compare
-                </label>
-              )}
-
-              {displayableAnns.map(ann => {
-                const isActive = isCompareMode ? compareUsers.includes(ann) : activeAnn === ann;
-                const userColor = annotatorColors[ann] || '#6b7280';
-                const style = isCompareMode && isActive 
-                    ? { backgroundColor: userColor, color: 'white' } 
-                    : (isActive ? { backgroundColor: 'white', color: '#4338ca' } : { color: isCompareMode ? userColor : undefined });
-
-                return (
-                   <button
-                      key={ann}
-                      onClick={(e) => {
-                         e.stopPropagation();
-                         if (isCompareMode) {
-                            setCompareUsers(prev => prev.includes(ann) ? prev.filter(u => u !== ann) : [...prev, ann]);
-                         } else {
-                            onUpdateSentence({ ...sentence, activeAnnotator: ann }, true);
-                         }
-                      }}
-                      style={style}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${!isActive ? 'hover:bg-gray-200 opacity-70 hover:opacity-100' : 'shadow-sm opacity-100'}`}
-                   >
-                      {ann}
-                   </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-  
-        {isExpanded && (
-          <div className="p-4 bg-white animate-in fade-in slide-in-from-top-2 duration-200">
-            <DependencyGraph 
-               sentence={sentence}
-               activeAnn={activeAnn}
-               onUpdateSentence={onUpdateSentence} 
-               isCompareMode={isCompareMode}
-               compareUsers={compareUsers}
-               annotatorColors={annotatorColors}
-            />
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // --- UI Frame ---
 
   return (
@@ -1593,7 +1643,8 @@ export function Dendroid({
                     key={sent.id} sentence={sent} index={idx}
                     isExpanded={expandedIds.has(sent.id)} 
                     onToggle={() => { setExpandedIds(prev => { const next = new Set(prev); if (next.has(sent.id)) next.delete(sent.id); else next.add(sent.id); return next; }); }} 
-                    onUpdateSentence={handleUpdateSentence} 
+                    onUpdateSentence={handleUpdateSentence}
+                    config={editorConfig} 
                   />
                 ))}
               </div>
