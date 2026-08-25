@@ -1,0 +1,398 @@
+{
+  "!top": [
+    "text"
+  ],
+  "text": {
+    "attrs": {
+      "id": null,
+      "author": null,
+      "shortTitle": null,
+      "modality": null,
+      "production": null,
+      "dateCollected": null,
+      "dateCreated": null,
+      "dateModified": null,
+      "sourceURL": null,
+      "speakerCount": null,
+      "speakerList": null,
+      "title": null,
+      "sourcePublication": null,
+      "type": [
+        "interview",
+        "news",
+        "voyage",
+        "whow",
+        "academic",
+        "bio",
+        "reddit",
+        "fiction",
+        "conversation",
+        "speech",
+        "textbook",
+        "vlog",
+        "court",
+        "essay",
+        "letter",
+        "podcast",
+        "threat",
+        "medical",
+        "syllabus",
+        "proof",
+        "poetry",
+        "legal",
+        "dictionary",
+        "esports"
+      ]
+    },
+    "children": [
+      "figure",
+      "list",
+      "p",
+      "table",
+      "quote",
+      "s",
+      "head",
+      "sp",
+      "incident"
+    ]
+  },
+  "head": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "s",
+      "hi",
+      "foreign"
+    ]
+  },
+  "lg": {
+    "attrs": {
+      "type": null,
+      "n": null
+    },
+    "children": [
+      "s"
+    ]
+  },
+  "note": {
+    "attrs": {
+      "place": null,
+      "n": null
+    },
+    "children": [
+      "s"
+    ]
+  },
+  "sp": {
+    "attrs": {
+      "who": null,
+      "whom": null
+    },
+    "children": [
+      "s",
+      "head",
+      "list",
+      "p",
+      "quote",
+      "w",
+      "hi",
+      "foreign"
+    ]
+  },
+  "s": {
+    "attrs": {
+      "type": [
+        "decl",
+        "sub",
+        "imp",
+        "q",
+        "wh",
+        "inf",
+        "ger",
+        "intj",
+        "frag",
+        "other",
+        "multiple"
+      ]
+    },
+    "children": [
+      "add",
+      "row",
+      "figure",
+      "foreign",
+      "hi",
+      "sp",
+      "q",
+      "cell",
+      "w",
+      "quote",
+      "ref",
+      "date",
+      "gap",
+      "incident",
+      "l",
+      "list",
+      "measure",
+      "sic",
+      "time"
+    ]
+  },
+  "incident": {
+    "attrs": {
+      "type": null,
+      "who": null
+    }
+  },
+  "date": {
+    "attrs": {
+      "from": null,
+      "notAfter": null,
+      "notBefore": null,
+      "rend": null,
+      "to": null,
+      "when": null
+    },
+    "children": [
+      "w",
+      "sic",
+      "ref"
+    ]
+  },
+  "gap": {
+    "attrs": {
+      "reason": null
+    }
+  },
+  "measure": {
+    "attrs": {
+      "type": null
+    }
+  },
+  "sic": {
+    "attrs": {
+      "ana": null
+    },
+    "children": [
+      "ref",
+      "incident",
+      "w",
+      "hi"
+    ]
+  },
+  "w": {
+    "children": [
+      "hi",
+      "ref",
+      "q",
+      "sic",
+      "date",
+      "time"
+    ]
+  },
+  "time": {
+    "attrs": {
+      "when": null,
+      "from": null,
+      "to": null
+    },
+    "children": [
+      "w",
+      "sic"
+    ]
+  },
+  "quote": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "add",
+      "q",
+      "date",
+      "foreign",
+      "p",
+      "w",
+      "ref",
+      "hi",
+      "s",
+      "gap",
+      "sic"
+    ]
+  },
+  "figure": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "caption"
+    ]
+  },
+  "caption": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "foreign",
+      "quote",
+      "hi",
+      "s"
+    ]
+  },
+  "p": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "add",
+      "figure",
+      "hi",
+      "lg",
+      "note",
+      "quote",
+      "list",
+      "s",
+      "sp"
+    ]
+  },
+  "table": {
+    "attrs": {
+      "rend": null,
+      "rows": null,
+      "cols": null
+    },
+    "children": [
+      "head",
+      "row",
+      "s"
+    ]
+  },
+  "row": {
+    "attrs": {
+      "n": null
+    },
+    "children": [
+      "cell",
+      "s"
+    ]
+  },
+  "cell": {
+    "attrs": {
+      "n": null,
+      "rend": null,
+      "role": null
+    },
+    "children": [
+      "figure",
+      "date",
+      "list",
+      "ref",
+      "hi",
+      "s"
+    ]
+  },
+  "list": {
+    "attrs": {
+      "type": [
+        "ordered",
+        "unordered"
+      ]
+    },
+    "children": [
+      "figure",
+      "item"
+    ]
+  },
+  "item": {
+    "attrs": {
+      "n": null
+    },
+    "children": [
+      "head",
+      "figure",
+      "ref",
+      "hi",
+      "w",
+      "list",
+      "p",
+      "s"
+    ]
+  },
+  "add": {
+    "children": [
+      "s",
+      "ref"
+    ]
+  },
+  "l": {
+    "attrs": {
+      "n": null
+    },
+    "children": [
+      "s",
+      "sic",
+      "w",
+      "date"
+    ]
+  },
+  "hi": {
+    "attrs": {
+      "rend": null
+    },
+    "children": [
+      "ref",
+      "date",
+      "figure",
+      "foreign",
+      "incident",
+      "w",
+      "lg",
+      "s",
+      "caption",
+      "q",
+      "sic"
+    ]
+  },
+  "foreign": {
+    "attrs": {
+      "xml:lang": null
+    },
+    "children": [
+      "ref",
+      "figure",
+      "incident",
+      "w",
+      "lg",
+      "s",
+      "caption",
+      "q",
+      "sic",
+      "date",
+      "hi"
+    ]
+  },
+  "q": {
+    "children": [
+      "figure",
+      "foreign",
+      "hi",
+      "w",
+      "sic",
+      "ref"
+    ]
+  },
+  "ref": {
+    "attrs": {
+      "target": null,
+      "rend": null
+    },
+    "children": [
+      "add",
+      "foreign",
+      "w",
+      "q",
+      "hi",
+      "sic",
+      "date"
+    ]
+  }
+}
