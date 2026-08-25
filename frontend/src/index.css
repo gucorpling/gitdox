@@ -39,3 +39,9 @@
 .x-spreadsheet-scrollbar.vertical {
     pointer-events: auto;
 }
+
+.sync-container{
+    width: 118px;
+    left: -6px;
+    position: relative;
+}

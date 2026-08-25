@@ -80,7 +80,7 @@ export default function ValidationBadge({
   const canLinkCellReferences = typeof onCellReferenceClick === 'function';
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ width: '130px'}}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={`inline-flex items-center gap-2 px-2.5 py-1 rounded text-xs font-medium transition-all ${

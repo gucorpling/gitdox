@@ -387,7 +387,7 @@ export const getValidationSummary = (validation, options = {}) => {
   if (normalized.status === 'validating' || normalized.status === 'queued' || normalized.status === 'processing') {
     return {
       status: 'validating',
-      label: 'Validating...',
+      label: 'Validating',
       filterText: 'validating pending in-progress',
       title: 'Validation is in progress'
     };

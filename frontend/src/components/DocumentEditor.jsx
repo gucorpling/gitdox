@@ -25,8 +25,7 @@ import {
 export default function DocumentEditor({ 
   apiCall, 
   docId, 
-  goBack, 
-  goBackToCorpus, 
+  onCorpusChange,
   user, 
   projectName, 
   mutationTools, 
@@ -308,6 +307,13 @@ export default function DocumentEditor({
       alert("Failed to save document metadata: " + err.message);
     }
   }, [apiCall, buildMetadataObject, doc, docId]);
+
+  // Keep the nav's "Corpus" button in sync with the currently open document
+  useEffect(() => {
+    if (!onCorpusChange) return;
+    onCorpusChange(doc?.corpus || '');
+    return () => onCorpusChange('');
+  }, [doc?.corpus, onCorpusChange]);
 
   useEffect(() => {
     const init = async () => {
@@ -1318,43 +1324,67 @@ export default function DocumentEditor({
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col space-y-4" style={{ maxWidth: '100%' }}>
-      <div className="flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <a
-            href="#"
-            onClick={(e) => {
-              // Only intercept standard left-clicks without modifier keys
-              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                e.preventDefault();
-                goBack();
-              }
-            }}
-            className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer"
-          >
-            ← Back to Dashboard
-          </a>
-          <a
-            href="#"
-            onClick={(e) => {
-              // Only intercept standard left-clicks without modifier keys
-              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                e.preventDefault();
-                goBackToCorpus(doc?.corpus || '');
-              }
-            }}
-            className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer"
-          >
-            ← Back to Corpus
-          </a>
+      <div className="flex items-center gap-3 shrink-0">
+        {/* No min-w-0 here: once the fields can't shrink further, the row overflows (scrolls) instead of clipping */}
+        <div className={`flex-1 flex items-center gap-4 p-2 rounded-xl shadow-sm border border-slate-200 ${panelStyle ? '' : 'bg-white'}`} style={panelStyle}>
+          <div className="flex-1 min-w-[6rem]">
+            <label className="block text-xs font-semibold text-slate-500 uppercase">Corpus</label>
+            <input
+              className="w-full border-b pb-1 focus:outline-none focus:border-indigo-500"
+              value={doc.corpus}
+              onChange={e => updateDocField('corpus', e.target.value, false)}
+              onBlur={e => autoSaveDocField('corpus', e.target.value)}
+            />
+          </div>
+          <div className="flex-1 min-w-[10rem]">
+            <label className="block text-xs font-semibold text-slate-500 uppercase">Document Name</label>
+            <input
+              className="w-full border-b pb-1 focus:outline-none focus:border-indigo-500 font-medium"
+              value={doc.docname}
+              onChange={e => updateDocField('docname', e.target.value, false)}
+              onBlur={e => {
+                autoSaveDocField('docname', e.target.value);
+                fetchLatestGithubCommitMessage();
+              }}
+            />
+          </div>
+          <div className="flex-1 min-w-[6rem]">
+            <label className="block text-xs font-semibold text-slate-500 uppercase">Repo</label>
+            <input
+              className="w-full border-b pb-1 focus:outline-none focus:border-indigo-500"
+              value={doc.repo || ''}
+              onChange={e => updateDocField('repo', e.target.value, false)}
+              onBlur={e => {
+                autoSaveDocField('repo', e.target.value);
+                fetchLatestGithubCommitMessage();
+              }}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="shrink-0">
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Status</label>
+            <select className="border rounded p-1 text-sm bg-slate-50" value={doc.status} onChange={e => autoSaveDocField('status', e.target.value)}>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>{formatStatusCategoryLabel(status)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="shrink-0">
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Assignee</label>
+            <select
+              className="border rounded p-1 text-sm bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+              value={doc.assigned || ''}
+              onChange={e => autoSaveDocField('assigned', e.target.value)}
+              disabled={!canEditAssignee}
+              title={!canEditAssignee ? 'Only admins can reassign documents.' : undefined}
+            >
+               {assigneeOptions.map((username) => <option key={username} value={username}>{username}</option>)}
+            </select>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <ValidationBadge
-            validationSummary={validationSummary}
-            maxCoordsPerRule={maxValidatorWarnPerRule}
-            onCellReferenceClick={doc?.mode === 'spreadsheet' ? handleValidationCellReferenceClick : null}
-          />
 
-          <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold border ${
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          <div className={`sync-container inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold border ${
             isAutoSaving
               ? 'bg-amber-50 text-amber-700 border-amber-200'
               : hasUnsavedChanges
@@ -1370,63 +1400,12 @@ export default function DocumentEditor({
             }`}></span>
             {isAutoSaving ? 'Saving...' : (hasUnsavedChanges ? 'Unsynced' : 'Saved')}
           </div>
-        </div>
-      </div>
 
-      <div className={`p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-6 gap-4 shrink-0 ${panelStyle ? '' : 'bg-white'}`} style={panelStyle}>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase">Corpus</label>
-          <input
-            className="w-full border-b pb-1 focus:outline-none focus:border-indigo-500"
-            value={doc.corpus}
-            onChange={e => updateDocField('corpus', e.target.value, false)}
-            onBlur={e => autoSaveDocField('corpus', e.target.value)}
+          <ValidationBadge
+            validationSummary={validationSummary}
+            maxCoordsPerRule={maxValidatorWarnPerRule}
+            onCellReferenceClick={doc?.mode === 'spreadsheet' ? handleValidationCellReferenceClick : null}
           />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-xs font-semibold text-slate-500 uppercase">Document Name</label>
-          <input
-            className="w-full border-b pb-1 focus:outline-none focus:border-indigo-500 font-medium"
-            value={doc.docname}
-            onChange={e => updateDocField('docname', e.target.value, false)}
-            onBlur={e => {
-              autoSaveDocField('docname', e.target.value);
-              fetchLatestGithubCommitMessage(); // <-- Add this
-            }}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase">Repo</label>
-          <input
-            className="w-full border-b pb-1 focus:outline-none focus:border-indigo-500"
-            value={doc.repo || ''}
-            onChange={e => updateDocField('repo', e.target.value, false)}
-            onBlur={e => {
-              autoSaveDocField('repo', e.target.value);
-              fetchLatestGithubCommitMessage(); // <-- Add this
-            }}
-            placeholder="Optional"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Status</label>
-          <select className="w-full border rounded p-1 text-sm bg-slate-50" value={doc.status} onChange={e => autoSaveDocField('status', e.target.value)}>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>{formatStatusCategoryLabel(status)}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Assignee</label>
-          <select
-            className="w-full border rounded p-1 text-sm bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
-            value={doc.assigned || ''}
-            onChange={e => autoSaveDocField('assigned', e.target.value)}
-            disabled={!canEditAssignee}
-            title={!canEditAssignee ? 'Only admins can reassign documents.' : undefined}
-          >
-             {assigneeOptions.map((username) => <option key={username} value={username}>{username}</option>)}
-          </select>
         </div>
       </div>
 
@@ -1465,9 +1444,8 @@ export default function DocumentEditor({
                   className="h-full text-sm border-t border-slate-100"
                 />
               </div>
-              {/* 2. Add the button to the XML toolbar */}
+              {/* 2. XML toolbar button */}
               <div className="border-t border-slate-100 px-4 py-3 flex items-center gap-2 bg-slate-50">
-                {/* --- ADD THIS BUTTON --- */}
                 <button
                   type="button"
                   onClick={() => setXmlTagModalOpen(true)}

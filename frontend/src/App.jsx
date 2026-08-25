@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { FileText, Users, LogOut, AlertCircle } from 'lucide-react';
+import { FileText, Users, LogOut, AlertCircle, FolderOpen } from 'lucide-react';
 import DocumentEditor from './components/DocumentEditor';
 import AdminView from './components/AdminView';
 import DashboardView from './components/DashboardView';
@@ -276,6 +276,7 @@ export default function App() {
   
   const [dashboardViewState, setDashboardViewState] = useState(() => normalizeDashboardViewState());
   const [dashboardRestoreRequestId, setDashboardRestoreRequestId] = useState(0);
+  const [activeDocCorpus, setActiveDocCorpus] = useState('');
   const [error, setError] = useState('');
   const [appConfig, setAppConfig] = useState(null);
   const [isAppConfigLoaded, setIsAppConfigLoaded] = useState(false);
@@ -465,6 +466,8 @@ export default function App() {
       const localPath = stripFrontendBasePath(pathname, EFFECTIVE_FRONTEND_BASE_PATH);
       const route = resolveRouteFromPathname(localPath);
       const restoredDashboardState = normalizeDashboardViewState(state?.dashboardViewState);
+      // Optional "?corpus=" query string (used by the nav's back to corpus link), seeds the filter on a fresh load/new tab
+      const corpusFromQuery = new URLSearchParams(window.location.search).get('corpus');
 
       if (route.view === 'login') {
         setCurrentView('login');
@@ -496,15 +499,18 @@ export default function App() {
       }
 
       setCurrentView('dashboard');
+      const effectiveDashboardState = corpusFromQuery
+        ? normalizeDashboardViewState({ columnFilters: { ...EMPTY_DASHBOARD_FILTERS, corpus: corpusFromQuery }, scrollY: 0 })
+        : restoredDashboardState;
       setDashboardViewState((prev) => (
-        areColumnFiltersEqual(prev.columnFilters, restoredDashboardState.columnFilters) && prev.scrollY === restoredDashboardState.scrollY
+        areColumnFiltersEqual(prev.columnFilters, effectiveDashboardState.columnFilters) && prev.scrollY === effectiveDashboardState.scrollY
           ? prev
-          : restoredDashboardState
+          : effectiveDashboardState
       ));
       if (route.view === 'dashboard') {
         setDashboardRestoreRequestId((prev) => prev + 1);
       }
-      replaceRouteState(DASHBOARD_PATH, 'dashboard', restoredDashboardState);
+      replaceRouteState(DASHBOARD_PATH, 'dashboard', effectiveDashboardState);
     };
 
     syncRoute(window.location.pathname);
@@ -642,8 +648,16 @@ export default function App() {
     });
   };
 
+  const goToCurrentDocCorpus = () => {
+    goToDashboardWithCorpusFilter(activeDocCorpus);
+  };
+
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors bg-slate-50 text-slate-800`}>
+    <div
+      className="min-h-screen flex flex-col font-sans transition-colors bg-slate-50 text-slate-800"
+      // Matches the nav background so horizontal overflow margins aren't left white
+      style={token ? { backgroundColor: navBackgroundColor || '#ffffff' } : undefined}
+    >
       {/* Top Navigation */}
       {token && (
         <nav
@@ -671,20 +685,6 @@ export default function App() {
             </div>
 
             <div className="hidden md:flex space-x-2">
-              <a
-                href="#dashboard"
-                onClick={(e) => {
-                  e.preventDefault();
-                  goToDashboard();
-                }}
-                className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
-                  currentView === 'dashboard' 
-                    ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
-                    : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
-                }`}
-              >
-                <FileText size={18} /> Dashboard
-              </a>
               {user?.adminlevel >= 1 && (
                 <a
                   href={buildFrontendPath(ADMIN_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}
@@ -703,11 +703,43 @@ export default function App() {
                   <Users size={18} /> Admin
                 </a>
               )}
+              <a
+                href={buildFrontendPath(DASHBOARD_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}
+                onClick={(e) => {
+                  if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                    e.preventDefault();
+                    goToDashboard();
+                  }
+                }}
+                className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
+                  currentView === 'dashboard' 
+                    ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
+                    : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
+                }`}
+              >
+                <FileText size={18} /> Dashboard
+              </a>
+              {currentView.startsWith('document:') && (
+                <a
+                  href={`${buildFrontendPath(DASHBOARD_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}${activeDocCorpus ? `?corpus=${encodeURIComponent(activeDocCorpus)}` : ''}`}
+                  onClick={(e) => {
+                    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                      e.preventDefault();
+                      goToCurrentDocCorpus();
+                    }
+                  }}
+                  className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
+                    isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <FolderOpen size={18} /> Corpus
+                </a>
+              )}
             </div>
           </div>
           <div className="flex items-center space-x-4">
             <div className={`text-sm hidden sm:block ${isNavDark ? 'text-slate-300' : 'text-slate-600'}`}>
-              Signed in as{' '}
+              User:{' '}
               <span className={`font-semibold ${isNavDark ? 'text-slate-100' : 'text-slate-800'}`}>
                 {user?.username}
               </span>
@@ -761,7 +793,7 @@ export default function App() {
       <main className="p-6 flex-1" style={Object.keys(mainStyle).length > 0 ? mainStyle : undefined}>
         {!token && <LoginView setToken={setToken} setUser={setUser} onLoginSuccess={handleLoginSuccess} apiCall={apiCall} projectName={projectName} isMainDark={isMainDark} />}
         {token && currentView === 'dashboard' && <DashboardView apiCall={apiCall} user={user} openDoc={navigateToDocument} projectName={projectName} isNavDark={isNavDark} uiConfig={appConfig?.ui || {}} dashboardViewState={dashboardViewState} dashboardRestoreRequestId={dashboardRestoreRequestId} onDashboardViewStateChange={handleDashboardViewStateChange} statusCategories={statusCategories} editorOptions={editorOptions} isMainDark={isMainDark} frontendBasePath={EFFECTIVE_FRONTEND_BASE_PATH}/>}
-        {token && currentView.startsWith('document:') && <DocumentEditor apiCall={apiCall} docId={currentView.split(':')[1]} goBack={goToDashboard} goBackToCorpus={goToDashboardWithCorpusFilter} user={user} projectName={projectName} mutationTools={toolConfig} spannotatorConfig={appConfig?.entities || {}} dendroidConfig={appConfig?.dendroid || {}} spreadsheetConfig={appConfig?.spreadsheet || {}} editorOptions={editorOptions} editorFonts={{ ui: appConfig?.ui, xml: appConfig?.xml, entities: appConfig?.entities, spreadsheet: appConfig?.spreadsheet }} spreadsheetColumnOrderConfig={spreadsheetColumnOrder} xmlTagCompletion={xmlTagCompletion} statusCategories={statusCategories} isMainDark={isMainDark} isAppConfigLoaded={isAppConfigLoaded} />}
+        {token && currentView.startsWith('document:') && <DocumentEditor apiCall={apiCall} docId={currentView.split(':')[1]} onCorpusChange={setActiveDocCorpus} user={user} projectName={projectName} mutationTools={toolConfig} spannotatorConfig={appConfig?.entities || {}} dendroidConfig={appConfig?.dendroid || {}} spreadsheetConfig={appConfig?.spreadsheet || {}} editorOptions={editorOptions} editorFonts={{ ui: appConfig?.ui, xml: appConfig?.xml, entities: appConfig?.entities, spreadsheet: appConfig?.spreadsheet }} spreadsheetColumnOrderConfig={spreadsheetColumnOrder} xmlTagCompletion={xmlTagCompletion} statusCategories={statusCategories} isMainDark={isMainDark} isAppConfigLoaded={isAppConfigLoaded} />}
         {token && currentView === 'admin' && <AdminView apiCall={apiCall} user={user} token={token} projectName={projectName} isNavDark={isNavDark} uiConfig={appConfig?.ui || {}} statusCategories={statusCategories} refreshStatusCategories={refreshStatusCategories} isMainDark={isMainDark} />}
       </main>
     </div>
