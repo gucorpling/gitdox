@@ -15,6 +15,8 @@ let exportConfigNames = [];
 let exportConfigsLoaded = false;
 let allowDataTransfer = true;
 let allowExternalClipboard = true;
+let exactScrollX = null;  // accumulate fractional scrolls on trackpads
+let exactScrollY = null;
 
 const SOCIALCALC_SIGNATURE = '--SocialCalcSpreadsheetControlSave';
 
@@ -646,25 +648,6 @@ function patchSelector() {
         ) {
             sel.setEnd(toolbarSnapshot.eri, toolbarSnapshot.eci);
         }
-        
-        if (isProgrammaticJump && !sel._isRendering) {
-            sel._isRendering = true;
-            if (mySpreadsheet && mySpreadsheet.sheet) {
-                let sheet = mySpreadsheet.sheet;
-                if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                    try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0); } catch(e) { console.warn('Error moving vertical scrollbar during programmatic jump:', e); }
-                }
-                if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-                    try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : 0); } catch(e) { console.warn('Error moving horizontal scrollbar during programmatic jump:', e); }
-                }
-                if (typeof sheet.render === 'function') {
-                    sheet.render();
-                } else if (sheet.table && typeof sheet.table.render === 'function') {
-                    sheet.table.render();
-                }
-            }
-            sel._isRendering = false;
-        }
 
         syncFormulaBarFromSelection();
         
@@ -725,27 +708,14 @@ function syncViewportFromSheetData(options = {}) {
     const preserveHorizontal = !!options.preserveHorizontal;
     const lockedScrollX = Number.isFinite(options.lockedScrollX) ? options.lockedScrollX : null;
 
-    const applyViewport = () => {
+    const applyViewport = (horizontalTarget = null) => {
         if (requestId !== _viewportSyncRequestId) return;
         if (lockedScrollX !== null) {
             if (!data.scroll || typeof data.scroll !== 'object') data.scroll = {};
             data.scroll.x = lockedScrollX;
         }
         
-        // 1. Move Scrollbars first before calculating pixel offsets
-        if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : 0 ); } catch (e) {
-                console.warn('Error moving vertical scrollbar:', e);
-            }
-        }
-        if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            const left = lockedScrollX !== null ? lockedScrollX : (data.scroll ? data.scroll.x : 0);
-            try { sheet.horizontalScrollbar.move( left ); } catch (e) {
-                console.warn('Error moving horizontal scrollbar:', e);
-            }
-        }
-
-        // 2. Now recalculate blue selection box offsets against the new scroll position
+        // 1. Recalculate blue selection box offsets against the new scroll position
         if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
             sheet.selector.resetAreaOffset();
         }
@@ -756,12 +726,27 @@ function syncViewportFromSheetData(options = {}) {
             sheet.selector.resetBRLAreaOffset();
         }
         
-        // 3. Render Canvas
+        // 2. Render Canvas FIRST. 
         if (typeof sheet.render === 'function') {
             sheet.render();
         } else if (sheet.table && typeof sheet.table.render === 'function') {
             sheet.table.render();
         }
+
+        // 3. WAIT FOR PAINT, THEN MOVE SCROLLBARS
+        requestAnimationFrame(() => {
+            if (requestId !== _viewportSyncRequestId) return; // Safety check if another request fired
+            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                try { sheet.verticalScrollbar.move(data.scroll ? {top: data.scroll.y} : {top: 0}); } catch (e) {
+                    console.warn('Error moving vertical scrollbar:', e);
+                }
+            }
+            if (horizontalTarget !== null && sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                try { sheet.horizontalScrollbar.move({left: horizontalTarget}); } catch (e) {
+                    console.warn('Error moving horizontal scrollbar:', e);
+                }
+            }
+        });
     };
 
     const selectedRect = typeof data.getSelectedRect === 'function' ? data.getSelectedRect() : null;
@@ -774,6 +759,9 @@ function syncViewportFromSheetData(options = {}) {
         const width = selectedRect.width || 0;
         const height = selectedRect.height || 0;
 
+        let horizontalPending = false;
+        let verticalPending = false;
+
         if (!preserveHorizontal && sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
             let targetLeft = null;
             if (Math.abs(viewLeft) + width > tableOffset.width) {
@@ -785,7 +773,8 @@ function syncViewportFromSheetData(options = {}) {
                 }
             }
             if (targetLeft !== null && typeof data.scrollx === 'function') {
-                try { data.scrollx(targetLeft, applyViewport); } catch (e) {console.warn('Error scrolling horizontally:', e);}
+                horizontalPending = true;
+                try { data.scrollx(targetLeft, () => applyViewport(targetLeft)); } catch (e) {console.warn('Error scrolling horizontally:', e);}
             }
         }
 
@@ -800,10 +789,13 @@ function syncViewportFromSheetData(options = {}) {
                 targetTop = contentTop - 1 - freezeH;
             }
             if (targetTop !== null && typeof data.scrolly === 'function') {
+                verticalPending = true;
                 try { data.scrolly(targetTop, applyViewport); } catch (e) {console.warn('Error scrolling vertically:', e);}
             }
         }
-        applyViewport();
+        if (!horizontalPending && !verticalPending) {
+            applyViewport();
+        }
     } else {
         applyViewport();
     }
@@ -847,20 +839,14 @@ function jumpSelectionTo(ri, ci, skipFocusRestore = false, options = {}) {
         : null;
     const requestId = ++_viewportSyncRequestId;
     
-    isProgrammaticJump = true;
-    try {
-        // 1. Identify true span of target cell (handling merges)
-        const targetBounds = getExpandedCellBounds(mySpreadsheet.sheet.data, ri, ci);
-        
-        // 2. Let the native patched selector update all internal UI and data states safely 
-        //    before we attempt to calculate scroll distances.
-        restoreSelectorRange(targetBounds);
+    // 1. Identify true span of target cell (handling merges)
+    const targetBounds = getExpandedCellBounds(mySpreadsheet.sheet.data, ri, ci);
+    
+    // 2. Update the internal UI and data states safely 
+    restoreSelectorRange(targetBounds);
 
-        // 3. Move the viewport to destination
-        syncViewportFromSheetData({ preserveHorizontal, requestId, lockedScrollX });
-    } finally {
-        isProgrammaticJump = false;
-    }
+    // 3. Move the viewport and trigger the correctly-ordered render pipeline
+    syncViewportFromSheetData({ preserveHorizontal, requestId, lockedScrollX });
     
     if (!skipFocusRestore) {
         // Pass skipSyntheticClick: true to prevent stale coordinate ghost clicks 
@@ -881,7 +867,6 @@ let appHistory = [];
 let appHistoryIndex = -1;
 let lastRi = 0;
 let lastCi = 0;
-let isProgrammaticJump = false;
 let activeToolbarSelectionSnapshot = null;
 const BG_COLOR_OPTIONS = ['#ffffff', '#efc990', '#fee2e2', '#dcfce7', '#dbeafe', '#ede9fe', '#fce7f3', '#e5e7eb'];
 let configuredSpreadsheetFontFamily = null;
@@ -3219,16 +3204,14 @@ function restoreViewportScrollPosition(position) {
     data.scroll.x = targetX;
     data.scroll.ci = fallbackCi;
 
-    const applyViewport = () => {
-        // 1. MOVE SCROLLBARS FIRST
-        if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move(data.scroll ? data.scroll.y : targetY); } catch (e) {console.error('Error moving vertical scrollbar:', e); }
-        }
-        if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            try { sheet.horizontalScrollbar.move(data.scroll ? data.scroll.x : targetX); } catch (e) {console.error('Error moving horizontal scrollbar:', e); }
-        }
+    // Claim this as the authoritative in-flight request. Any earlier calls
+    // to restoreViewportScrollPosition/syncViewportFromSheetData that are
+    // still pending in a rAF callback will see a mismatched requestId and bail,
+    // so only the most recently requested scroll position ever gets applied.
+    const requestId = ++_viewportSyncRequestId;
 
-        // 2. RECALCULATE SELECTION BOX OFFSETS
+    const applyViewport = () => {
+        // 1. RECALCULATE SELECTION BOX OFFSETS
         if (sheet.selector && typeof sheet.selector.resetBRTAreaOffset === 'function') {
             sheet.selector.resetBRTAreaOffset();
         }
@@ -3238,13 +3221,33 @@ function restoreViewportScrollPosition(position) {
         if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
             sheet.selector.resetAreaOffset();
         }
-        
-        // 3. RENDER CANVAS
+
+        // 2. RENDER CANVAS FIRST
+        // This forces the internal engine to update DOM bounds (scrollbar max-heights)
         if (typeof sheet.render === 'function') {
             sheet.render();
         } else if (sheet.table && typeof sheet.table.render === 'function') {
             sheet.table.render();
         }
+        
+        // 3. WAIT FOR PAINT, THEN MOVE SCROLLBARS
+        requestAnimationFrame(() => {
+            if (requestId !== _viewportSyncRequestId) return; // a newer scroll request superseded this one
+
+            const vScrollEl = document.querySelector('.x-spreadsheet-scrollbar.vertical');
+            if (vScrollEl) vScrollEl.scrollHeight; // force layout calculation
+
+            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : targetY }); } catch (e) {
+                    console.warn('Error moving vertical scrollbar:', e);
+                }
+            }
+            if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : targetX }); } catch (e) {
+                    console.warn('Error moving horizontal scrollbar:', e);
+                }
+            }
+        });
     };
 
     applyViewport();
@@ -3416,26 +3419,45 @@ function handleSpreadsheetWheel(e) {
     const currentX = data.scroll && Number.isFinite(data.scroll.x) ? data.scroll.x : 0;
     const currentY = data.scroll && Number.isFinite(data.scroll.y) ? data.scroll.y : 0;
 
-    const targetX = Math.max(0, currentX + deltaX);
-    const targetY = Math.max(0, currentY + deltaY);
+    // RESYNC: If the engine's absolute position is more than 1 pixel off from our exact tracker 
+    // (e.g. the user used arrow keys or clicked a cell to jump), reset our exact tracker
+    if (exactScrollX === null || Math.abs(exactScrollX - currentX) > 1) {
+        exactScrollX = currentX;
+    }
+    if (exactScrollY === null || Math.abs(exactScrollY - currentY) > 1) {
+        exactScrollY = currentY;
+    }
+
+    // Accumulate the exact floating point fractions
+    exactScrollX += deltaX;
+    exactScrollY += deltaY;
+
+    // Prevent scrolling past the top/left edge
+    exactScrollX = Math.max(0, exactScrollX);
+    exactScrollY = Math.max(0, exactScrollY);
+
+    // Round only when communicating with the x-data-spreadsheet engine
+    const targetX = Math.round(exactScrollX);
+    const targetY = Math.round(exactScrollY);
 
     let needsRender = false;
 
-    // Apply exact pixel offsets to the internal x-data-spreadsheet engine
     if (deltaY !== 0 && typeof data.scrolly === 'function') {
         data.scrolly(targetY, () => { needsRender = true; });
+        if (Number.isFinite(data.scroll?.y)) exactScrollY = data.scroll.y; // resync to clamped truth immediately
     }
     if (deltaX !== 0 && typeof data.scrollx === 'function') {
         data.scrollx(targetX, () => { needsRender = true; });
+        if (Number.isFinite(data.scroll?.x)) exactScrollX = data.scroll.x;
     }
-
+    
     // Resync UI to match the new scroll coordinates
     if (needsRender) {
         if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (err) {console.error('Error moving vertical scrollbar:', err); }
+            try { sheet.verticalScrollbar.move( data.scroll.y); } catch (err) {console.error('Error moving vertical scrollbar:', err); }
         }
         if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            try { sheet.horizontalScrollbar.move(data.scroll.x); } catch (err) {console.error('Error moving horizontal scrollbar:', err); }
+            try { sheet.horizontalScrollbar.move( data.scroll.x); } catch (err) {console.error('Error moving horizontal scrollbar:', err); }
         }
 
         if (sheet.selector) {
