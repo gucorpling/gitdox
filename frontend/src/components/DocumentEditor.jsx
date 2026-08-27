@@ -19,7 +19,9 @@ import {
   normalizePreferredColumnOrder,
   normalizeBackgroundImageValue,
   normalizeFontFamily,
-  isSpreadsheetBackedMode
+  isSpreadsheetBackedMode,
+  getAllowedEditorModes,
+  isEditorModeAllowedForUser
 } from '../appShared';
 
 export default function DocumentEditor({ 
@@ -1129,14 +1131,20 @@ export default function DocumentEditor({
     && !isLoadingGithubCommitMessage
     && !isRestoringFromGithub;
     
-  const modeSelectOptions = useMemo(() => {
+  const allowedEditorModes = useMemo(() => getAllowedEditorModes(user, editorOptions), [user, editorOptions]);
+  const filteredModeOptions = useMemo(() => {
+    const baseOptions = editorOptions.filter((option) => allowedEditorModes.includes(String(option?.mode || option?.key || '').trim().toLowerCase()));
+    if (!baseOptions.length) return [];
     const currentMode = doc?.mode;
-    if (!currentMode) return editorOptions;
-    if (editorOptions.some((option) => option.mode === currentMode)) {
-      return editorOptions;
+    if (!currentMode) return baseOptions;
+    if (baseOptions.some((option) => option.mode === currentMode)) {
+      return baseOptions;
     }
-    return [...editorOptions, { key: `legacy-${currentMode}`, mode: currentMode, label: currentMode }];
-  }, [doc?.mode, editorOptions]);
+    return [...baseOptions, { key: `legacy-${currentMode}`, mode: currentMode, label: currentMode }];
+  }, [doc?.mode, editorOptions, allowedEditorModes]);
+  const showModeDropdown = filteredModeOptions.length > 1;
+  const isCurrentModeAllowed = isEditorModeAllowedForUser(user, doc?.mode, editorOptions);
+  const modeSelectOptions = filteredModeOptions;
   
   const githubModeKind = doc?.mode === 'xml' ? 'xml' : 'spreadsheet';
   const spannotatorMetaDict = useMemo(() => buildMetadataObject(metadata), [metadata, buildMetadataObject]);
@@ -1414,13 +1422,20 @@ export default function DocumentEditor({
           className={`rounded-xl shadow-sm border border-slate-200 flex flex-col relative h-[800px] overflow-hidden ${effectiveEditorSurfaceStyle ? '' : 'bg-white'}`}
           style={effectiveEditorSurfaceStyle}
         >
-          <div className="absolute top-2 right-4 z-10 bg-white rounded p-1 shadow-sm" style={{top: "-1px"}}>
-             <select className="text-xs bg-slate-100 border-none rounded p-1" value={doc.mode} onChange={e => autoSaveDocField('mode', e.target.value)}>
-              {modeSelectOptions.map((option) => (
-                <option key={option.key} value={option.mode}>{option.label}</option>
-              ))}
-            </select>
-          </div>
+          {!showModeDropdown && !isCurrentModeAllowed && (
+            <div className="absolute top-2 right-4 z-10 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 shadow-sm">
+              This document is in the {doc.mode} mode, but your account is not permitted to use that editor. Please contact an admin.
+            </div>
+          )}
+          {showModeDropdown && (
+            <div className="absolute top-2 right-4 z-10 bg-white rounded p-1 shadow-sm" style={{top: "-1px"}}>
+              <select className="text-xs bg-slate-100 border-none rounded p-1" value={doc.mode} onChange={e => autoSaveDocField('mode', e.target.value)}>
+                {modeSelectOptions.map((option) => (
+                  <option key={option.key} value={option.mode}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
           
           {doc.mode === 'xml' ? (
             <div className="flex-1 bg-white pt-10 flex flex-col min-h-0">

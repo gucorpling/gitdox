@@ -181,6 +181,85 @@ export const normalizeConfiguredEditors = (value) => {
   return Array.from(normalizedByMode.values());
 };
 
+export const normalizeAllowedEditors = (value, editorOptions = []) => {
+  const configuredModes = Array.isArray(editorOptions) && editorOptions.length > 0
+    ? editorOptions.map((option) => String(option?.mode || option?.key || '').trim().toLowerCase()).filter(Boolean)
+    : DEFAULT_EDITOR_OPTIONS.map((option) => option.mode);
+
+  const normalizedModes = Array.from(new Set(configuredModes));
+  if (normalizedModes.length === 0) return {};
+
+  const parseSource = () => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return {};
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch {
+        // ignore invalid JSON; fall through below
+      }
+      return Object.fromEntries(
+        trimmed.split(',').map((token) => [String(token).trim().toLowerCase(), true]).filter(([mode]) => mode)
+      );
+    }
+    if (Array.isArray(value)) {
+      return Object.fromEntries(value.map((mode) => [String(mode).trim().toLowerCase(), true]).filter(([mode]) => mode));
+    }
+    return {};
+  };
+
+  const source = parseSource();
+  return normalizedModes.reduce((acc, mode) => {
+    const hasExplicitValue = Object.prototype.hasOwnProperty.call(source, mode);
+    const rawValue = hasExplicitValue ? source[mode] : true;
+    acc[mode] = rawValue === true || rawValue === 'true' || rawValue === 1 || rawValue === '1';
+    return acc;
+  }, {});
+};
+
+export const getAllowedEditorModes = (user, editorOptions = []) => {
+  const configuredModes = Array.isArray(editorOptions) && editorOptions.length > 0
+    ? editorOptions.map((option) => String(option?.mode || option?.key || '').trim().toLowerCase()).filter(Boolean)
+    : DEFAULT_EDITOR_OPTIONS.map((option) => option.mode);
+
+  if (!configuredModes.length) return [];
+  if ((user?.adminlevel ?? 0) >= 2) return configuredModes;
+
+  const allowedEditors = normalizeAllowedEditors(user?.allowed_editors, editorOptions);
+  return configuredModes.filter((mode) => allowedEditors[mode] !== false);
+};
+
+export const isEditorModeAllowedForUser = (user, mode, editorOptions = []) => {
+  const normalizedMode = String(mode || '').trim().toLowerCase();
+  if (!normalizedMode) return true;
+  if ((user?.adminlevel ?? 0) >= 2) return true;
+
+  const allowedModes = getAllowedEditorModes(user, editorOptions);
+  return allowedModes.includes(normalizedMode);
+};
+
+export const normalizeAllowedCorporaPattern = (value) => {
+  if (value === undefined || value === null || value === '') return '.*';
+  const normalized = String(value).trim();
+  return normalized || '.*';
+};
+
+export const isCorpusAllowedForUser = (user, corpus) => {
+  const adminLevel = Number(user?.adminlevel ?? 0);
+  if (adminLevel >= 2) return true;
+  const corpusName = String(corpus || '').trim();
+  if (!corpusName) return true;
+
+  const pattern = normalizeAllowedCorporaPattern(user?.allowed_corpora);
+  try {
+    return new RegExp(pattern).test(corpusName);
+  } catch {
+    return true;
+  }
+};
+
 export const getDefaultEditorMode = (editorOptions) => {
   if (Array.isArray(editorOptions) && editorOptions.length > 0) {
     return editorOptions[0].mode;

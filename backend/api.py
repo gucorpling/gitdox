@@ -151,6 +151,97 @@ def get_default_document_mode(project_config: Optional[dict]) -> str:
                 return normalized
     return "xml"
 
+
+def get_configured_editor_modes(project_config: Optional[dict] = None) -> List[str]:
+    editors = project_config.get("instance", {}).get("editors") if isinstance(project_config, dict) else None
+    if isinstance(editors, dict):
+        modes = [normalize_document_mode(raw_key) for raw_key in editors.keys()]
+        cleaned = [mode for mode in modes if mode]
+        if cleaned:
+            return cleaned
+    return list(VALID_DOCUMENT_MODES)
+
+
+def normalize_allowed_corpora_pattern(value: Any) -> str:
+    if value is None:
+        return ".*"
+    pattern = str(value).strip()
+    return pattern if pattern else ".*"
+
+
+def normalize_allowed_editors(value: Any, project_config: Optional[dict] = None) -> dict:
+    modes = get_configured_editor_modes(project_config)
+    if not modes:
+        modes = list(VALID_DOCUMENT_MODES)
+
+    if value in (None, "", {}):
+        return {mode: True for mode in modes}
+
+    parsed_value = value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return {mode: True for mode in modes}
+        try:
+            parsed_value = json.loads(stripped)
+        except Exception:
+            parsed_value = {}
+
+    if isinstance(parsed_value, list):
+        allowed = {normalize_document_mode(str(mode)): True for mode in parsed_value if normalize_document_mode(str(mode))}
+        return {mode: bool(allowed.get(mode, False)) for mode in modes}
+
+    if isinstance(parsed_value, dict):
+        normalized = {}
+        for mode in modes:
+            raw_value = parsed_value.get(mode)
+            if raw_value is None:
+                raw_value = parsed_value.get(mode.lower())
+            if raw_value is None and mode in parsed_value:
+                raw_value = parsed_value[mode]
+            if raw_value is None:
+                normalized[mode] = True
+            else:
+                normalized[mode] = bool(raw_value) if not isinstance(raw_value, str) else raw_value.strip().lower() not in {"", "false", "0"}
+        return normalized
+
+    return {mode: True for mode in modes}
+
+
+def user_has_corpus_access(user_data: Optional[dict], corpus: Optional[str]) -> bool:
+    if not user_data:
+        return True
+    if int(user_data.get("adminlevel", 0)) >= 2:
+        return True
+    if not corpus:
+        return True
+    pattern = normalize_allowed_corpora_pattern(user_data.get("allowed_corpora"))
+    try:
+        return bool(re.search(pattern, str(corpus)))
+    except re.error:
+        return True
+
+
+def user_has_editor_access(user_data: Optional[dict], mode: Optional[str], project_config: Optional[dict] = None) -> bool:
+    if not user_data:
+        return True
+    if int(user_data.get("adminlevel", 0)) >= 2:
+        return True
+    normalized_mode = normalize_document_mode(mode)
+    if not normalized_mode:
+        return True
+    allowed_editors = normalize_allowed_editors(user_data.get("allowed_editors"), project_config)
+    return bool(allowed_editors.get(normalized_mode, True))
+
+
+def can_manage_user(current_user: Optional[dict], target_user: Optional[dict]) -> bool:
+    if not current_user or not target_user:
+        return False
+    current_level = int(current_user.get("adminlevel", 0) or 0)
+    target_level = int(target_user.get("adminlevel", 0) or 0)
+    return current_level >= target_level
+
+
 # --- Pydantic Models for Data Validation ---
 ALLOWED_VALIDATION_DOMAINS = {"xml", "spreadsheet", "metadata"}
 COMMON_IMPORT_EXTENSIONS = (".xml", ".sgml", ".tt")
@@ -206,6 +297,8 @@ class UserCreate(BaseModel):
     email: str
     git_username: Optional[str] = ""
     token: Optional[str] = ""
+    allowed_corpora: Optional[str] = ""
+    allowed_editors: Optional[dict] = {}
 
 
 class UserUpdate(BaseModel):
@@ -215,6 +308,8 @@ class UserUpdate(BaseModel):
     email: str
     git_username: Optional[str] = ""
     token: Optional[str] = ""
+    allowed_corpora: Optional[str] = ""
+    allowed_editors: Optional[dict] = {}
 
 
 class PasswordChange(BaseModel):
@@ -946,6 +1041,8 @@ def get_current_user(token: Optional[str] = Header(None)) -> dict:
 
     # Convert adminlevel back to int and inject project context
     user_data['adminlevel'] = int(user_data.get('adminlevel', 0))
+    user_data['allowed_corpora'] = normalize_allowed_corpora_pattern(user_data.get('allowed_corpora'))
+    user_data['allowed_editors'] = normalize_allowed_editors(user_data.get('allowed_editors'), get_project_config(project_name))
     user_data['project_name'] = project_name
     return user_data
 
@@ -1028,11 +1125,14 @@ def authenticate(login: AuthLogin):
     r.set(f"token:{token}", f"{login.project_name}:{login.username}")
     r.hset(user_key, "token_session", token)  
 
+    project_config = get_project_config(login.project_name)
     return {
-        "token": token, 
-        "username": login.username, 
-        "project_name": login.project_name, 
-        "adminlevel": int(user_data.get('adminlevel', 0))
+        "token": token,
+        "username": login.username,
+        "project_name": login.project_name,
+        "adminlevel": int(user_data.get('adminlevel', 0)),
+        "allowed_corpora": normalize_allowed_corpora_pattern(user_data.get('allowed_corpora')),
+        "allowed_editors": normalize_allowed_editors(user_data.get('allowed_editors'), project_config)
     }
 
 
@@ -1048,6 +1148,8 @@ def list_users(project_name: str, current_user: dict = Depends(require_admin(1))
         user_data = r.hgetall(key)
         user_data.pop("password", None)
         user_data.pop("token_session", None)
+        user_data["allowed_corpora"] = normalize_allowed_corpora_pattern(user_data.get("allowed_corpora"))
+        user_data["allowed_editors"] = normalize_allowed_editors(user_data.get("allowed_editors"), get_project_config(project_name))
         users.append(user_data)
     return users
 
@@ -1064,6 +1166,8 @@ def create_user(project_name: str, user: UserCreate, current_user: dict = Depend
 
     user_dict = user.model_dump()
     user_dict['password'] = hash_password(user_dict['password'])
+    user_dict['allowed_corpora'] = normalize_allowed_corpora_pattern(user_dict.get('allowed_corpora'))
+    user_dict['allowed_editors'] = json.dumps(normalize_allowed_editors(user_dict.get('allowed_editors'), get_project_config(project_name)))
     r.hset(user_key, mapping=user_dict)
     return {"message": f"User {user.username} created successfully"}
 
@@ -1078,11 +1182,20 @@ def update_user(project_name: str, username: str, data: UserUpdate, current_user
     if not r.exists(user_key):
         raise HTTPException(status_code=404, detail="User not found")
 
+    target_user = r.hgetall(user_key)
+    if not can_manage_user(current_user, target_user):
+        raise HTTPException(status_code=403, detail="You cannot modify a user with a higher admin level than your own.")
+
     user_dict = data.model_dump(exclude_unset=True)
     if user_dict.get('password'):
         user_dict['password'] = hash_password(user_dict['password'])
     else:
         user_dict.pop('password', None)
+
+    if 'allowed_corpora' in user_dict:
+        user_dict['allowed_corpora'] = normalize_allowed_corpora_pattern(user_dict.get('allowed_corpora'))
+    if 'allowed_editors' in user_dict:
+        user_dict['allowed_editors'] = json.dumps(normalize_allowed_editors(user_dict.get('allowed_editors'), get_project_config(project_name)))
 
     r.hset(user_key, mapping=user_dict)
     return {"message": f"User {username} updated successfully"}
@@ -1100,6 +1213,10 @@ def delete_user(project_name: str, username: str, current_user: dict = Depends(r
     user_key = f"user:{project_name}:{username}"
     if not r.exists(user_key):
         raise HTTPException(status_code=404, detail="User not found")
+
+    target_user = r.hgetall(user_key)
+    if not can_manage_user(current_user, target_user):
+        raise HTTPException(status_code=403, detail="You cannot delete a user with a higher admin level than your own.")
 
     reassigned_docs = 0
     # Optimised to only check docs belonging to this specific project
@@ -1381,8 +1498,15 @@ def add_document(
     doc_id = _allocate_project_doc_id(doc.project)
     doc_key = f"doc:{doc_id}"
 
-    doc_dict = doc.model_dump()
     project_config = get_project_config(doc.project)
+    if int(current_user.get("adminlevel", 0)) < 2:
+        if not user_has_corpus_access(current_user, doc.corpus):
+            raise HTTPException(status_code=403, detail="This user is not allowed to create documents in that corpus.")
+        doc_mode = normalize_document_mode(doc.mode) or get_default_document_mode(project_config)
+        if not user_has_editor_access(current_user, doc_mode, project_config):
+            raise HTTPException(status_code=403, detail=f"This user is not allowed to use the '{doc_mode}' editor mode.")
+
+    doc_dict = doc.model_dump()
     doc_dict["mode"] = normalize_document_mode(doc_dict.get("mode")) or get_default_document_mode(project_config)
     doc_dict["id"] = doc_id
     doc_dict["assigned"] = doc_dict.get("assigned") or current_user.get("username", "admin")
@@ -1414,8 +1538,9 @@ def list_documents(project_name: str, current_user: dict = Depends(require_admin
     if not doc_ids:
         return []
 
-    fields = ["id", "metadata", "validation", "mode", "status", "docname", "corpus", "repo", "assigned", "last_modified_at", "last_modified_by"] 
-    
+    project_config = get_project_config(project_name)
+    fields = ["id", "metadata", "validation", "mode", "status", "docname", "corpus", "repo", "assigned", "last_modified_at", "last_modified_by"]
+
     pipe = r.pipeline()
     for doc_id in doc_ids:
         pipe.hmget(f"doc:{doc_id}", fields)
@@ -1425,15 +1550,13 @@ def list_documents(project_name: str, current_user: dict = Depends(require_admin
     
     docs = []
     for doc_id, values in zip(doc_ids, results):
-        # values will be [id_val, metadata_val, validation_val, ...]
-        # If the hash didn't exist, values might be [None, None, None]
-        if any(values): 
-            # Zip the field names with the returned values to recreate the dict
+        if any(values):
             doc_data = dict(zip(fields, values))
             doc_data["metadata"] = _load_json_field(doc_data.get("metadata"), {})
             doc_data["validation"] = _load_json_field(doc_data.get("validation"), {})
-            docs.append(doc_data)
-            
+            if user_has_corpus_access(current_user, doc_data.get("corpus")):
+                docs.append(doc_data)
+
     return docs
 
 
@@ -1478,6 +1601,13 @@ def update_document(
 
     old_corpus = old_doc_data.get("corpus")
     project = old_doc_data.get("project")
+    project_config = get_project_config(project)
+    if int(current_user.get("adminlevel", 0)) < 2:
+        if not user_has_corpus_access(current_user, old_doc_data.get("corpus")):
+            raise HTTPException(status_code=403, detail="This user is not allowed to edit documents in that corpus.")
+        requested_mode = normalize_document_mode(data.mode) or old_doc_data.get("mode") or get_default_document_mode(project_config)
+        if not user_has_editor_access(current_user, requested_mode, project_config):
+            raise HTTPException(status_code=403, detail=f"This user is not allowed to use the '{requested_mode}' editor mode.")
 
     # Level-0 users can update status and mode only.
     if int(current_user.get("adminlevel", 0)) < 1:
@@ -1529,6 +1659,15 @@ def rename_document(doc_id: str, data: DocumentRename, current_user: dict = Depe
     if not r.exists(doc_key):
         raise HTTPException(status_code=404, detail="Document not found")
 
+    if int(current_user.get("adminlevel", 0)) < 2:
+        doc_data = r.hgetall(doc_key)
+        project_config = get_project_config(doc_data.get("project"))
+        if not user_has_corpus_access(current_user, doc_data.get("corpus")):
+            raise HTTPException(status_code=403, detail="This user is not allowed to edit documents in that corpus.")
+        current_mode = normalize_document_mode(doc_data.get("mode")) or get_default_document_mode(project_config)
+        if not user_has_editor_access(current_user, current_mode, project_config):
+            raise HTTPException(status_code=403, detail=f"This user is not allowed to use the '{current_mode}' editor mode.")
+
     r.hset(doc_key, "docname", data.new_docname)
     return {"message": "Document renamed successfully"}
 
@@ -1566,6 +1705,15 @@ def write_document_contents(
     doc_key = f"doc:{doc_id}"
     if not r.exists(doc_key):
         raise HTTPException(status_code=404, detail="Document not found")
+
+    doc_data = r.hgetall(doc_key)
+    if int(current_user.get("adminlevel", 0)) < 2:
+        project_config = get_project_config(doc_data.get("project"))
+        if not user_has_corpus_access(current_user, doc_data.get("corpus")):
+            raise HTTPException(status_code=403, detail="This user is not allowed to edit documents in that corpus.")
+        current_mode = normalize_document_mode(doc_data.get("mode")) or get_default_document_mode(project_config)
+        if not user_has_editor_access(current_user, current_mode, project_config):
+            raise HTTPException(status_code=403, detail=f"This user is not allowed to use the '{current_mode}' editor mode.")
 
     # Concurrency check: if client provided a timestamp, compare with current DB value and reject if DB is newer.
     current_db_time = r.hget(doc_key, "last_modified_at")

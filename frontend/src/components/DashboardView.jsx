@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown, GitBranch } from 'lucide-react';
-import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath, getDefaultEditorMode, getValidationSummary, normalizeDashboardViewState, areColumnFiltersEqual } from '../appShared';
+import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown, GitBranch, Ban } from 'lucide-react';
+import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath, getDefaultEditorMode, getValidationSummary, normalizeDashboardViewState, areColumnFiltersEqual, isEditorModeAllowedForUser, isCorpusAllowedForUser } from '../appShared';
 
 const getDocumentFieldValue = (doc, field) => {
   if (field === 'validation') {
@@ -146,6 +146,7 @@ const DocumentRow = React.memo(({
   canEditAssignee,
   user,
   frontendBasePath,
+  editorOptions,
   menuRef,
   onToggleMenu,
   onUpdateField,
@@ -179,6 +180,7 @@ const DocumentRow = React.memo(({
   const safeStatus = String(doc.status || '').trim();
   const statusColors = statusPalette[safeStatus] || statusPalette[DEFAULT_STATUS_CATEGORIES[0]];
   const modeLabel = editorLabelByMode[doc.mode] || doc.mode;
+  const isModeBlocked = !isEditorModeAllowedForUser(user, doc?.mode, editorOptions);
   const statusButtonStyle = {
     backgroundColor: statusColors?.backgroundColor || '#475569',
     borderColor: statusColors?.borderColor || '#334155',
@@ -299,19 +301,28 @@ const DocumentRow = React.memo(({
       </td>
       <td className="p-4 text-right">
         <div className="inline-flex items-center gap-2 whitespace-nowrap">
-          <a
-            href={buildFrontendPath(`/docs/${encodeURIComponent(String(doc.id))}`, frontendBasePath)}
-            onClick={(e) => {
-              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                e.preventDefault();
-                openDoc(doc.id);
-              }
-            }}
-            className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 p-2"
-            title={`Open document ${doc.id}`}
-          >
-            <Edit size={18} />
-          </a>
+          {isModeBlocked ? (
+            <span
+              className="inline-flex items-center justify-center text-red-500 p-2"
+              title={`This document is in the ${doc.mode || 'unknown'} mode, but your account does not allow that editor. Please contact an admin if you need access.`}
+            >
+              <Ban size={18} />
+            </span>
+          ) : (
+            <a
+              href={buildFrontendPath(`/docs/${encodeURIComponent(String(doc.id))}`, frontendBasePath)}
+              onClick={(e) => {
+                if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                  e.preventDefault();
+                  openDoc(doc.id);
+                }
+              }}
+              className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 p-2"
+              title={`Open document ${doc.id}`}
+            >
+              <Edit size={18} />
+            </a>
+          )}
           <button disabled={user.adminlevel <= 1} onClick={() => onDelete(doc.id)} className="text-red-500 hover:text-red-700 p-2 disabled:opacity-30">
             <Trash2 size={18} />
           </button>
@@ -487,8 +498,12 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, isN
     }
   };
 
+  const visibleDocuments = useMemo(() => {
+    return documents.filter((doc) => isCorpusAllowedForUser(user, doc?.corpus));
+  }, [documents, user]);
+
   const filteredAndSortedDocuments = useMemo(() => {
-    const filtered = documents.filter((doc) => {
+    const filtered = visibleDocuments.filter((doc) => {
       return Object.entries(columnFilters).every(([field, filterValue]) => {
         if (!filterValue) return true;
         return normalizedValue(getDocumentFieldValue(doc, field)).includes(normalizedValue(filterValue));
@@ -507,7 +522,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, isN
 
       return compareField(a, b, 'id', 'asc');
     });
-  }, [documents, columnFilters, primarySort]);
+  }, [visibleDocuments, columnFilters, primarySort]);
 
   const hasPendingValidations = useMemo(
     () => documents.some((doc) => {
@@ -747,6 +762,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, isN
                   canEditAssignee={canEditAssignee}
                   user={user}
                   frontendBasePath={frontendBasePath}
+                  editorOptions={editorOptions}
                   menuRef={statusMenuRef}
                   onToggleMenu={(id) => setOpenStatusMenuDocId((prev) => (prev === id ? null : id))}
                   onUpdateField={(docToUpdate, field, value) => {

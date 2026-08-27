@@ -1,15 +1,26 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { Plus, Trash2, Edit, X, Upload, Download, Shield, ShieldPlus, ArrowUpFromLine, User } from 'lucide-react';
+import { Plus, Trash2, Edit, X, Upload, Download, Shield, ShieldPlus, ArrowUpFromLine, User, TriangleAlert } from 'lucide-react';
 import {
   API_ROOT,
   DEFAULT_STATUS_CATEGORIES,
   EMPTY_VALIDATION,
   formatStatusCategoryLabel,
   normalizeCssStyleValue,
-  normalizeStatusCategories
+  normalizeStatusCategories,
+  normalizeAllowedEditors,
+  normalizeAllowedCorporaPattern,
+  getAllowedEditorModes
 } from '../appShared';
 
-export default function AdminView({ apiCall, user, token, projectName, isNavDark, uiConfig = {}, statusCategories = [], refreshStatusCategories }) {
+const buildDefaultAllowedEditors = (editorOptions = []) => {
+  const configuredModes = Array.isArray(editorOptions) && editorOptions.length > 0
+    ? editorOptions.map((option) => String(option?.mode || option?.key || '').trim().toLowerCase()).filter(Boolean)
+    : ['xml'];
+
+  return Object.fromEntries(configuredModes.map((mode) => [mode, true]));
+};
+
+export default function AdminView({ apiCall, user, token, projectName, isNavDark, uiConfig = {}, statusCategories = [], refreshStatusCategories, editorOptions = [] }) {
   const adminLevel = user?.adminlevel ?? 0;
   const canManageUsers = adminLevel >= 2;
   const canManageAssignments = adminLevel >= 1;
@@ -21,8 +32,19 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
 
   const [activeTab, setActiveTab] = useState(canManageUsers ? 'users' : canManageAssignments ? 'assignments' : 'validations');
   const [users, setUsers] = useState([]);
-  const [newUser, setNewUser] = useState({ username: '', password: '', realname: '', email: '', adminlevel: 0, git_username: '', token: '' });
+  const [newUser, setNewUser] = useState({
+    username: '',
+    password: '',
+    realname: '',
+    email: '',
+    adminlevel: 0,
+    git_username: '',
+    token: '',
+    allowed_corpora: '',
+    allowed_editors: buildDefaultAllowedEditors(editorOptions)
+  });
   const [userSort, setUserSort] = useState({ key: 'username', dir: 'asc' });
+  const [userPermissionWarning, setUserPermissionWarning] = useState('');
 
   const handleUserSort = (key) => {
     setUserSort((prev) => ({
@@ -314,32 +336,88 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
 
   const handleAddOrUpdateUser = async (e) => {
     e.preventDefault();
+    const payload = {
+      ...newUser,
+      allowed_corpora: normalizeAllowedCorporaPattern(newUser.allowed_corpora),
+      allowed_editors: normalizeAllowedEditors(newUser.allowed_editors, editorOptions)
+    };
+
+    const noEditorAccess = (payload.adminlevel ?? 0) < 2 && Object.values(payload.allowed_editors || {}).every((enabled) => !enabled);
+    if (noEditorAccess) {
+      const confirmed = window.confirm('This user has no allowed editors. They will be unable to edit documents until an admin restores access. Continue?');
+      if (!confirmed) return;
+    }
+
     try {
       if (isEditing) {
-        await apiCall(`/projects/${projectName}/users/${newUser.username}`, 'PUT', newUser);
+        await apiCall(`/projects/${projectName}/users/${newUser.username}`, 'PUT', payload);
         setIsEditing(false);
       } else {
-        await apiCall(`/projects/${projectName}/users`, 'POST', newUser);
+        await apiCall(`/projects/${projectName}/users`, 'POST', payload);
       }
       await fetchUsers();
-      setNewUser({ username: '', password: '', realname: '', email: '', adminlevel: 0, git_username: '', token: '' });
+      setUserPermissionWarning('');
+      setNewUser({
+        username: '',
+        password: '',
+        realname: '',
+        email: '',
+        adminlevel: 0,
+        git_username: '',
+        token: '',
+        allowed_corpora: '',
+        allowed_editors: buildDefaultAllowedEditors(editorOptions)
+      });
     } catch (err) {
       console.warn("Error adding/updating user:", err);
+      setUserPermissionWarning(err?.message || 'Unable to save user permissions.');
     }
   };
 
   const handleEditClick = (u) => {
-    setNewUser({ ...u, password: '' });
+    if (!canManageUserRecord(u)) {
+      alert('You cannot edit a user with a higher admin level than your own.');
+      return;
+    }
+    setNewUser({
+      ...u,
+      password: '',
+      allowed_corpora: normalizeAllowedCorporaPattern(u?.allowed_corpora),
+      allowed_editors: normalizeAllowedEditors(u?.allowed_editors, editorOptions)
+    });
+    setUserPermissionWarning('');
     setIsEditing(true);
   };
 
   const cancelEdit = () => {
     setIsEditing(false);
-    setNewUser({ username: '', password: '', realname: '', email: '', adminlevel: 0, git_username: '', token: '' });
+    setUserPermissionWarning('');
+    setNewUser({
+      username: '',
+      password: '',
+      realname: '',
+      email: '',
+      adminlevel: 0,
+      git_username: '',
+      token: '',
+      allowed_corpora: '',
+      allowed_editors: buildDefaultAllowedEditors(editorOptions)
+    });
+  };
+
+  const canManageUserRecord = (targetUser) => {
+    const currentLevel = Number(adminLevel || 0);
+    const targetLevel = Number(targetUser?.adminlevel ?? 0);
+    return currentLevel >= targetLevel;
   };
 
   const handleDeleteUser = async (username) => {
     if (adminLevel < 3) return;
+    const targetUser = users.find((u) => u.username === username);
+    if (!canManageUserRecord(targetUser)) {
+      alert('You cannot delete a user with a higher admin level than your own.');
+      return;
+    }
     if (!confirm(`Delete user ${username}?`)) return;
     try {
       await apiCall(`/projects/${projectName}/users/${username}`, 'DELETE');
@@ -1267,7 +1345,50 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                 <label className="block text-slate-600 mb-1">GitHub token</label>
                 <input type="password" className="w-full border p-2 rounded" placeholder="Optional" value={newUser.token || ''} onChange={e=>setNewUser({...newUser, token: e.target.value})} />
               </div>
-              
+
+              <div>
+                <label className="block text-slate-600 mb-1">Allowed corpora (regex)</label>
+                <input
+                  className="w-full border p-2 rounded"
+                  placeholder=".*"
+                  value={newUser.allowed_corpora ?? ''}
+                  onChange={(e) => setNewUser((prev) => ({ ...prev, allowed_corpora: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 mb-1">Allowed editors</label>
+                <div className="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+                  {(Array.isArray(editorOptions) && editorOptions.length > 0 ? editorOptions : [{ key: 'xml', mode: 'xml', label: 'xml' }]).map((option) => {
+                    const mode = String(option?.mode || option?.key || '').trim().toLowerCase();
+                    if (!mode) return null;
+                    const isChecked = Boolean((newUser.allowed_editors || {})[mode] !== false);
+                    return (
+                      <label key={mode} className="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => setNewUser((prev) => ({
+                            ...prev,
+                            allowed_editors: {
+                              ...(prev.allowed_editors || {}),
+                              [mode]: e.target.checked
+                            }
+                          }))}
+                        />
+                        <span>{option?.label || mode}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {userPermissionWarning && (
+                <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {userPermissionWarning}
+                </div>
+              )}
+
               <div className="flex gap-2 mt-4">
                 <button type="submit" title="(manager/admin only)" className="flex items-center justify-center gap-1.5 flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700">
                   <span>{isEditing ? 'Update user' : 'Create user'}</span><Shield size={14} className="opacity-60" />
@@ -1310,9 +1431,19 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                     // Safely parse the level to an integer, defaulting to 0 if it's missing or invalid
                     const level = parseInt(u.adminlevel) || 0;
 
+                    const userAllowedEditors = normalizeAllowedEditors(u?.allowed_editors, editorOptions);
+                    const hasNoAvailableEditors = (parseInt(u.adminlevel, 10) ?? 0) < 2 && Object.values(userAllowedEditors).every((enabled) => !enabled);
+
                     return (
                       <tr key={u.username} onDoubleClick={() => handleEditClick(u)} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" title="Double click to edit">
-                        <td className="p-4 font-medium text-indigo-600 whitespace-nowrap">{u.username}</td>
+                        <td className="p-4 font-medium text-indigo-600 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {hasNoAvailableEditors && (
+                              <TriangleAlert size={16} className="text-amber-500" title="This user has no way of editing documents." />
+                            )}
+                            <span>{u.username}</span>
+                          </div>
+                        </td>
                         <td className="p-4 text-sm">{u.realname}</td>
                         <td className="p-4">
                           <span 

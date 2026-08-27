@@ -15,6 +15,9 @@ import {
   normalizeConfiguredEditors,
   normalizeStatusCategories,
   normalizeCssStyleValue,
+  getAllowedEditorModes,
+  isEditorModeAllowedForUser,
+  isCorpusAllowedForUser,
   EFFECTIVE_FRONTEND_BASE_PATH,
   isDarkColor,
   EMPTY_DASHBOARD_FILTERS,
@@ -794,7 +797,7 @@ export default function App() {
         {!token && <LoginView setToken={setToken} setUser={setUser} onLoginSuccess={handleLoginSuccess} apiCall={apiCall} projectName={projectName} isMainDark={isMainDark} />}
         {token && currentView === 'dashboard' && <DashboardView apiCall={apiCall} user={user} openDoc={navigateToDocument} projectName={projectName} isNavDark={isNavDark} uiConfig={appConfig?.ui || {}} dashboardViewState={dashboardViewState} dashboardRestoreRequestId={dashboardRestoreRequestId} onDashboardViewStateChange={handleDashboardViewStateChange} statusCategories={statusCategories} editorOptions={editorOptions} isMainDark={isMainDark} frontendBasePath={EFFECTIVE_FRONTEND_BASE_PATH}/>}
         {token && currentView.startsWith('document:') && <DocumentEditor apiCall={apiCall} docId={currentView.split(':')[1]} onCorpusChange={setActiveDocCorpus} user={user} projectName={projectName} mutationTools={toolConfig} spannotatorConfig={appConfig?.entities || {}} dendroidConfig={appConfig?.dendroid || {}} spreadsheetConfig={appConfig?.spreadsheet || {}} editorOptions={editorOptions} editorFonts={{ ui: appConfig?.ui, xml: appConfig?.xml, entities: appConfig?.entities, spreadsheet: appConfig?.spreadsheet }} spreadsheetColumnOrderConfig={spreadsheetColumnOrder} xmlTagCompletion={xmlTagCompletion} statusCategories={statusCategories} isMainDark={isMainDark} isAppConfigLoaded={isAppConfigLoaded} />}
-        {token && currentView === 'admin' && <AdminView apiCall={apiCall} user={user} token={token} projectName={projectName} isNavDark={isNavDark} uiConfig={appConfig?.ui || {}} statusCategories={statusCategories} refreshStatusCategories={refreshStatusCategories} isMainDark={isMainDark} />}
+        {token && currentView === 'admin' && <AdminView apiCall={apiCall} user={user} token={token} projectName={projectName} isNavDark={isNavDark} uiConfig={appConfig?.ui || {}} statusCategories={statusCategories} refreshStatusCategories={refreshStatusCategories} isMainDark={isMainDark} editorOptions={editorOptions} />}
       </main>
     </div>
   );

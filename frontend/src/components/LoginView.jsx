@@ -20,16 +20,20 @@ export default function LoginView({ setToken, setUser, onLoginSuccess, apiCall, 
       
       // Store the project_name in state to maintain the user's current context
       localStorage.setItem('auth_user', JSON.stringify({ 
-        username: data.username, 
+        username: data.username,
         adminlevel: data.adminlevel,
-        project_name: data.project_name
+        project_name: data.project_name,
+        allowed_corpora: data.allowed_corpora || '.*',
+        allowed_editors: data.allowed_editors || {}
       }));
-      
+
       setToken(data.token);
-      setUser({ 
-        username: data.username, 
+      setUser({
+        username: data.username,
         adminlevel: data.adminlevel,
-        project_name: data.project_name
+        project_name: data.project_name,
+        allowed_corpora: data.allowed_corpora || '.*',
+        allowed_editors: data.allowed_editors || {}
       });
 
       if (typeof onLoginSuccess === 'function') {
