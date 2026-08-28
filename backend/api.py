@@ -344,7 +344,7 @@ class DocumentUpdate(BaseModel):
     mode: str
     status: str
     assigned: str
-    metadata: dict
+    metadata: Optional[dict] = None
 
 
 class DocumentRename(BaseModel):
@@ -1528,9 +1528,26 @@ def add_document(
     }
 
 
+def _summarize_validation(validation: dict) -> dict:
+    """Strips passing rule results, keeping only rule count and failing rules with violations."""
+    if not isinstance(validation, dict):
+        return validation
+    results = validation.get("results") or []
+    failing_results = [r for r in results if isinstance(r, dict) and r.get("violations")]
+    return {
+        "status": validation.get("status"),
+        "rules_run": validation.get("rules_run"),
+        "results": failing_results
+    }
+
+
 @app.get("/projects/{project_name}/documents")
-def list_documents(project_name: str, current_user: dict = Depends(require_admin(0))):
-    """Lists all documents for a project."""
+def list_documents(project_name: str, summary: bool = False, current_user: dict = Depends(require_admin(0))):
+    """Lists all documents for a project.
+
+    When `summary` is true, omits unused metadata and passing validation rules
+    to reduce payload size (used by the dashboard document list view).
+    """
     if current_user.get('project_name') != project_name: 
         raise HTTPException(status_code=403, detail="Access denied to this project")
     
@@ -1539,7 +1556,9 @@ def list_documents(project_name: str, current_user: dict = Depends(require_admin
         return []
 
     project_config = get_project_config(project_name)
-    fields = ["id", "metadata", "validation", "mode", "status", "docname", "corpus", "repo", "assigned", "last_modified_at", "last_modified_by"]
+    fields = ["id", "validation", "mode", "status", "docname", "corpus", "repo", "assigned", "last_modified_at", "last_modified_by"]
+    if not summary:
+        fields.insert(1, "metadata")
 
     pipe = r.pipeline()
     for doc_id in doc_ids:
@@ -1552,8 +1571,11 @@ def list_documents(project_name: str, current_user: dict = Depends(require_admin
     for doc_id, values in zip(doc_ids, results):
         if any(values):
             doc_data = dict(zip(fields, values))
-            doc_data["metadata"] = _load_json_field(doc_data.get("metadata"), {})
+            if not summary:
+                doc_data["metadata"] = _load_json_field(doc_data.get("metadata"), {})
             doc_data["validation"] = _load_json_field(doc_data.get("validation"), {})
+            if summary:
+                doc_data["validation"] = _summarize_validation(doc_data["validation"])
             if user_has_corpus_access(current_user, doc_data.get("corpus")):
                 docs.append(doc_data)
 
@@ -1627,7 +1649,7 @@ def update_document(
                 )
 
         old_metadata = _load_json_field(old_doc_data.get("metadata"), {})
-        new_metadata = data.metadata if isinstance(data.metadata, dict) else {}
+        new_metadata = old_metadata if data.metadata is None else data.metadata
         if old_metadata != new_metadata:
             raise HTTPException(
                 status_code=403,
@@ -1635,7 +1657,11 @@ def update_document(
             )
 
     data_dict = data.model_dump()
-    data_dict["metadata"] = _dump_json_field(data_dict.get("metadata", {}))
+    # metadata omitted (e.g. by callers using the slim document list) keeps the existing value
+    if data.metadata is None:
+        data_dict["metadata"] = old_doc_data.get("metadata", "{}")
+    else:
+        data_dict["metadata"] = _dump_json_field(data_dict.get("metadata", {}))
 
     r.hset(doc_key, mapping=data_dict)
 

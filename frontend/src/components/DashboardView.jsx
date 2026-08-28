@@ -349,7 +349,7 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, isN
 
   const fetchDocs = useCallback(async () => {
     try {
-      const data = await apiCall(`/projects/${projectName}/documents`);
+      const data = await apiCall(`/projects/${projectName}/documents?summary=true`);
       setDocuments(data);
     } catch (err) {
       console.warn("Error fetching documents:", err);
@@ -596,20 +596,6 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, isN
     return labels.length > 0 ? labels.join('/') : 'mode';
   }, [editorOptions]);
 
-  const parseMetadataForUpdate = (metadata) => {
-    if (!metadata) return {};
-    if (typeof metadata === 'string') {
-      try {
-        const parsed = JSON.parse(metadata);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-      } catch (err) {
-        console.warn("Failed to parse metadata JSON string:", err);
-        return {};
-      }
-    }
-    return typeof metadata === 'object' ? metadata : {};
-  };
-
   const handleInlineDocumentFieldUpdate = async (doc, field, value) => {
     if (!doc || doc[field] === value) return;
 
@@ -620,14 +606,15 @@ export default function DashboardView({ apiCall, user, openDoc, projectName, isN
     setSavingFieldKeys((prev) => (prev.includes(savingFieldKey) ? prev : [...prev, savingFieldKey]));
 
     try {
+      // metadata is omitted here (the dashboard's slim document list doesn't fetch it); the
+      // backend preserves the document's existing metadata when the field is left out.
       const response = await apiCall(`/documents/${doc.id}`, 'PUT', {
         corpus: optimisticDoc.corpus,
         docname: optimisticDoc.docname,
         repo: optimisticDoc.repo || '',
         mode: optimisticDoc.mode,
         status: optimisticDoc.status,
-        assigned: optimisticDoc.assigned,
-        metadata: parseMetadataForUpdate(optimisticDoc.metadata)
+        assigned: optimisticDoc.assigned
       });
 
       const persistedDoc = response?.validation
