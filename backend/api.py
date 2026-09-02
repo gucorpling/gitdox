@@ -1155,10 +1155,13 @@ def list_users(project_name: str, current_user: dict = Depends(require_admin(1))
 
 
 @app.post("/projects/{project_name}/users")
-def create_user(project_name: str, user: UserCreate, current_user: dict = Depends(require_admin(3))):
-    """Creates a new user in a project (Requires AdminLevel > 2)."""
+def create_user(project_name: str, user: UserCreate, current_user: dict = Depends(require_admin(2))):
+    """Creates a new user in a project, up to the caller's admin level."""
     if current_user['project_name'] != project_name:
         raise HTTPException(status_code=403, detail="Access denied to this project")
+
+    if not can_manage_user(current_user, user.model_dump()):
+        raise HTTPException(status_code=403, detail="You cannot create a user with a higher admin level than your own.")
 
     user_key = f"user:{project_name}:{user.username}"
     if r.exists(user_key):
@@ -1202,8 +1205,8 @@ def update_user(project_name: str, username: str, data: UserUpdate, current_user
 
 
 @app.delete("/projects/{project_name}/users/{username}")
-def delete_user(project_name: str, username: str, current_user: dict = Depends(require_admin(3))):
-    """Deletes a user (Requires AdminLevel > 2)."""
+def delete_user(project_name: str, username: str, current_user: dict = Depends(require_admin(2))):
+    """Deletes a non-admin user when the caller has an equal or higher level."""
     if current_user['project_name'] != project_name:
         raise HTTPException(status_code=403, detail="Access denied to this project")
 

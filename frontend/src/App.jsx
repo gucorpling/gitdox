@@ -15,9 +15,6 @@ import {
   normalizeConfiguredEditors,
   normalizeStatusCategories,
   normalizeCssStyleValue,
-  getAllowedEditorModes,
-  isEditorModeAllowedForUser,
-  isCorpusAllowedForUser,
   EFFECTIVE_FRONTEND_BASE_PATH,
   isDarkColor,
   EMPTY_DASHBOARD_FILTERS,
@@ -429,12 +426,18 @@ export default function App() {
           data = { detail: responseText };
         }
       }
-      if (!response.ok) throw new Error(data.detail || 'API Error');
+      if (!response.ok) {
+        const error = new Error(data.detail || 'API Error');
+        error.status = response.status;
+        error.data = data;
+        throw error;
+      }
       return data;
     } catch (err) {
       if (err.message !== 'SILENT_ABORT') {
         setError(err.message);
-        if (err.message.includes('token')) handleLogout();
+        const isAuthError = err.status === 401 && !publicEndpoints.includes(endpoint);
+        if (isAuthError) handleLogout();
       }
       throw err;
     }

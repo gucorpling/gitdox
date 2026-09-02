@@ -8,8 +8,7 @@ import {
   normalizeCssStyleValue,
   normalizeStatusCategories,
   normalizeAllowedEditors,
-  normalizeAllowedCorporaPattern,
-  getAllowedEditorModes
+  normalizeAllowedCorporaPattern
 } from '../appShared';
 
 const buildDefaultAllowedEditors = (editorOptions = []) => {
@@ -24,7 +23,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
   const adminLevel = user?.adminlevel ?? 0;
   const canManageUsers = adminLevel >= 2;
   const canManageAssignments = adminLevel >= 1;
-  const canDeleteUsers = adminLevel >= 3;
+  const canDeleteUsers = adminLevel >= 2;
   const canManageValidations = adminLevel >= 1;
   const canBatchImportCorpus = adminLevel >= 2;
   const canRenameCorpus = adminLevel >= 1;
@@ -336,6 +335,10 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
 
   const handleAddOrUpdateUser = async (e) => {
     e.preventDefault();
+    if (!isEditing && Number(newUser.adminlevel) > Number(adminLevel)) {
+      setUserPermissionWarning('You cannot create a user with a higher admin level than your own.');
+      return;
+    }
     const payload = {
       ...newUser,
       allowed_corpora: normalizeAllowedCorporaPattern(newUser.allowed_corpora),
@@ -412,7 +415,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
   };
 
   const handleDeleteUser = async (username) => {
-    if (adminLevel < 3) return;
+    if (adminLevel < 2) return;
     const targetUser = users.find((u) => u.username === username);
     if (!canManageUserRecord(targetUser)) {
       alert('You cannot delete a user with a higher admin level than your own.');
@@ -1335,7 +1338,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                     <option value={0}>0 - Annotator</option>
                     <option value={1}>1 - Committer</option>
                     <option value={2}>2 - Manager</option>
-                    <option value={3}>3 - Admin</option>
+                    {adminLevel >= 3 && <option value={3}>3 - Admin</option>}
                   </select>
                 </div>
                 <div><label className="block text-slate-600 mb-1">GitHub username</label><input className="w-full border p-2 rounded" placeholder="Optional" value={newUser.git_username || ''} onChange={e=>setNewUser({...newUser, git_username: e.target.value})} /></div>
@@ -1464,9 +1467,9 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                         </td>
                         <td className="p-4 text-sm text-slate-500">{u.email}</td>
                         <td className="p-4 text-right space-x-2">
-                          {canDeleteUsers && (
+                          {canDeleteUsers && level < 3 && (
                             <button 
-                              title="Delete User (Admin only)" 
+                              title="Delete User"
                               onClick={() => handleDeleteUser(u.username)} 
                               className="inline-flex items-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-2.5 py-1.5 rounded-md border border-red-100 transition-colors"
                             >
@@ -1749,12 +1752,12 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                 <form onSubmit={handleValidationSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 text-sm">
                     <div>
-                      <label className="block text-slate-600 mb-1">Document</label>
-                      <input className="w-full border p-2 rounded" placeholder="Substring match" value={validationForm.document} onChange={e => setValidationForm({ ...validationForm, document: e.target.value })} />
-                    </div>
-                    <div>
                       <label className="block text-slate-600 mb-1">Corpus</label>
                       <input className="w-full border p-2 rounded" placeholder="Substring match" value={validationForm.corpus} onChange={e => setValidationForm({ ...validationForm, corpus: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 mb-1">Document</label>
+                      <input className="w-full border p-2 rounded" placeholder="Substring match" value={validationForm.document} onChange={e => setValidationForm({ ...validationForm, document: e.target.value })} />
                     </div>
                     <div>
                       <label className="block text-slate-600 mb-1">Domain</label>
@@ -1905,6 +1908,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
             <div className="mt-4 text-sm text-slate-600 border-t border-slate-200 pt-4">
               <ul className="list-disc pl-5 space-y-2">
                 <li><code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">exists</code> and <code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">!exists</code> mean that an annotation name must or must not exist (e.g. metadata name, spreadsheet column)</li>
+                <li><code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">tag ~ x|y|z</code> in XML mode means that the only allowed XML tags are &lt;x&gt;, &lt;y&gt;, and &lt;z&gt;</li>
                 <li><code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">col1 = val</code> and <code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">col1 ~ regex</code> mean that col1 must only have the value <code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">val</code>, or match the <code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">regex</code></li>
                 <li><code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">col1==col2</code> means the values in the same spans across col1 and col2 must match</li>
                 <li><code className="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded">col1 &gt; col2</code> means spreadsheet spans in col1 must <em>nest</em> spans in col2</li>
