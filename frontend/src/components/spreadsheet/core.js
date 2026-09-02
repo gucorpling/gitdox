@@ -8,6 +8,7 @@ let onFetchConfigs = null;
 let onImportSgml = null;
 let onImportResult = null;
 let onCanonicalized = null;
+let onFindOpen = null;
 let isDomBound = false;
 let isKeyboardBound = false;
 const MAX_COLUMN_COUNT = 26 * 26;
@@ -3118,6 +3119,7 @@ let findMatchIndex = -1;
 function openFindReplace() {
     const dialog = document.getElementById('find-replace-dialog');
     dialog.classList.remove('hidden');
+    onFindOpen?.();
     const input = document.getElementById('find-input');
     input.focus();
     input.select();
@@ -3793,7 +3795,7 @@ function unbindDomEvents() {
     isDomBound = false;
 }
 
-export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], allowDataTransfer: allowTransfer = true, allowExternalClipboard: allowClipboard = true, onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null } = {}) {
+export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], allowDataTransfer: allowTransfer = true, allowExternalClipboard: allowClipboard = true, onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null, onFindOpen: findOpen = null } = {}) {
     configuredSpreadsheetFontFamily = normalizeSpreadsheetFontFamily(fontFamily);
     currentPreferredColumnOrder = Array.isArray(preferredColumnOrder) ? preferredColumnOrder : []; 
     allowDataTransfer = Boolean(allowTransfer);
@@ -3805,6 +3807,7 @@ export function createSpreadsheetCore({ initialValue = '', fontFamily = null, pr
     onFetchConfigs = fetchConfigs;
     onImportSgml = importSgml;
     onImportResult = importResult;
+    onFindOpen = findOpen;
     exportConfigNames = [];
     exportConfigsLoaded = false;
     bindDomEvents();
@@ -3989,6 +3992,7 @@ export function createSpreadsheetCore({ initialValue = '', fontFamily = null, pr
             onFetchConfigs = null;
             onImportSgml = null;
             onImportResult = null;
+            onFindOpen = null;
             exportConfigNames = [];
             exportConfigsLoaded = false;
             unbindDomEvents();

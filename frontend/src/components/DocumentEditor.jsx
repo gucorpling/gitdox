@@ -1277,6 +1277,11 @@ export default function DocumentEditor({
     spreadsheetEditorRef.current?.focusCell?.(cellRef);
   }, []);
 
+  const [validationBadgeCollapseSignal, setValidationBadgeCollapseSignal] = useState(0);
+  const handleFindOpen = useCallback(() => {
+    setValidationBadgeCollapseSignal((signal) => signal + 1);
+  }, []);
+
   const handleInsertXmlTag = (e) => {
     e.preventDefault();
     const { tag, attr, val } = xmlTagForm;
@@ -1402,6 +1407,7 @@ export default function DocumentEditor({
           </div>
 
           <ValidationBadge
+            key={validationBadgeCollapseSignal}
             validationSummary={validationSummary}
             maxCoordsPerRule={maxValidatorWarnPerRule}
             onCellReferenceClick={doc?.mode === 'spreadsheet' ? handleValidationCellReferenceClick : null}
@@ -1556,6 +1562,7 @@ export default function DocumentEditor({
                   onCanonicalized={handleSpreadsheetCanonicalized}
                   onImportResult={handleSpreadsheetImportResult}
                   onImportSgml={importSpreadsheetSgml}
+                  onFindOpen={handleFindOpen}
                   docId={docId}
                   apiCall={apiCall}
                   className="h-full"

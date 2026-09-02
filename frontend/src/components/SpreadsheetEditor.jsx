@@ -35,6 +35,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
   onCanonicalized,
   onImportResult, 
   onImportSgml,
+  onFindOpen,
   docId = null, 
   apiCall = null, 
   className = '', 
@@ -122,6 +123,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
       onFetchConfigs,
       onImportSgml,
       onImportResult,
+      onFindOpen,
     });
     setCoreReady(true);
 
