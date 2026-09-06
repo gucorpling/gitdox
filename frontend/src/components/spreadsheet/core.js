@@ -388,6 +388,26 @@ const restoreFocus = (selectionOverride = null, options = {}) => {
     }
 };
 
+function lockOverlayerContentScroll() {
+    if (!mySpreadsheet || !mySpreadsheet.sheet) return;
+    const el = document.querySelector('.x-spreadsheet-overlayer-content');
+    if (!el || el._scrollLocked) return;
+
+    // This container should never scroll natively — all scrolling is handled
+    // via data.scroll.y/x and the custom scrollbar divs. But something (focus,
+    // wheel momentum, etc.) is nudging its real scrollTop away from 0, which
+    // silently offsets every absolutely-positioned child (including the
+    // selector box) despite their own style.top values being correct.
+    el.addEventListener('scroll', () => {
+        if (el.scrollTop !== 0 || el.scrollLeft !== 0) {
+            //console.log('[lockOverlayerContentScroll] Correcting drifted native scroll:', el.scrollTop, el.scrollLeft);
+            el.scrollTop = 0;
+            el.scrollLeft = 0;
+        }
+    });
+    el._scrollLocked = true;
+}
+
 // --- MONKEY-PATCH THE SELECTION ENGINE (Fixes Navigation & Auto-Scrolling) ---
 function patchSelector() {
     if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector) return;
@@ -484,6 +504,7 @@ function patchSelector() {
     };
 
     patchGeometryOffsetGuards();
+    lockOverlayerContentScroll();
     if (sheet.selector._isPatched) return;
 
     let sel = sheet.selector;
@@ -3223,23 +3244,36 @@ function navigateToMatch(idx) {
         return; 
     }
 
-    // Capture focus before jumping to the match
+    // Capture focus before jumping to the match so user can stay in Find box while navigating
     const activeEl = document.activeElement;
     const findDialog = document.getElementById('find-replace-dialog');
+    const findInput = document.getElementById('find-input');
     const wasInDialog = findDialog && findDialog.contains(activeEl);
 
     jumpSelectionTo(match.ri, match.ci, true);
 
-    // Restore focus
+    // Restore focus with multiple strategies to ensure it survives all async operations
     if (findDialog && !findDialog.classList.contains('hidden') && wasInDialog) {
-        setTimeout(() => {
-            // Restore focus to exactly what the user was using (e.g. input box or Next button)
-            if (activeEl && typeof activeEl.focus === 'function') {
-                activeEl.focus();
-            } else {
-                document.getElementById('find-input').focus();
+        const restoreFocusToElement = (el) => {
+            if (el && typeof el.focus === 'function') {
+                el.focus({ preventScroll: true });
+                return true;
             }
-        }, 0);
+            return false;
+        };
+
+        const targetEl = activeEl || findInput;
+        
+        // Immediate attempt (might not work if operations are still ongoing)
+        restoreFocusToElement(targetEl);
+        
+        // Delayed attempt after the find operation completes
+        setTimeout(() => restoreFocusToElement(targetEl), 50);
+        
+        // Secondary safety net after requestAnimationFrame
+        requestAnimationFrame(() => {
+            setTimeout(() => restoreFocusToElement(targetEl), 0);
+        });
     }
 }
 
