@@ -19,7 +19,8 @@ import {
   normalizePreferredColumnOrder,
   normalizeBackgroundImageValue,
   normalizeFontFamily,
-  isSpreadsheetBackedMode
+  isSpreadsheetBackedMode,
+  isEditorModeAllowedForUser
 } from '../appShared';
 
 export default function DocumentEditor({ 
@@ -223,7 +224,9 @@ export default function DocumentEditor({
     setIsAutoSaving(true);
     try {
       const currentTimestamp = timeOverride !== null ? timeOverride : lastModifiedAtRef.current;
-      const response = await apiCall(`/documents/${docId}/contents`, 'PUT', {
+      // Use doc.id (not the docId prop) so a save scheduled for a previously-open
+      // document can never be redirected to a different document opened afterwards.
+      const response = await apiCall(`/documents/${doc.id}/contents`, 'PUT', {
         content_xml: contentXml,
         content_spreadsheet: spreadsheetValue,
         last_modified_at: currentTimestamp
@@ -249,7 +252,7 @@ export default function DocumentEditor({
       isSavingRef.current = false;
       setIsAutoSaving(false);
     }
-  }, [apiCall, contentXml, doc, docId, checkForConflicts]);
+  }, [apiCall, contentXml, doc, checkForConflicts]);
 
   const autoSaveXmlContent = useCallback(async (xmlValue, timeOverride = null) => {
     if (!doc) return;
@@ -257,7 +260,9 @@ export default function DocumentEditor({
     setIsAutoSaving(true);
     try {
       const currentTimestamp = timeOverride !== null ? timeOverride : lastModifiedAtRef.current;
-      const response = await apiCall(`/documents/${docId}/contents`, 'PUT', {
+      // Use doc.id (not the docId prop) so a save scheduled for a previously-open
+      // document can never be redirected to a different document opened afterwards.
+      const response = await apiCall(`/documents/${doc.id}/contents`, 'PUT', {
         content_xml: xmlValue,
         content_spreadsheet: contentSpreadsheet,
         last_modified_at: currentTimestamp
@@ -282,7 +287,7 @@ export default function DocumentEditor({
     } finally {
       setIsAutoSaving(false);
     }
-  }, [apiCall, contentSpreadsheet, doc, docId, checkForConflicts]);
+  }, [apiCall, contentSpreadsheet, doc, checkForConflicts]);
 
   const saveDocMetadataToBackend = useCallback(async (newMetaArray) => {
     if (!doc) return;
@@ -317,6 +322,20 @@ export default function DocumentEditor({
 
   useEffect(() => {
     const init = async () => {
+      // Reset all states tied to the previously-open document immediately so no stale
+      // content/dirty-flag/timestamp from the old document can ever be attributed to the
+      // newly-opened one while the new document is still loading.
+      setDoc(null);
+      setContentXml('');
+      setContentSpreadsheet('');
+      setHasUnsavedChanges(false);
+      setIsXmlDirty(false);
+      setIsSpreadsheetDirty(false);
+      setConflictData(null);
+      setWakeSyncNotice(null);
+      setLastModifiedAt(0);
+      lastModifiedAtRef.current = 0;
+
       // Fetch users in a separate try/catch so a failure here doesn't break document loading
       try {
         const users = await apiCall(`/projects/${projectName}/users`);
@@ -372,24 +391,28 @@ export default function DocumentEditor({
   }, [docId, projectName, apiCall, normalizeMetadataObject]);
 
   useEffect(() => {
-    if (!doc || doc.mode !== 'xml' || !isXmlDirty) return;
+    // doc.id must match the current docId prop: while switching documents, doc/contentXml
+    // can briefly still reflect the previously-open document even after docId has changed.
+    if (!doc || doc.id !== docId || doc.mode !== 'xml' || !isXmlDirty) return;
 
     const timer = setTimeout(() => {
       autoSaveXmlContent(contentXml);
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [contentXml, doc, doc?.id, doc?.mode, isXmlDirty, autoSaveXmlContent]);
+  }, [contentXml, doc, doc?.id, doc?.mode, docId, isXmlDirty, autoSaveXmlContent]);
 
   useEffect(() => {
-    if (!doc || !(isSpreadsheetBackedMode(doc.mode) || doc.mode === 'dendroid') || !isSpreadsheetDirty) return;
+    // doc.id must match the current docId prop: while switching documents, doc/contentSpreadsheet
+    // can briefly still reflect the previously-open document even after docId has changed.
+    if (!doc || doc.id !== docId || !(isSpreadsheetBackedMode(doc.mode) || doc.mode === 'dendroid') || !isSpreadsheetDirty) return;
 
     const timer = setTimeout(() => {
       autoSaveSpreadsheetContent(contentSpreadsheet);
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [contentSpreadsheet, doc, doc?.id, doc?.mode, isSpreadsheetDirty, autoSaveSpreadsheetContent]);
+  }, [contentSpreadsheet, doc, doc?.id, doc?.mode, docId, isSpreadsheetDirty, autoSaveSpreadsheetContent]);
 
   useEffect(() => {
     if (!docId) return;
@@ -1131,12 +1154,14 @@ export default function DocumentEditor({
     
   const modeSelectOptions = useMemo(() => {
     const currentMode = doc?.mode;
-    if (!currentMode) return editorOptions;
-    if (editorOptions.some((option) => option.mode === currentMode)) {
-      return editorOptions;
+    const allowedOptions = editorOptions.filter((option) => isEditorModeAllowedForUser(user, option.mode, editorOptions));
+    if (!currentMode) return allowedOptions;
+    if (allowedOptions.some((option) => option.mode === currentMode)) {
+      return allowedOptions;
     }
-    return [...editorOptions, { key: `legacy-${currentMode}`, mode: currentMode, label: currentMode }];
-  }, [doc?.mode, editorOptions]);
+    // the document's current mode is always shown even if not otherwise permitted, so the user can see what they're viewing
+    return [...allowedOptions, { key: `legacy-${currentMode}`, mode: currentMode, label: currentMode }];
+  }, [doc?.mode, editorOptions, user]);
   
   const githubModeKind = doc?.mode === 'xml' ? 'xml' : 'spreadsheet';
   const spannotatorMetaDict = useMemo(() => buildMetadataObject(metadata), [metadata, buildMetadataObject]);
@@ -1421,11 +1446,13 @@ export default function DocumentEditor({
           style={effectiveEditorSurfaceStyle}
         >
           <div className="absolute top-2 right-4 z-10 bg-white rounded p-1 shadow-sm" style={{top: "-1px"}}>
-             <select className="text-xs bg-slate-100 border-none rounded p-1" value={doc.mode} onChange={e => autoSaveDocField('mode', e.target.value)}>
-              {modeSelectOptions.map((option) => (
-                <option key={option.key} value={option.mode}>{option.label}</option>
-              ))}
-            </select>
+             {modeSelectOptions.length > 1 && (
+               <select className="text-xs bg-slate-100 border-none rounded p-1" value={doc.mode} onChange={e => autoSaveDocField('mode', e.target.value)}>
+                {modeSelectOptions.map((option) => (
+                  <option key={option.key} value={option.mode}>{option.label}</option>
+                ))}
+              </select>
+             )}
           </div>
           
           {doc.mode === 'xml' ? (
