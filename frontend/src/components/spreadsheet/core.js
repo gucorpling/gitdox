@@ -357,6 +357,12 @@ const restoreFocus = (selectionOverride = null, options = {}) => {
         mySpreadsheet.sheet.isFocus = true; 
         restoreSelectorRange(selectionRange);
 
+        // jumpSelectionTo etc. know exactly where to jump to;
+        // Lock the viewport scroll position if specified to prevent library scrolling drift
+        if (options.lockedViewportScroll) {
+            restoreViewportScrollPosition(options.lockedViewportScroll);
+        }
+
         // Synthetic mouseclick strictly on the actively selected cell - 
         // Wakes up the canvas engine without snapping selection to A1
         const canvas = document.querySelector('.x-spreadsheet-sheet canvas');
@@ -394,18 +400,58 @@ function lockOverlayerContentScroll() {
     if (!el || el._scrollLocked) return;
 
     // This container should never scroll natively — all scrolling is handled
-    // via data.scroll.y/x and the custom scrollbar divs. But something (focus,
-    // wheel momentum, etc.) is nudging its real scrollTop away from 0, which
-    // silently offsets every absolutely-positioned child (including the
-    // selector box) despite their own style.top values being correct.
+    // via data.scroll.y/x and the custom scrollbar divs
     el.addEventListener('scroll', () => {
         if (el.scrollTop !== 0 || el.scrollLeft !== 0) {
-            //console.log('[lockOverlayerContentScroll] Correcting drifted native scroll:', el.scrollTop, el.scrollLeft);
             el.scrollTop = 0;
             el.scrollLeft = 0;
         }
     });
     el._scrollLocked = true;
+}
+
+// Guard against scrollbar feedback loops when data.scroll is set, triggering
+// the library's moveFn -> Sheet.verticalScrollbarMove -> data.scrolly
+let _suppressScrollbarFeedback = 0;
+let _scrollbarFeedbackGuardBound = false;
+let _scrollbarFeedbackGuardHandler = null;
+
+function bindScrollbarFeedbackGuard() {
+    if (_scrollbarFeedbackGuardBound) return;
+    // Capture phase on document: runs before the library's own listener on the
+    // scrollbar element, so stopImmediatePropagation() will block moveFn 
+    _scrollbarFeedbackGuardHandler = (e) => {
+            if (_suppressScrollbarFeedback > 0 && e.target && e.target.classList
+                && e.target.classList.contains('x-spreadsheet-scrollbar')) {
+                e.stopImmediatePropagation();
+            }
+    };
+    document.addEventListener('scroll', _scrollbarFeedbackGuardHandler, true);
+    _scrollbarFeedbackGuardBound = true;
+}
+
+function unbindScrollbarFeedbackGuard() {
+    if (_scrollbarFeedbackGuardBound && _scrollbarFeedbackGuardHandler) {
+        document.removeEventListener('scroll', _scrollbarFeedbackGuardHandler, true);
+    }
+    _scrollbarFeedbackGuardHandler = null;
+    _scrollbarFeedbackGuardBound = false;
+    _suppressScrollbarFeedback = 0;
+}
+
+function withScrollbarFeedbackSuppressed(fn) {
+    _suppressScrollbarFeedback++;
+    try {
+        fn();
+    } finally {
+        // The native scroll event this can trigger fires asynchronously, not
+        // synchronously inside fn(), so hold the guard for a couple of frames.
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                _suppressScrollbarFeedback = Math.max(0, _suppressScrollbarFeedback - 1);
+            });
+        });
+    }
 }
 
 // --- MONKEY-PATCH THE SELECTION ENGINE (Fixes Navigation & Auto-Scrolling) ---
@@ -621,9 +667,11 @@ function patchSelector() {
                 // Only force UI rendering and scrolling if we are not already at the desired absolute coordinate
                 if (Math.abs(currentY - targetTop) > 1 && typeof data.scrolly === 'function') {
                     data.scrolly(targetTop, () => {
-                        if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                            try { sheet.verticalScrollbar.move(data.scroll.y); } catch (e) {console.warn('Error moving vertical scrollbar during snap:', e);}
-                        }
+                        withScrollbarFeedbackSuppressed(() => {
+                            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                                try { sheet.verticalScrollbar.move(data.scroll.y); } catch (e) {console.warn('Error moving vertical scrollbar during snap:', e);}
+                            }
+                        });
                         if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
                             sheet.selector.resetAreaOffset();
                             if (typeof sheet.selector.resetBRTAreaOffset === 'function') sheet.selector.resetBRTAreaOffset();
@@ -638,8 +686,8 @@ function patchSelector() {
                 }
             };
 
-            // Wait for the library's internal keydown loop (which fires synchronously *after* sel.set returns)
-            // to finish messing with the viewport, then enforce our boundary.
+            // Wait for the library's internal keydown loop (which fires synchronously after sel.set returns)
+            // to finish messing with the viewport, then enforce our boundary
             setTimeout(() => {
                 doSnap();
                 // Secondary safety net catch in case the library defers via requestAnimationFrame natively
@@ -759,17 +807,18 @@ function syncViewportFromSheetData(options = {}) {
 
         // 3. WAIT FOR PAINT, THEN MOVE SCROLLBARS
         requestAnimationFrame(() => {
-            if (requestId !== _viewportSyncRequestId) return; // Safety check if another request fired
-            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                try { sheet.verticalScrollbar.move(data.scroll ? {top: data.scroll.y} : {top: 0}); } catch (e) {
-                    console.warn('Error moving vertical scrollbar:', e);
+            withScrollbarFeedbackSuppressed(() => {
+                if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                   try { sheet.verticalScrollbar.move(data.scroll ? {top: data.scroll.y} : {top: 0}); } catch (e) {
+                        console.warn('Error moving vertical scrollbar:', e);
+                    }
                 }
-            }
-            if (horizontalTarget !== null && sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-                try { sheet.horizontalScrollbar.move({left: horizontalTarget}); } catch (e) {
-                    console.warn('Error moving horizontal scrollbar:', e);
+                if (horizontalTarget !== null && sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                    try { sheet.horizontalScrollbar.move({left: horizontalTarget}); } catch (e) {
+                        console.warn('Error moving horizontal scrollbar:', e);
+                    }
                 }
-            }
+            });
         });
     };
 
@@ -788,7 +837,7 @@ function syncViewportFromSheetData(options = {}) {
 
         if (!preserveHorizontal && sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
             let targetLeft = null;
-            if (Math.abs(viewLeft) + width > tableOffset.width) {
+            if (viewLeft + width > tableOffset.width) {
                 targetLeft = contentLeft + width - tableOffset.width;
             } else {
                 const freezeW = typeof data.freezeTotalWidth === 'function' ? data.freezeTotalWidth() : 0;
@@ -807,9 +856,9 @@ function syncViewportFromSheetData(options = {}) {
             const freezeH = typeof data.freezeTotalHeight === 'function' ? data.freezeTotalHeight() : 0;
             if (height > tableOffset.height) {
                 targetTop = Math.max(0, contentTop - 1 - freezeH);
-            } else if (Math.abs(viewTop) + height > tableOffset.height) {
+            } else if (viewTop + height > tableOffset.height) {
                 targetTop = contentTop + height - tableOffset.height - 1;
-            } else if (viewTop < freezeH) {
+            } else if (viewTop < 0) {
                 targetTop = contentTop - 1 - freezeH;
             }
             if (targetTop !== null && typeof data.scrolly === 'function') {
@@ -887,17 +936,19 @@ function restoreViewportScrollPosition(position) {
 
             const vScrollEl = document.querySelector('.x-spreadsheet-scrollbar.vertical');
             if (vScrollEl) vScrollEl.scrollHeight; // force layout calculation
-
-            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : targetY }); } catch (e) {
-                    console.warn('Error moving vertical scrollbar:', e);
+            
+            withScrollbarFeedbackSuppressed(() => {
+                if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                    try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : targetY }); } catch (e) {
+                        console.warn('Error moving vertical scrollbar:', e);
+                    }
                 }
-            }
-            if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-                try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : targetX }); } catch (e) {
-                    console.warn('Error moving horizontal scrollbar:', e);
+                if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                    try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : targetX }); } catch (e) {
+                        console.warn('Error moving horizontal scrollbar:', e);
+                    }
                 }
-            }
+            });
         });
     };
 
@@ -942,19 +993,22 @@ function jumpSelectionTo(ri, ci, skipFocusRestore = false, options = {}) {
         : null;
     const requestId = ++_viewportSyncRequestId;
     
-    // 1. Identify true span of target cell (handling merges)
     const targetBounds = getExpandedCellBounds(mySpreadsheet.sheet.data, ri, ci);
     
-    // 2. Update the internal UI and data states safely 
     restoreSelectorRange(targetBounds);
 
-    // 3. Move the viewport and trigger the correctly-ordered render pipeline
     syncViewportFromSheetData({ preserveHorizontal, requestId, lockedScrollX });
-    
+
+
     if (!skipFocusRestore) {
-        // Pass skipSyntheticClick: true to prevent stale coordinate ghost clicks 
-        // from accidentally triggering the editor on the previous cell.
-        scheduleRestoreFocus(null, { skipSyntheticClick: true });
+        // lockedViewportScroll makes every restoreFocus pass scheduleRestoreFocus
+        // queues (both the immediate and the rAF-deferred one) re-assert the
+        // scroll position we just computed - see restoreFocus for why this is
+        // needed instead of just calling scheduleRestoreFocus plain.
+        scheduleRestoreFocus(null, {
+            skipSyntheticClick: true,
+            lockedViewportScroll: getViewportScrollPosition(),
+        });
     }
 }
 
@@ -3464,7 +3518,7 @@ function handleSpreadsheetWheel(e) {
         deltaX *= 800;
     }
 
-const currentX = data.scroll && Number.isFinite(data.scroll.x) ? data.scroll.x : 0;
+    const currentX = data.scroll && Number.isFinite(data.scroll.x) ? data.scroll.x : 0;
     const currentY = data.scroll && Number.isFinite(data.scroll.y) ? data.scroll.y : 0;
 
     // Only resync if the engine's position changed outside of this wheel handler
@@ -3509,16 +3563,18 @@ const currentX = data.scroll && Number.isFinite(data.scroll.x) ? data.scroll.x :
 
     // Resync UI to match the new scroll coordinates
     if (needsRender) {
-        if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            //console.log('[BEFORE VSCROLLBAR MOVE]', data.scroll.y);
-            try { sheet.verticalScrollbar.move( data.scroll.y); } catch (err) {console.error('Error moving vertical scrollbar:', err); }
-            //console.log('[AFTER VSCROLLBAR MOVE]', data.scroll.y);
-        }
-        if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            //console.log('[BEFORE HSCROLLBAR MOVE]', data.scroll.x);
-            try { sheet.horizontalScrollbar.move( data.scroll.x); } catch (err) {console.error('Error moving horizontal scrollbar:', err); }
-            //console.log('[AFTER HSCROLLBAR MOVE]', data.scroll.x);
-        }
+        withScrollbarFeedbackSuppressed(() => {
+            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
+                //console.log('[BEFORE VSCROLLBAR MOVE]', data.scroll.y);
+                try { sheet.verticalScrollbar.move( data.scroll.y); } catch (err) {console.error('Error moving vertical scrollbar:', err); }
+                //console.log('[AFTER VSCROLLBAR MOVE]', data.scroll.y);
+            }
+            if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
+                //console.log('[BEFORE HSCROLLBAR MOVE]', data.scroll.x);
+                try { sheet.horizontalScrollbar.move( data.scroll.x); } catch (err) {console.error('Error moving horizontal scrollbar:', err); }
+                //console.log('[AFTER HSCROLLBAR MOVE]', data.scroll.x);
+            }
+        });
 
         if (sheet.selector) {
             if (typeof sheet.selector.resetBRTAreaOffset === 'function') sheet.selector.resetBRTAreaOffset();
@@ -3792,6 +3848,7 @@ function bindDomEvents() {
     window.replaceAll = replaceAll;
     window.runFindSearch = runFindSearch;
 
+    bindScrollbarFeedbackGuard();
     isDomBound = true;
 }
 
@@ -3826,6 +3883,7 @@ function unbindDomEvents() {
     }
     
     window.removeEventListener('resize', handleWindowResize, true);
+    unbindScrollbarFeedbackGuard();
     isDomBound = false;
 }
 
