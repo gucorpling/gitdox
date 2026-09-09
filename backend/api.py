@@ -28,6 +28,8 @@ from nlp_modules.coptic import coptic_tokenize, coptic_nlp_tabulate, coptic_ner
 from nlp_modules.identify import suggest_identities
 from nlp_modules.indent import reindent
 from nlp_modules.stype_classifier import STypeClassifier
+from nlp_modules.diaparse import diaparse
+from nlp_modules.stanza_tag import main as stanza_tag
 
 MASTER_INIT_SECRET = "my_super_secret_master_password"  # CHANGE THIS BEFORE DEPLOYMENT!
 API_PREFIX = (os.environ.get("GITDOX_API_PREFIX", "/gdapi") or "/gdapi").strip()
@@ -2292,6 +2294,38 @@ def mutate_document_contents(
             raise HTTPException(status_code=400, detail=f"stype classification failed: {str(e)}")
 
         return NlpMutationResponse(tool=tool, content_xml=transformed)
+    elif tool == "diaparse":
+        if data.content_spreadsheet is not None:
+            source = data.content_spreadsheet
+        else:
+            raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
+        try:
+            sgml = social_to_sgml(source)
+            transformed = diaparse(sgml)
+            sgml_valid = validate_tt(transformed)
+            if sgml_valid:
+                transformed, _ = sgml_to_social(transformed)
+                return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Parse failed: {str(e)}")
+
+        return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
+    elif tool == "stanza_tag":
+        if data.content_spreadsheet is not None:
+            source = data.content_spreadsheet
+        else:
+            raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
+        try:
+            sgml = social_to_sgml(source)
+            transformed = stanza_tag(sgml)
+            sgml_valid = validate_tt(transformed)
+            if sgml_valid:
+                transformed, _ = sgml_to_social(transformed)
+                return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Stanza tagging failed: {str(e)}")
+
+        return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
     elif tool == "reindent":
         if data.content_xml is not None:
             source = data.content_xml
@@ -2318,7 +2352,7 @@ def mutate_document_contents(
         if data.content_spreadsheet is not None:
             source = data.content_spreadsheet
         else:
-            raise HTTPException(status_code=400, detail="Provide content_xml")
+            raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
         try:
             sgml = social_to_sgml(source)
             transformed = coptic_ner(sgml)
@@ -2326,7 +2360,7 @@ def mutate_document_contents(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"NER failed: {str(e)}")
 
-        return NlpMutationResponse(tool=tool, content_xml=transformed)
+        return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
     elif tool == "tabulate":
         if data.content_xml is not None:
             source = data.content_xml

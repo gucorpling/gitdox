@@ -1,0 +1,3 @@
+# These requirements are only needed if you run the corresponding NLP tools in your project
+diaparser
+stanza
