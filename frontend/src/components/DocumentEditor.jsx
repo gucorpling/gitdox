@@ -816,7 +816,9 @@ export default function DocumentEditor({
 
     setIsLoadingGithubCommitMessage(true);
     try {
-      const response = await apiCall(`/documents/${docId}/github/commit-message?file_path=${encodeURIComponent(filePath)}`);
+      // Silent: this runs automatically on document open, so a missing GitHub
+      // token shouldn't surface as a user-facing error until they act on GitHub.
+      const response = await apiCall(`/documents/${docId}/github/commit-message?file_path=${encodeURIComponent(filePath)}`, 'GET', null, { silent: true });
       const fetchedMessage = typeof response?.commit_message === 'string' ? response.commit_message.trim() : '';
       const fetchedUrl = typeof response?.commit_url === 'string' ? response.commit_url.trim() : '';
       const fetchedDate = typeof response?.commit_date === 'string' ? response.commit_date.trim() : '';

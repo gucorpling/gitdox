@@ -435,7 +435,7 @@ export default function App() {
       return data;
     } catch (err) {
       if (err.message !== 'SILENT_ABORT') {
-        setError(err.message);
+        if (!options?.silent) setError(err.message);
         const isAuthError = err.status === 401 && !publicEndpoints.includes(endpoint);
         if (isAuthError) handleLogout();
       }
