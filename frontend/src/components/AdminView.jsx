@@ -24,9 +24,10 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
   const canManageUsers = adminLevel >= 2;
   const canManageAssignments = adminLevel >= 1;
   const canDeleteUsers = adminLevel >= 2;
-  const canManageValidations = adminLevel >= 1;
+  const canManageValidations = adminLevel >= 2;
   const canBatchImportCorpus = adminLevel >= 2;
-  const canRenameCorpus = adminLevel >= 1;
+  const canManageCorpus = adminLevel >= 2;
+  const canRenameCorpus = adminLevel >= 2;
   const canDeleteCorpus = adminLevel >= 2;
 
   const [activeTab, setActiveTab] = useState(canManageUsers ? 'users' : canManageAssignments ? 'assignments' : 'validations');
@@ -245,10 +246,12 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
       if (canManageValidations) {
         await fetchValidations();
       }
-      await fetchCorpora();
+      if (canManageCorpus) {
+        await fetchCorpora();
+      }
     };
     load();
-  }, [canManageUsers, canManageAssignments, canManageValidations, fetchUsers, fetchValidations, fetchCorpora]);
+  }, [canManageUsers, canManageAssignments, canManageValidations, canManageCorpus, fetchUsers, fetchValidations, fetchCorpora]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -257,11 +260,19 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
         return;
       }
       if (activeTab === 'assignments' && !canManageAssignments) {
-        setActiveTab(canManageUsers ? 'users' : (canManageValidations ? 'validations' : 'corpus-management'));
+        setActiveTab(canManageUsers ? 'users' : (canManageValidations ? 'validations' : canManageCorpus ? 'corpus-management' : 'assignments'));
+        return;
+      }
+      if (activeTab === 'validations' && !canManageValidations) {
+        setActiveTab(canManageUsers ? 'users' : canManageAssignments ? 'assignments' : canManageCorpus ? 'corpus-management' : 'assignments');
+        return;
+      }
+      if (activeTab === 'corpus-management' && !canManageCorpus) {
+        setActiveTab(canManageUsers ? 'users' : canManageAssignments ? 'assignments' : canManageValidations ? 'validations' : 'assignments');
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [activeTab, canManageUsers, canManageAssignments, canManageValidations]);
+  }, [activeTab, canManageUsers, canManageAssignments, canManageValidations, canManageCorpus]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1316,13 +1327,13 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
             Validations
           </button>
         )}
-        <button
+        {canManageCorpus && <button
           type="button"
           onClick={() => setActiveTab('corpus-management')}
           className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === 'corpus-management' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
           Corpus Management
-        </button>
+        </button>}
       </div>
 
       <div
@@ -1561,7 +1572,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+            {adminLevel >= 2 && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
               <h3 className="text-lg font-semibold">Manage status categories</h3>
               <form onSubmit={handleAddStatusCategory} className="space-y-4 text-sm">
                 <div>
@@ -1604,7 +1615,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                   </button>
                 </div>
               </form>
-            </div>
+            </div>}
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
               <h3 className="text-lg font-semibold border-b border-slate-100 pb-2">Global changes</h3>
@@ -1931,7 +1942,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
         </div>
       )}
 
-      {activeTab === 'corpus-management' && (
+      {canManageCorpus && activeTab === 'corpus-management' && (
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">

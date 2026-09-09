@@ -223,6 +223,13 @@ def user_has_corpus_access(user_data: Optional[dict], corpus: Optional[str]) -> 
         return True
 
 
+def require_corpus_access(current_user: dict, project_name: str, corpus: str) -> None:
+    if current_user.get('project_name') != project_name:
+        raise HTTPException(status_code=403, detail="Access denied to this project")
+    if not user_has_corpus_access(current_user, corpus):
+        raise HTTPException(status_code=403, detail="This user is not allowed to access that corpus.")
+
+
 def user_has_editor_access(user_data: Optional[dict], mode: Optional[str], project_config: Optional[dict] = None) -> bool:
     if not user_data:
         return True
@@ -1346,6 +1353,8 @@ def get_app_config(project: Optional[str] = None):
 @app.get("/corpora/{corpus_name}/metadata")
 def get_corpus_metadata(corpus_name: str, current_user: dict = Depends(require_admin(0))):
     """Gets metadata for a specific corpus."""
+    if not user_has_corpus_access(current_user, corpus_name):
+        raise HTTPException(status_code=403, detail="This user is not allowed to access that corpus.")
     data = r.get(f"corpus:{corpus_name}:metadata")
     if data:
         return json.loads(data)
@@ -1354,8 +1363,10 @@ def get_corpus_metadata(corpus_name: str, current_user: dict = Depends(require_a
 
 @app.put("/corpora/{corpus_name}/metadata")
 def update_corpus_metadata(corpus_name: str, metadata: dict = Body(...),
-                           current_user: dict = Depends(require_admin(1))):
+                           current_user: dict = Depends(require_admin(2))):
     """Updates metadata for a specific corpus."""
+    if not user_has_corpus_access(current_user, corpus_name):
+        raise HTTPException(status_code=403, detail="This user is not allowed to access that corpus.")
     r.set(f"corpus:{corpus_name}:metadata", json.dumps(metadata))
     return {"message": "Corpus metadata updated successfully"}
 
@@ -1382,7 +1393,7 @@ def get_status_categories(project_name: str, current_user: dict = Depends(requir
 def update_status_categories(
         project_name: str,
         payload: StatusCategoryList = Body(...),
-        current_user: dict = Depends(require_admin(1)),
+        current_user: dict = Depends(require_admin(2)),
 ):
     """
     Replaces status categories, but rejects removal of any category that is still used by docs.
@@ -1447,7 +1458,7 @@ def list_project_corpora(project_name: str, current_user: dict = Depends(require
         corpus = r.hget(f"doc:{doc_id}", "corpus")
         if corpus is not None:
             corpus = corpus.strip()
-            if corpus:
+            if corpus and user_has_corpus_access(current_user, corpus):
                 corpus_names.add(corpus)
 
     return {
@@ -1467,7 +1478,7 @@ def delete_corpus(
     Deletes a corpus by deleting all documents in the project that use that corpus.
     Requires AdminLevel > 1.
     """
-    if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
+    require_corpus_access(current_user, project_name, corpus_name)
     deleted_doc_ids = _delete_project_corpus_documents(project_name, corpus_name, delete_metadata=True)
 
     return {
@@ -1484,14 +1495,14 @@ def rename_corpus(
         corpus_name: str,
     background_tasks: BackgroundTasks,
         new_corpus_name: str = Body(..., embed=True),
-        current_user: dict = Depends(require_admin(1))
+        current_user: dict = Depends(require_admin(2))
 ):
     """
     Renames a corpus by replacing corpus value in all matching project documents.
     Revalidates affected documents because applicable validation rules may change.
     Requires AdminLevel > 0.
     """
-    if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
+    require_corpus_access(current_user, project_name, corpus_name)
     new_corpus_name = (new_corpus_name or "").strip()
     if not new_corpus_name:
         raise HTTPException(status_code=400, detail="new_corpus_name cannot be empty")
@@ -1937,7 +1948,7 @@ async def import_documents_zip(
         default_status: str = Form(""),
         default_repo: str = Form(""),
         zip_file: UploadFile = File(...),
-        current_user: dict = Depends(require_admin(1)),
+        current_user: dict = Depends(require_admin(2)),
         excluded_meta: list = Form([])
 ):
     """
@@ -2141,6 +2152,9 @@ async def import_documents_zip(
                             assigned = overrides["assigned"]
                         if overrides["status"]:
                             status = overrides["status"]
+
+                    if not user_has_corpus_access(current_user, corpus):
+                        raise HTTPException(status_code=403, detail=f"This user is not allowed to import documents into corpus '{corpus}'.")
 
                     if overwrite_existing_corpus and corpus in existing_corpora and corpus not in overwritten_corpora:
                         deleted_doc_ids = _delete_project_corpus_documents(project_name, corpus, delete_metadata=True)
@@ -2394,6 +2408,8 @@ def export_corpus_zip(
     """
     from fastapi.responses import StreamingResponse
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
+    if not user_has_corpus_access(current_user, corpus_name):
+        raise HTTPException(status_code=403, detail="This user is not allowed to access that corpus.")
 
     fmt = (mode or "xml").strip().lower()
     if fmt not in {"xml", "spreadsheet"}:
@@ -2531,7 +2547,7 @@ def list_validations(project_name: str, current_user: dict = Depends(require_adm
 
     for validation_id in validation_ids:
         rule_data = r.hgetall(_validation_key(project_name, validation_id))
-        if rule_data:
+        if rule_data and (not rule_data.get("corpus") or user_has_corpus_access(current_user, rule_data.get("corpus"))):
             rule_data["id"] = validation_id
             rules.append(rule_data)
 
@@ -2545,10 +2561,14 @@ def create_validation(
     project_name: str,
     data: ValidationCreate,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(require_admin(1))
+    current_user: dict = Depends(require_admin(2)),
 ):
     """Creates a validation rule for a project (Requires AdminLevel > 0)."""
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
+    if not data.corpus and int(current_user.get('adminlevel', 0)) < 3:
+        raise HTTPException(status_code=403, detail="A corpus is required for validation rules at this admin level.")
+    if data.corpus and not user_has_corpus_access(current_user, data.corpus):
+        raise HTTPException(status_code=403, detail="This user is not allowed to manage validations for that corpus.")
     validation_id = secrets.token_urlsafe(8)
     rule_key = _validation_key(project_name, validation_id)
     rule_data = data.model_dump()
@@ -2572,7 +2592,7 @@ def update_validation(
         validation_id: str,
         data: ValidationCreate,
     background_tasks: BackgroundTasks,
-        current_user: dict = Depends(require_admin(1))
+        current_user: dict = Depends(require_admin(2))
 ):
     """Updates a validation rule and revalidates any documents affected by the change."""
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
@@ -2583,6 +2603,11 @@ def update_validation(
 
     old_rule_data = r.hgetall(rule_key)
     new_rule_data = data.model_dump()
+    for rule_data in (old_rule_data, new_rule_data):
+        if not rule_data.get('corpus') and int(current_user.get('adminlevel', 0)) < 3:
+            raise HTTPException(status_code=403, detail="Global validation rules require admin level 3.")
+        if rule_data.get('corpus') and not user_has_corpus_access(current_user, rule_data['corpus']):
+            raise HTTPException(status_code=403, detail="This user is not allowed to manage validations for that corpus.")
 
     r.hset(rule_key, mapping=new_rule_data)
     r.sadd(_validation_set_key(project_name), validation_id)
@@ -2602,7 +2627,7 @@ def delete_validation(
     project_name: str,
     validation_id: str,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(require_admin(1))
+    current_user: dict = Depends(require_admin(2)),
 ):
     """Deletes a validation rule from a project (Requires AdminLevel > 0)."""
     if current_user.get('project_name') != project_name: raise HTTPException(status_code=403, detail="Access denied to this project")
@@ -2612,6 +2637,10 @@ def delete_validation(
         raise HTTPException(status_code=404, detail="Validation not found")
 
     old_rule_data = r.hgetall(rule_key)
+    if not old_rule_data.get('corpus') and int(current_user.get('adminlevel', 0)) < 3:
+        raise HTTPException(status_code=403, detail="Global validation rules require admin level 3.")
+    if old_rule_data.get('corpus') and not user_has_corpus_access(current_user, old_rule_data['corpus']):
+        raise HTTPException(status_code=403, detail="This user is not allowed to manage validations for that corpus.")
 
     r.delete(rule_key)
     r.srem(_validation_set_key(project_name), validation_id)
