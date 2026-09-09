@@ -2,6 +2,8 @@ import re
 from collections import defaultdict
 from typing import Dict, List, Optional, Set, Union, Tuple, Match, Iterable
 
+from run_xsd import validate_xml_string
+
 
 class Cell:
     """
@@ -700,14 +702,21 @@ def run_all_validations(
     input_type: str,
     metadata: Dict[str, str],
     rule_specs: List[Dict[str, str]],
-    config: Optional[Dict[str, object]] = None
+    config: Optional[Dict[str, object]] = None,
+    xsd_schemas: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Union[str, List[str]]]]:
     """
     Convenience function to run multiple validations on a single document.
     rule_specs should be a list of dictionaries, e.g.:
     [{"domain": "spreadsheet", "key": "pos", "operator": "~", "value": "/^(VBP|PP|VVG)$/"}]
+
+    xsd_schemas maps xsd filename (the rule's `key`) to the already-loaded schema content,
+    used by "xsd" operator rules (domain "xml"). Since XSD validation is comparatively
+    expensive and trivially fails on any other XML problem, it is only run once all other
+    non-xsd XML domain rules have been confirmed to pass.
     """
     results = []
+    xsd_specs: List[Dict[str, str]] = []
 
     # Initialize the appropriate validators based on input_type
     ss_validator = SpreadsheetValidator(indata) if input_type == "spreadsheet" else None
@@ -740,16 +749,23 @@ def run_all_validations(
 
     for spec in rule_specs:
         domain = spec.get("domain", "")
-        rule = ValidationRule(
-            domain=domain,
-            key=spec.get("key", ""),
-            operator=spec.get("operator", ""),
-            value=spec.get("value")
-        )
+        operator = spec.get("operator", "")
 
         # Skip domain rules that do not apply to the current input_type
         if domain in ("spreadsheet", "xml") and domain != input_type:
             continue
+
+        # xsd checks are deferred until non-xsd XML rules are known to pass (see below)
+        if domain == "xml" and operator == "xsd":
+            xsd_specs.append(spec)
+            continue
+
+        rule = ValidationRule(
+            domain=domain,
+            key=spec.get("key", ""),
+            operator=operator,
+            value=spec.get("value")
+        )
 
         violations = []
         if domain == "metadata":
@@ -772,6 +788,35 @@ def run_all_validations(
             "rule": rule_str,
             "violations": violations
         })
+
+    if xsd_specs:
+        # Only worth running expensive XSD validation once all other XML rules pass
+        xml_domain_valid = all(not r["violations"] for r in results if r["domain"] == "xml")
+
+        if xml_domain_valid:
+            for spec in xsd_specs:
+                schema_name = spec.get("key", "")
+                rule_str = f"{schema_name} xsd"
+                schema_content = (xsd_schemas or {}).get(schema_name)
+
+                if schema_content is None:
+                    results.append({
+                        "domain": "xml",
+                        "rule": rule_str,
+                        "violations": [f"xsd '{schema_name}': schema file not found"]
+                    })
+                    continue
+
+                is_valid, message = validate_xml_string(
+                    schema_content, indata, xsd_filename=schema_name, reformat=True
+                )
+
+                if is_valid:
+                    results.append({"domain": "xml", "rule": rule_str, "violations": []})
+                else:
+                    # One violation per reported error line, so each counts as a separate error
+                    for line in message.split("\n"):
+                        results.append({"domain": "xml", "rule": rule_str, "violations": [line]})
 
     return results
 

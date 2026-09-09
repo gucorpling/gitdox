@@ -457,11 +457,14 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
   };
 
   const handleValidationDomainChange = (domain) => {
-    setValidationForm((prev) => ({
-      ...prev,
-      domain,
-      operator: domain === 'spreadsheet' || (prev.operator !== '&' && prev.operator !== 'nelink') ? prev.operator : 'exists'
-    }));
+    setValidationForm((prev) => {
+      const needsSpreadsheet = prev.operator === '&' || prev.operator === 'nelink';
+      const needsXml = prev.operator === 'xsd';
+      let operator = prev.operator;
+      if (needsSpreadsheet && domain !== 'spreadsheet') operator = 'exists';
+      if (needsXml && domain !== 'XML') operator = 'exists';
+      return { ...prev, domain, operator };
+    });
   };
 
   const handleEditValidation = (validation) => {
@@ -572,8 +575,9 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
     }));
 
     const allowedDomains = ['xml', 'spreadsheet', 'metadata'];
-    const allowedOperators = ['exists', '!exists', '=', '~', '==', '|', '&', '>', 'nelink'];
+    const allowedOperators = ['exists', '!exists', '=', '~', '==', '|', '&', '>', 'nelink', 'xsd'];
     const ssOnlyOperators = ['>', '|', '==', 'nelink'];
+    const xmlOnlyOperators = ['xsd'];
 
     for (let i = startIndex; i < lines.length; i++) {
        const cols = lines[i].split('\t');
@@ -602,6 +606,10 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
        }
        if (ssOnlyOperators.includes(op) && dom !== 'spreadsheet') {
           alert(`Import rejected. Error on line ${i+1}: Operator '${op}' is only allowed in 'spreadsheet' domain.`);
+          e.target.value = null; return;
+       }
+       if (xmlOnlyOperators.includes(op) && domRaw !== 'xml') {
+          alert(`Import rejected. Error on line ${i+1}: Operator '${op}' is only allowed in 'xml' domain.`);
           e.target.value = null; return;
        }
        if (!key) {
@@ -1783,11 +1791,12 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                         <option value="&" disabled={validationForm.domain !== 'spreadsheet'}>&amp;</option>
                         <option value=">">&gt;</option>
                         <option value="nelink" disabled={validationForm.domain !== 'spreadsheet'}>nelink</option>
+                        <option value="xsd" disabled={validationForm.domain !== 'XML'}>xsd</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-slate-600 mb-1">Value</label>
-                      <input className="w-full border p-2 rounded" placeholder="Comparison value or second key" value={validationForm.value} onChange={e => setValidationForm({ ...validationForm, value: e.target.value })} />
+                      <input disabled={validationForm.operator === 'xsd'} className="w-full border p-2 rounded disabled:bg-slate-100" placeholder={validationForm.operator === 'xsd' ? 'Not used for xsd' : 'Comparison value or second key'} value={validationForm.operator === 'xsd' ? '' : validationForm.value} onChange={e => setValidationForm({ ...validationForm, value: e.target.value })} />
                     </div>
                   </div>
                   <div className="flex gap-2 justify-end">

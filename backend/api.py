@@ -112,6 +112,7 @@ r = redis.Redis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
 # Project config
 BASE_DIR = Path(__file__).resolve().parent
 XML_TAG_SCHEMA_DIR = (BASE_DIR / ".." / "schemas" / "xml_tags").resolve()
+XSD_SCHEMA_DIR = (BASE_DIR / ".." / "schemas" / "xsd").resolve()
 
 def resolve_config_path(project_name: Optional[str] = None) -> Path:
     """Resolve the config file path, prioritizing project-specific configs."""
@@ -254,7 +255,7 @@ class ValidationBase(BaseModel):
     corpus: str = ""
     domain: str
     key: str
-    operator: Literal["exists", "!exists", "=", "==", "|", ">", "~", "&", "nelink"]
+    operator: Literal["exists", "!exists", "=", "==", "|", ">", "~", "&", "nelink", "xsd"]
     value: str = ""
 
     @field_validator("document", "corpus", "domain", "key", "value", mode="before")
@@ -952,6 +953,41 @@ def _rerun_validations_for_documents(doc_ids: list[str]) -> dict:
     return _enqueue_validation_for_documents(doc_ids)
 
 
+_xsd_schema_cache: dict[str, tuple[float, str]] = {}
+
+
+def _load_xsd_schema(filename: str) -> Optional[str]:
+    """Reads an XSD schema file's contents from schemas/xsd/, guarding against path traversal.
+
+    Cached in-memory per filename, keyed off mtime, to avoid re-reading on every validation run.
+    """
+    if not filename:
+        return None
+
+    schema_path = (XSD_SCHEMA_DIR / filename).resolve()
+    if schema_path.parent != XSD_SCHEMA_DIR or schema_path.suffix.lower() != ".xsd":
+        return None
+    if not schema_path.exists() or not schema_path.is_file():
+        return None
+
+    try:
+        mtime = schema_path.stat().st_mtime
+    except Exception:
+        return None
+
+    cached = _xsd_schema_cache.get(filename)
+    if cached and cached[0] == mtime:
+        return cached[1]
+
+    try:
+        content = schema_path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+    _xsd_schema_cache[filename] = (mtime, content)
+    return content
+
+
 def _run_document_validations(doc_id: str) -> dict:
     """
     Resolve all project validation rules applicable to this document,
@@ -1008,7 +1044,21 @@ def _run_document_validations(doc_id: str) -> dict:
             indata = spreadsheet_content
 
         project_config = get_project_config(project)
-        results = run_all_validations(indata, input_type, metadata, rule_specs, config=project_config)
+
+        xsd_schemas = {}
+        if input_type == "xml":
+            xsd_filenames = {
+                spec["key"] for spec in rule_specs
+                if spec.get("domain") == "xml" and spec.get("operator") == "xsd" and spec.get("key")
+            }
+            for filename in xsd_filenames:
+                content = _load_xsd_schema(filename)
+                if content is not None:
+                    xsd_schemas[filename] = content
+
+        results = run_all_validations(
+            indata, input_type, metadata, rule_specs, config=project_config, xsd_schemas=xsd_schemas
+        )
     else:
         results = []
 

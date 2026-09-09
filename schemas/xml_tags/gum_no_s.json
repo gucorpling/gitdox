@@ -50,6 +50,9 @@
   },
   "sp": {
     "attrs": {
+      "place": null,
+      "upvotes": null,
+      "when": null,
       "who": null,
       "whom": null
     },
