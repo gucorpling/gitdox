@@ -557,3 +557,111 @@ export const getMetadataValidationViolationKeys = (validation, metadataRows = []
 
   return [...violatingKeys];
 };
+
+// --- XML SCHEMA NORMALIZATION LOGIC ---
+
+export const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+export const toStringArray = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim());
+};
+
+export const toAttrSpec = (name, value, global = false) => {
+  if (typeof name !== 'string' || !name.trim()) return null;
+  const attrName = name.trim();
+  const values = toStringArray(value);
+  const attr = { name: attrName };
+  if (values.length > 0) attr.values = values;
+  if (global) attr.global = true;
+  return attr;
+};
+
+export const normalizeCm6XmlSchema = (schema) => {
+  if (!isPlainObject(schema)) return null;
+  if (!Array.isArray(schema.elements)) return null;
+
+  const elements = schema.elements
+    .map((element) => {
+      if (!isPlainObject(element)) return null;
+      if (typeof element.name !== 'string' || !element.name.trim()) return null;
+
+      const normalized = { name: element.name.trim() };
+      const children = toStringArray(element.children);
+      if (children.length > 0) normalized.children = children;
+
+      const textContent = toStringArray(element.textContent);
+      if (textContent.length > 0) normalized.textContent = textContent;
+
+      if (typeof element.top === 'boolean') normalized.top = element.top;
+
+      if (Array.isArray(element.attributes)) {
+        const attributes = element.attributes
+          .map((attr) => {
+            if (typeof attr === 'string') return attr.trim() || null;
+            if (!isPlainObject(attr)) return null;
+            return toAttrSpec(attr.name, attr.values, Boolean(attr.global));
+          })
+          .filter(Boolean);
+
+        if (attributes.length > 0) normalized.attributes = attributes;
+      }
+      return normalized;
+    })
+    .filter(Boolean);
+
+  if (elements.length === 0) return null;
+
+  const attributes = Array.isArray(schema.attributes)
+    ? schema.attributes.map((attr) => {
+        if (!isPlainObject(attr)) return null;
+        return toAttrSpec(attr.name, attr.values, Boolean(attr.global));
+      }).filter(Boolean)
+    : [];
+
+  return attributes.length > 0 ? { elements, attributes } : { elements };
+};
+
+export const normalizeLegacyXmlSchema = (schema) => {
+  if (!isPlainObject(schema)) return null;
+
+  const topLevel = new Set(toStringArray(schema['!top']));
+  const globalAttrs = isPlainObject(schema['!attrs']) ? schema['!attrs'] : {};
+
+  const elements = Object.entries(schema)
+    .filter(([key]) => typeof key === 'string' && key && !key.startsWith('!'))
+    .map(([name, spec]) => {
+      const normalized = { name };
+      if (topLevel.has(name)) normalized.top = true;
+
+      const children = toStringArray(spec?.children);
+      if (children.length > 0) normalized.children = children;
+
+      const textContent = toStringArray(spec?.textContent);
+      if (textContent.length > 0) normalized.textContent = textContent;
+
+      const attrSpecs = [];
+      if (isPlainObject(globalAttrs)) {
+        Object.entries(globalAttrs).forEach(([attrName, attrValues]) => {
+          const parsed = toAttrSpec(attrName, attrValues);
+          if (parsed) attrSpecs.push(parsed);
+        });
+      }
+      if (isPlainObject(spec?.attrs)) {
+        Object.entries(spec.attrs).forEach(([attrName, attrValues]) => {
+          const parsed = toAttrSpec(attrName, attrValues);
+          if (parsed) attrSpecs.push(parsed);
+        });
+      }
+
+      if (attrSpecs.length > 0) normalized.attributes = attrSpecs;
+
+      return normalized;
+    });
+
+  return elements.length > 0 ? { elements } : null;
+};
+
+export const buildXmlCompletionConfig = (schema) => {
+  return normalizeCm6XmlSchema(schema) || normalizeLegacyXmlSchema(schema);
+};
