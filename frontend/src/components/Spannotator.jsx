@@ -12,7 +12,6 @@ import {
   FileUp,
   Flame,
   FlaskConical,
-  Group,
   HelpCircle,
   Leaf,
   Link,
@@ -24,7 +23,6 @@ import {
   User,
   PersonStanding,
   Box,
-  X,
   XCircle,
   Clock3,
   Star
@@ -44,8 +42,6 @@ import {
   getNamedEntityTypes,
   getAnnotationStarColor,
   hasCrossingOverlap,
-  mergeCheckValues,
-  nextGroupId,
   normalizeCheckValue,
   parseTextToTokens,
   priorityOrderBridge,
@@ -197,6 +193,53 @@ function LegacyEntityIcon({ iconName, title, className, size = 12 }) {
   const normalized = String(iconName || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
   const Icon = LEGACY_ICON_MAP[iconName] || LEGACY_ICON_MAP[normalized] || HelpCircle;
   return <Icon title={title} size={size} strokeWidth={1.9} className={className} />;
+}
+
+function getEntityRect(rootEl, entityId) {
+  const box = rootEl?.querySelector(`#${CSS.escape(entityId)}`);
+  if (!box) return null;
+  return box.getBoundingClientRect();
+}
+
+function getAnchorPoint(rect, anchor) {
+  if (!rect) return null;
+  switch (anchor) {
+    case 'west': return { x: rect.left, y: rect.top + rect.height / 2 };
+    case 'east': return { x: rect.right, y: rect.top + rect.height / 2 };
+    case 'north': return { x: rect.left + rect.width / 2, y: rect.top };
+    case 'south': return { x: rect.left + rect.width / 2, y: rect.bottom };
+    case 'nw': return { x: rect.left, y: rect.top };
+    case 'ne': return { x: rect.right, y: rect.top };
+    case 'sw': return { x: rect.left, y: rect.bottom };
+    case 'se': return { x: rect.right, y: rect.bottom };
+    default: return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+}
+
+function chooseAnchors(sourceRect, targetRect) {
+  const sx = sourceRect.left + sourceRect.width / 2;
+  const sy = sourceRect.top + sourceRect.height / 2;
+  const tx = targetRect.left + targetRect.width / 2;
+  const ty = targetRect.top + targetRect.height / 2;
+  const dx = tx - sx;
+  const dy = ty - sy;
+
+  if (Math.abs(dx) > Math.abs(dy) * 1.3) {
+    return dx < 0
+      ? { source: 'west', target: 'east' }
+      : { source: 'east', target: 'west' };
+  }
+
+  if (Math.abs(dy) > Math.abs(dx) * 1.3) {
+    return dy < 0
+      ? { source: 'north', target: 'south' }
+      : { source: 'south', target: 'north' };
+  }
+
+  if (dx < 0 && dy < 0) return { source: 'nw', target: 'se' };
+  if (dx > 0 && dy < 0) return { source: 'ne', target: 'sw' };
+  if (dx < 0 && dy > 0) return { source: 'sw', target: 'ne' };
+  return { source: 'se', target: 'nw' };
 }
 
 const TokenNode = React.memo(function TokenNode({ tok, selected, resizeClassName = '', onMouseDown, onMouseEnter, onClick }) {
@@ -434,6 +477,7 @@ export default function Spannotator({
   const lastEmittedValueRef = useRef(null);
   const hasHydratedControlledValueRef = useRef(false);
   const suppressNextControlledEmitRef = useRef(false);
+  const [edgeLinePaths, setEdgeLinePaths] = useState([]); // Fixed refs inside render issue
 
   const showEntityLinking = parseConfigBoolean(
     modelConfig?.entities?.show_entity_linking ?? modelConfig?.show_entity_linking
@@ -592,30 +636,7 @@ export default function Spannotator({
     }
 
     return imported;
-  }, [config, meta_dict, modelConfig, onMetadataChange, socialcalcModel, tokens.length, value]);
-
-  const harmonizeCorefSalience = (groupId, entityMap = entities) => {
-    // Dynamic fallback for the primary grouping tier
-    const primaryGroupType = configuredGroups[0] || 'coref';
-    const members = groups[primaryGroupType]?.[groupId] || [];
-    if (members.length === 0) return;
-    const merged = mergeCheckValues(members.map((id) => entityMap[id]?.annos?.[summarySyncKey]), modelConfig, summarySyncKey);
-    setEntities((prev) => {
-      const next = { ...prev };
-      members.forEach((id) => {
-        if (!next[id]) return;
-        next[id] = {
-          ...next[id],
-          annos: {
-            ...next[id].annos,
-            [summarySyncKey]: merged
-          },
-          salienceField: true
-        };
-      });
-      return next;
-    });
-  };
+  }, [config, meta_dict, modelConfig, onMetadataChange, socialcalcModel, tokens, value]);
 
   const tokensById = useMemo(() => {
     const m = {};
@@ -650,19 +671,374 @@ export default function Spannotator({
     return map;
   }, [entitiesList, configuredEdges]);
 
-  const bridgeTriggerIds = useMemo(() => {
-    const ids = new Set();
-    const primaryGroup = configuredGroups[0] || 'coref';
-    Object.keys(groups[primaryGroup] || {}).forEach((gid) => {
-      if (parseInt(gid, 10) === 0) {
-        (groups[primaryGroup]?.[gid] || []).forEach((id) => ids.add(id));
-        return;
-      }
-      const members = sortByStart(groups[primaryGroup]?.[gid] || []);
-      if (members.length > 0) ids.add(members[0]);
+  const dispatchModelMutation = useCallback((action) => {
+    const currentState = createAnnotationState({
+      tokens,
+      entitiesById: entities,
+      groupsByType: groups,
+      assignedColors,
+      uiState: {
+        colorMode,
+        selectedTokens,
+        selectedEntities,
+        activeEntityId,
+        hoveredGroupEntities,
+        hoveredEdgeEntityId,
+        contextMenu,
+        dialogs: {
+          showImportDialog,
+          showExportDialog,
+          showAnnotationDialog
+        }
+      },
+      summaries,
+      config: modelConfig
     });
-    return ids;
-  }, [groups, configuredGroups]);
+
+    const nextState = spannotatorReducer(currentState, action);
+    setTokens(nextState.tokens);
+    setEntities(nextState.entitiesById);
+    setGroups(nextState.groupsByType);
+    setAssignedColors(nextState.assignedColors);
+    setSelectedTokens(new Set(nextState.uiState.selectedTokens || []));
+    setSelectedEntities(new Set(nextState.uiState.selectedEntities || []));
+    setActiveEntityId(nextState.uiState.activeEntityId || '');
+  }, [
+    tokens,
+    entities,
+    groups,
+    assignedColors,
+    colorMode,
+    selectedTokens,
+    selectedEntities,
+    activeEntityId,
+    hoveredGroupEntities,
+    hoveredEdgeEntityId,
+    contextMenu,
+    showImportDialog,
+    showExportDialog,
+    showAnnotationDialog,
+    summaries,
+    modelConfig
+  ]);
+
+  const changeEntityAnno = useCallback((entityId, key, changedValue) => {
+    const kind = getAnnotationKind(modelConfig, key);
+    setEntities((prev) => {
+      const e = prev[entityId];
+      if (!e) return prev;
+      return {
+        ...prev,
+        [entityId]: {
+          ...e,
+          annos: {
+            ...e.annos,
+            [key]: kind === 'checks' ? normalizeCheckValue(changedValue, modelConfig, key) : changedValue
+          },
+          salienceField: kind === 'checks' ? true : e.salienceField
+        }
+      };
+    });
+  }, [modelConfig]);
+
+  const changeEntityType = useCallback((entityId, entityType) => {
+    setEntities((prev) => {
+      const e = prev[entityId];
+      if (!e) return prev;
+
+      // 1. Update the targeted entity
+      const nextEntities = { ...prev };
+      nextEntities[entityId] = { ...e, type: entityType };
+
+      // 2. Propagate to cluster members if the grouping behavior enforces 'sametype'
+      const groupTypes = modelConfig?.GROUP_TYPES || [];
+      groupTypes.forEach((gType) => {
+        if (modelConfig?.GROUP_BEHAVIORS?.[gType] === 'sametype') {
+          const groupId = parseInt(e.groups?.[gType] || 0, 10);
+          
+          // Ignore group zero (singletons)
+          if (groupId > 0) {
+            // Grab the cluster members using the component's 'groups' state
+            const members = groups[gType]?.[groupId] || [];
+            members.forEach((id) => {
+              if (nextEntities[id] && nextEntities[id].type !== entityType) {
+                // Apply the exact same user-selected type to the rest of the cluster
+                nextEntities[id] = { ...nextEntities[id], type: entityType };
+              }
+            });
+          }
+        }
+      });
+
+      return nextEntities;
+    });
+  }, [modelConfig, groups]);
+
+  const assignGroup = useCallback((entityId, groupType, newGroupRaw, oldGroupHint = null) => {
+    const newGroup = parseInt(newGroupRaw, 10);
+
+    setEntities((prevEntities) => {
+      const entity = prevEntities[entityId];
+      if (!entity) return prevEntities;
+      return {
+        ...prevEntities,
+        [entityId]: {
+          ...entity,
+          tgroups: { ...entity.groups, [groupType]: newGroup }
+        }
+      };
+    });
+
+    setGroups((prevGroups) => {
+      const nextGroups = { ...prevGroups };
+      if (!nextGroups[groupType]) nextGroups[groupType] = { 0: [] };
+      nextGroups[groupType] = { ...nextGroups[groupType] };
+
+      const groupEntries = nextGroups[groupType];
+      if (!groupEntries[0]) groupEntries[0] = [];
+      const detectedOldGroup = Object.keys(groupEntries).find((gid) => (groupEntries[gid] || []).includes(entityId));
+      const oldGroup = oldGroupHint != null
+        ? parseInt(oldGroupHint, 10)
+        : (detectedOldGroup != null ? parseInt(detectedOldGroup, 10) : 0);
+
+      if (!groupEntries[newGroup]) groupEntries[newGroup] = [];
+
+      if (oldGroup !== newGroup && groupEntries[oldGroup]) {
+        groupEntries[oldGroup] = groupEntries[oldGroup].filter((id) => id !== entityId);
+        if (oldGroup !== 0 && groupEntries[oldGroup].length === 0) {
+          delete groupEntries[oldGroup];
+        } else if (oldGroup !== 0 && groupEntries[oldGroup].length === 1) {
+          const dissolvedMembers = [...groupEntries[oldGroup]];
+          dissolvedMembers.forEach((id) => {
+            if (!groupEntries[0].includes(id)) groupEntries[0] = [...groupEntries[0], id];
+          });
+          delete groupEntries[oldGroup];
+
+          setEntities((prevEntities) => {
+            const nextEntities = { ...prevEntities };
+            dissolvedMembers.forEach((id) => {
+              const member = nextEntities[id];
+              if (!member) return;
+
+              const nextMember = {
+                ...member,
+                groups: { ...member.groups, [groupType]: 0 }
+              };
+
+              // Dynamic Cleanup for Edge modes
+              if (configuredEdges.includes(groupType)) {
+                nextMember.bridge_antec = groupType === 'bridge' ? '_' : nextMember.bridge_antec;
+                nextMember.antecedents = {
+                  ...(nextMember.antecedents || {}),
+                  [groupType]: '_'
+                };
+                
+                let nextAnnos = { ...nextMember.annos };
+                // Cleanup related subtypes dynamically
+                const edgeConf = modelConfig?.colors?.edges?.[groupType];
+                if (edgeConf) {
+                  const subtypeKeys = Object.keys(edgeConf).filter(k => Array.isArray(edgeConf[k]));
+                  subtypeKeys.forEach(key => {
+                     nextAnnos[key] = `no${groupType}`;
+                  });
+                }
+                
+                // Fallback for strict bridge behavior if configured explicitly
+                if (groupType === 'bridge' && !edgeConf) {
+                    nextAnnos.bridgetype = 'nobridge';
+                    nextAnnos.infstat = nextAnnos.infstat === 'acc' ? 'auto' : nextAnnos.infstat;
+                }
+                nextMember.annos = nextAnnos;
+              }
+
+              nextEntities[id] = nextMember;
+            });
+            return nextEntities;
+          });
+        }
+      }
+
+      if (!groupEntries[newGroup]) groupEntries[newGroup] = [];
+      if (!groupEntries[newGroup].includes(entityId)) {
+        groupEntries[newGroup] = [...groupEntries[newGroup], entityId];
+      }
+
+      return nextGroups;
+    });
+
+    setAssignedColors((prev) => {
+      const next = { ...prev };
+      if (!next[groupType]) next[groupType] = { 0: GLOBAL_DEFAULTS.DEFAULT_COLOR };
+      if (!(newGroup in next[groupType])) {
+        next[groupType][newGroup] = newGroup === 0
+          ? GLOBAL_DEFAULTS.DEFAULT_COLOR
+          : (COREF_COLORS[newGroup - 1] || `#${Math.floor(Math.random() * 16777215).toString(16)}`);
+      }
+      return next;
+    });
+  }, [configuredEdges, modelConfig, COREF_COLORS, GLOBAL_DEFAULTS]);
+
+  const addEntity = useCallback((forcedTokenIds = null, forcedType = null) => {
+    const tokIds = forcedTokenIds ? [...forcedTokenIds] : Array.from(selectedTokens);
+    if (tokIds.length === 0) return;
+
+    tokIds.sort((a, b) => a - b);
+    const start = tokIds[0];
+    const end = tokIds[tokIds.length - 1];
+
+    for (let i = 1; i < tokIds.length; i += 1) {
+      if (tokIds[i] !== tokIds[i - 1] + 1) return;
+    }
+
+    const sentNum = tokensById[start]?.sentnum;
+    if (!sentNum) return;
+    if (tokIds.some((tid) => tokensById[tid]?.sentnum !== sentNum)) return;
+
+    const divId = `${start}-${end}`;
+    if (entities[divId]) return;
+
+    for (const e of entitiesList) {
+      if (hasCrossingOverlap(e, start, end)) return;
+    }
+
+    const entityType = forcedType || GLOBAL_DEFAULTS.DEFAULT_ENTITY_TYPE;
+    
+    const initialGroups = {};
+    allColorModes.forEach(mode => initialGroups[mode] = 0);
+    
+    const initialAntecedents = {};
+    configuredEdges.forEach(mode => initialAntecedents[mode] = '_');
+
+    const nextEntity = {
+      type: entityType,
+      start,
+      end,
+      toks: tokIds,
+      length: end - start + 1,
+      div_id: divId,
+      annos: { ...DEFAULT_ANNOS },
+      salienceField: true,
+      identity: '_',
+      bridge_antec: '_', // mainting for backward compatibility with model.js imports
+      antecedents: initialAntecedents,
+      next: {},
+      groups: initialGroups
+    };
+
+    setEntities((prev) => ({ ...prev, [divId]: nextEntity }));
+    setGroups((prev) => {
+      const next = { ...prev };
+      allColorModes.forEach((gtype) => {
+        if (!next[gtype]) next[gtype] = { 0: [] };
+        if (!next[gtype][0]) next[gtype][0] = [];
+        if (!next[gtype][0].includes(divId)) next[gtype][0] = [...next[gtype][0], divId];
+      });
+      return next;
+    });
+
+    setActiveEntityId(divId);
+    setSelectedTokens(new Set());
+    setSelectedEntities(new Set());
+  }, [selectedTokens, tokensById, entities, entitiesList, GLOBAL_DEFAULTS, allColorModes, configuredEdges, DEFAULT_ANNOS]);
+
+  const deleteEntity = useCallback((entityId) => {
+    setEntities((prev) => {
+      if (!prev[entityId]) return prev;
+      const next = { ...prev };
+      delete next[entityId];
+      return next;
+    });
+
+    setGroups((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((gtype) => {
+        const gObj = { ...next[gtype] };
+        if (!gObj[0]) gObj[0] = [];
+        Object.keys(gObj).forEach((gid) => {
+          gObj[gid] = gObj[gid].filter((id) => id !== entityId);
+          if (parseInt(gid, 10) !== 0 && gObj[gid].length === 0) {
+            delete gObj[gid];
+          } else if (parseInt(gid, 10) !== 0 && gObj[gid].length === 1) {
+            const [remainingId] = gObj[gid];
+            if (remainingId && !gObj[0].includes(remainingId)) {
+              gObj[0] = [...gObj[0], remainingId];
+            }
+            delete gObj[gid];
+
+            setEntities((prevEntities) => {
+              const remainingEntity = prevEntities[remainingId];
+              if (!remainingEntity) return prevEntities;
+
+              const nextEntities = {
+                ...prevEntities,
+                [remainingId]: {
+                  ...remainingEntity,
+                  groups: {
+                    ...remainingEntity.groups,
+                    [gtype]: 0
+                  }
+                }
+              };
+
+              // Dynamic Cleanup for Edges
+              if (configuredEdges.includes(gtype)) {
+                nextEntities[remainingId] = {
+                  ...nextEntities[remainingId],
+                  bridge_antec: gtype === 'bridge' ? '_' : nextEntities[remainingId].bridge_antec,
+                  antecedents: {
+                    ...(nextEntities[remainingId].antecedents || {}),
+                    [gtype]: '_'
+                  }
+                };
+                
+                let nextAnnos = { ...nextEntities[remainingId].annos };
+                const edgeConf = modelConfig?.colors?.edges?.[gtype];
+                if (edgeConf) {
+                  const subtypeKeys = Object.keys(edgeConf).filter(k => Array.isArray(edgeConf[k]));
+                  subtypeKeys.forEach(key => {
+                     nextAnnos[key] = `no${gtype}`;
+                  });
+                }
+                if (gtype === 'bridge' && !edgeConf) {
+                    nextAnnos.bridgetype = 'nobridge';
+                    nextAnnos.infstat = nextAnnos.infstat === 'acc' ? 'auto' : nextAnnos.infstat;
+                }
+                nextEntities[remainingId].annos = nextAnnos;
+              }
+
+              return nextEntities;
+            });
+          }
+        });
+        next[gtype] = gObj;
+      });
+      return next;
+    });
+
+    setSelectedEntities((prev) => {
+      const n = new Set(prev);
+      n.delete(entityId);
+      return n;
+    });
+    if (activeEntityId === entityId) setActiveEntityId('');
+    setContextMenu({ open: false, x: 0, y: 0, entityId: '' });
+  }, [configuredEdges, modelConfig, activeEntityId]);
+
+  const groupSelected = useCallback(() => {
+    if (colorMode === 'entities') return;
+    dispatchModelMutation({
+      type: 'GROUP_SELECTED',
+      groupType: colorMode
+    });
+  }, [colorMode, dispatchModelMutation]);
+
+  const ungroupSelected = useCallback(() => {
+    if (colorMode === 'entities') return;
+    dispatchModelMutation({
+      type: 'UNGROUP_SELECTED',
+      groupType: colorMode
+    });
+  }, [colorMode, dispatchModelMutation]);
 
   const activeSummary = summaries[activeSummaryIndex] || '';
   const activeSummaryDisplay = summaries.length > 0 ? `${activeSummaryIndex + 1} ${activeSummary}` : '';
@@ -670,6 +1046,7 @@ export default function Spannotator({
   useEffect(() => {
     if (annotationKeys.length === 0) return;
     if (!selectedAnnoKey || !annotationKeys.includes(selectedAnnoKey)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedAnnoKey(annotationKeys[0]);
     }
   }, [annotationKeys, selectedAnnoKey]);
@@ -684,6 +1061,7 @@ export default function Spannotator({
 
   useEffect(() => {
     if (summaries.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveSummaryIndex(0);
       setSummaryBarHeight(0);
       return;
@@ -695,6 +1073,7 @@ export default function Spannotator({
 
   useEffect(() => {
     if (summaries.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSummaryBarHeight(0);
       return undefined;
     }
@@ -747,11 +1126,13 @@ export default function Spannotator({
 
   useEffect(() => {
     if (showFirstMentionsButton) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowBridgeTriggers(false);
   }, [showFirstMentionsButton]);
 
   useEffect(() => {
     if (canAccessDataTransfer) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowImportDialog(false);
     setShowExportDialog(false);
   }, [canAccessDataTransfer]);
@@ -768,6 +1149,7 @@ export default function Spannotator({
     suppressNextControlledEmitRef.current = true;
 
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       applyImportedData(nextValue);
       lastImportedValueRef.current = nextValue;
       hasHydratedControlledValueRef.current = true;
@@ -847,7 +1229,7 @@ export default function Spannotator({
       document.removeEventListener('mousedown', onDocMouseDown);
       document.removeEventListener('keyup', onKeyUp);
     };
-  }, [selectedTokens, selectedEntities, colorMode, summaries.length]);
+  }, [selectedTokens, selectedEntities, colorMode, summaries.length, addEntity, groupSelected, ungroupSelected]);
 
   useEffect(() => {
     const onMouseUp = () => {
@@ -1034,309 +1416,7 @@ export default function Spannotator({
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [entities, findNearestResizeToken, getResizeProposal]);
-
-  const assignGroup = (entityId, groupType, newGroupRaw, oldGroupHint = null) => {
-    const newGroup = parseInt(newGroupRaw, 10);
-
-    setEntities((prevEntities) => {
-      const entity = prevEntities[entityId];
-      if (!entity) return prevEntities;
-      return {
-        ...prevEntities,
-        [entityId]: {
-          ...entity,
-          tgroups: { ...entity.groups, [groupType]: newGroup }
-        }
-      };
-    });
-
-    setGroups((prevGroups) => {
-      const nextGroups = { ...prevGroups };
-      if (!nextGroups[groupType]) nextGroups[groupType] = { 0: [] };
-      nextGroups[groupType] = { ...nextGroups[groupType] };
-
-      const groupEntries = nextGroups[groupType];
-      if (!groupEntries[0]) groupEntries[0] = [];
-      const detectedOldGroup = Object.keys(groupEntries).find((gid) => (groupEntries[gid] || []).includes(entityId));
-      const oldGroup = oldGroupHint != null
-        ? parseInt(oldGroupHint, 10)
-        : (detectedOldGroup != null ? parseInt(detectedOldGroup, 10) : 0);
-
-      if (!groupEntries[newGroup]) groupEntries[newGroup] = [];
-
-      if (oldGroup !== newGroup && groupEntries[oldGroup]) {
-        groupEntries[oldGroup] = groupEntries[oldGroup].filter((id) => id !== entityId);
-        if (oldGroup !== 0 && groupEntries[oldGroup].length === 0) {
-          delete groupEntries[oldGroup];
-        } else if (oldGroup !== 0 && groupEntries[oldGroup].length === 1) {
-          const dissolvedMembers = [...groupEntries[oldGroup]];
-          dissolvedMembers.forEach((id) => {
-            if (!groupEntries[0].includes(id)) groupEntries[0] = [...groupEntries[0], id];
-          });
-          delete groupEntries[oldGroup];
-
-          setEntities((prevEntities) => {
-            const nextEntities = { ...prevEntities };
-            dissolvedMembers.forEach((id) => {
-              const member = nextEntities[id];
-              if (!member) return;
-
-              const nextMember = {
-                ...member,
-                groups: { ...member.groups, [groupType]: 0 }
-              };
-
-              // Dynamic Cleanup for Edge modes
-              if (configuredEdges.includes(groupType)) {
-                nextMember.bridge_antec = groupType === 'bridge' ? '_' : nextMember.bridge_antec;
-                nextMember.antecedents = {
-                  ...(nextMember.antecedents || {}),
-                  [groupType]: '_'
-                };
-                
-                let nextAnnos = { ...nextMember.annos };
-                // Cleanup related subtypes dynamically
-                const edgeConf = modelConfig?.colors?.edges?.[groupType];
-                if (edgeConf) {
-                  const subtypeKeys = Object.keys(edgeConf).filter(k => Array.isArray(edgeConf[k]));
-                  subtypeKeys.forEach(key => {
-                     nextAnnos[key] = `no${groupType}`;
-                  });
-                }
-                
-                // Fallback for strict bridge behavior if configured explicitly
-                if (groupType === 'bridge' && !edgeConf) {
-                    nextAnnos.bridgetype = 'nobridge';
-                    nextAnnos.infstat = nextAnnos.infstat === 'acc' ? 'auto' : nextAnnos.infstat;
-                }
-                nextMember.annos = nextAnnos;
-              }
-
-              nextEntities[id] = nextMember;
-            });
-            return nextEntities;
-          });
-        }
-      }
-
-      if (!groupEntries[newGroup]) groupEntries[newGroup] = [];
-      if (!groupEntries[newGroup].includes(entityId)) {
-        groupEntries[newGroup] = [...groupEntries[newGroup], entityId];
-      }
-
-      return nextGroups;
-    });
-
-    setAssignedColors((prev) => {
-      const next = { ...prev };
-      if (!next[groupType]) next[groupType] = { 0: GLOBAL_DEFAULTS.DEFAULT_COLOR };
-      if (!(newGroup in next[groupType])) {
-        next[groupType][newGroup] = newGroup === 0
-          ? GLOBAL_DEFAULTS.DEFAULT_COLOR
-          : (COREF_COLORS[newGroup - 1] || `#${Math.floor(Math.random() * 16777215).toString(16)}`);
-      }
-      return next;
-    });
-  };
-
-  const addEntity = (forcedTokenIds = null, forcedType = null) => {
-    const tokIds = forcedTokenIds ? [...forcedTokenIds] : Array.from(selectedTokens);
-    if (tokIds.length === 0) return;
-
-    tokIds.sort((a, b) => a - b);
-    const start = tokIds[0];
-    const end = tokIds[tokIds.length - 1];
-
-    for (let i = 1; i < tokIds.length; i += 1) {
-      if (tokIds[i] !== tokIds[i - 1] + 1) return;
-    }
-
-    const sentNum = tokensById[start]?.sentnum;
-    if (!sentNum) return;
-    if (tokIds.some((tid) => tokensById[tid]?.sentnum !== sentNum)) return;
-
-    const divId = `${start}-${end}`;
-    if (entities[divId]) return;
-
-    for (const e of entitiesList) {
-      if (hasCrossingOverlap(e, start, end)) return;
-    }
-
-    const entityType = forcedType || GLOBAL_DEFAULTS.DEFAULT_ENTITY_TYPE;
-    
-    const initialGroups = {};
-    allColorModes.forEach(mode => initialGroups[mode] = 0);
-    
-    const initialAntecedents = {};
-    configuredEdges.forEach(mode => initialAntecedents[mode] = '_');
-
-    const nextEntity = {
-      type: entityType,
-      start,
-      end,
-      toks: tokIds,
-      length: end - start + 1,
-      div_id: divId,
-      annos: { ...DEFAULT_ANNOS },
-      salienceField: true,
-      identity: '_',
-      bridge_antec: '_', // mainting for backward compatibility with model.js imports
-      antecedents: initialAntecedents,
-      next: {},
-      groups: initialGroups
-    };
-
-    setEntities((prev) => ({ ...prev, [divId]: nextEntity }));
-    setGroups((prev) => {
-      const next = { ...prev };
-      allColorModes.forEach((gtype) => {
-        if (!next[gtype]) next[gtype] = { 0: [] };
-        if (!next[gtype][0]) next[gtype][0] = [];
-        if (!next[gtype][0].includes(divId)) next[gtype][0] = [...next[gtype][0], divId];
-      });
-      return next;
-    });
-
-    setActiveEntityId(divId);
-    setSelectedTokens(new Set());
-    setSelectedEntities(new Set());
-  };
-
-  const deleteEntity = (entityId) => {
-    setEntities((prev) => {
-      if (!prev[entityId]) return prev;
-      const next = { ...prev };
-      delete next[entityId];
-      return next;
-    });
-
-    setGroups((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((gtype) => {
-        const gObj = { ...next[gtype] };
-        if (!gObj[0]) gObj[0] = [];
-        Object.keys(gObj).forEach((gid) => {
-          gObj[gid] = gObj[gid].filter((id) => id !== entityId);
-          if (parseInt(gid, 10) !== 0 && gObj[gid].length === 0) {
-            delete gObj[gid];
-          } else if (parseInt(gid, 10) !== 0 && gObj[gid].length === 1) {
-            const [remainingId] = gObj[gid];
-            if (remainingId && !gObj[0].includes(remainingId)) {
-              gObj[0] = [...gObj[0], remainingId];
-            }
-            delete gObj[gid];
-
-            setEntities((prevEntities) => {
-              const remainingEntity = prevEntities[remainingId];
-              if (!remainingEntity) return prevEntities;
-
-              const nextEntities = {
-                ...prevEntities,
-                [remainingId]: {
-                  ...remainingEntity,
-                  groups: {
-                    ...remainingEntity.groups,
-                    [gtype]: 0
-                  }
-                }
-              };
-
-              // Dynamic Cleanup for Edges
-              if (configuredEdges.includes(gtype)) {
-                nextEntities[remainingId] = {
-                  ...nextEntities[remainingId],
-                  bridge_antec: gtype === 'bridge' ? '_' : nextEntities[remainingId].bridge_antec,
-                  antecedents: {
-                    ...(nextEntities[remainingId].antecedents || {}),
-                    [gtype]: '_'
-                  }
-                };
-                
-                let nextAnnos = { ...nextEntities[remainingId].annos };
-                const edgeConf = modelConfig?.colors?.edges?.[gtype];
-                if (edgeConf) {
-                  const subtypeKeys = Object.keys(edgeConf).filter(k => Array.isArray(edgeConf[k]));
-                  subtypeKeys.forEach(key => {
-                     nextAnnos[key] = `no${gtype}`;
-                  });
-                }
-                if (gtype === 'bridge' && !edgeConf) {
-                    nextAnnos.bridgetype = 'nobridge';
-                    nextAnnos.infstat = nextAnnos.infstat === 'acc' ? 'auto' : nextAnnos.infstat;
-                }
-                nextEntities[remainingId].annos = nextAnnos;
-              }
-
-              return nextEntities;
-            });
-          }
-        });
-        next[gtype] = gObj;
-      });
-      return next;
-    });
-
-    setSelectedEntities((prev) => {
-      const n = new Set(prev);
-      n.delete(entityId);
-      return n;
-    });
-    if (activeEntityId === entityId) setActiveEntityId('');
-    setContextMenu({ open: false, x: 0, y: 0, entityId: '' });
-  };
-
-  const changeEntityAnno = (entityId, key, value) => {
-    const kind = getAnnotationKind(modelConfig, key);
-    setEntities((prev) => {
-      const e = prev[entityId];
-      if (!e) return prev;
-      return {
-        ...prev,
-        [entityId]: {
-          ...e,
-          annos: {
-            ...e.annos,
-            [key]: kind === 'checks' ? normalizeCheckValue(value, modelConfig, key) : value
-          },
-          salienceField: kind === 'checks' ? true : e.salienceField
-        }
-      };
-    });
-  };
-
-const changeEntityType = (entityId, entityType) => {
-    setEntities((prev) => {
-      const e = prev[entityId];
-      if (!e) return prev;
-
-      // 1. Update the targeted entity
-      const nextEntities = { ...prev };
-      nextEntities[entityId] = { ...e, type: entityType };
-
-      // 2. Propagate to cluster members if the grouping behavior enforces 'sametype'
-      const groupTypes = modelConfig?.GROUP_TYPES || [];
-      groupTypes.forEach((gType) => {
-        if (modelConfig?.GROUP_BEHAVIORS?.[gType] === 'sametype') {
-          const groupId = parseInt(e.groups?.[gType] || 0, 10);
-          
-          // Ignore group zero (singletons)
-          if (groupId > 0) {
-            // Grab the cluster members using the component's 'groups' state
-            const members = groups[gType]?.[groupId] || [];
-            members.forEach((id) => {
-              if (nextEntities[id] && nextEntities[id].type !== entityType) {
-                // Apply the exact same user-selected type to the rest of the cluster
-                nextEntities[id] = { ...nextEntities[id], type: entityType };
-              }
-            });
-          }
-        }
-      });
-
-      return nextEntities;
-    });
-  };
+  }, [entities, findNearestResizeToken, getResizeProposal, addEntity, assignGroup, deleteEntity]);
 
   const refreshNamedEntityListing = useCallback(() => {
     const source = {
@@ -1402,7 +1482,7 @@ const changeEntityType = (entityId, entityType) => {
     targetEntityIds.forEach((entityId) => {
       changeEntityAnno(entityId, identityAnnotationKey, nextValue);
     });
-  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens]);
+  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens, changeEntityAnno]);
 
   const confirmNamedEntityIdentitySuggestion = useCallback((entityType, textValue) => {
     const inputKey = namedEntityInputKey(entityType, textValue);
@@ -1429,7 +1509,7 @@ const changeEntityType = (entityId, entityType) => {
       delete next[inputKey];
       return next;
     });
-  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityIdentityInputs, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens]);
+  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityIdentityInputs, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens, changeEntityAnno]);
 
   const runGuessIdentities = useCallback(async () => {
     if (typeof onGuessIdentities !== 'function') return;
@@ -1505,93 +1585,6 @@ const changeEntityType = (entityId, entityType) => {
     }
   }, [entities, entityTypeAnnotationKey, modelConfig, namedEntityIdentityInputs, namedEntityInputKey, onGuessIdentities, socialcalcModel, tokens]);
 
-  const harmonizeCorefSalienceForMembers = (memberIds, entityMap = entities) => {
-    if (!Array.isArray(memberIds) || memberIds.length === 0) return;
-    const merged = mergeCheckValues(memberIds.map((id) => entityMap[id]?.annos?.[summarySyncKey]), modelConfig, summarySyncKey);
-    setEntities((prev) => {
-      const next = { ...prev };
-      memberIds.forEach((id) => {
-        if (!next[id]) return;
-        next[id] = {
-          ...next[id],
-          annos: {
-            ...next[id].annos,
-            [summarySyncKey]: merged
-          },
-          salienceField: true
-        };
-      });
-      return next;
-    });
-  };
-
-  const dispatchModelMutation = useCallback((action) => {
-    const currentState = createAnnotationState({
-      tokens,
-      entitiesById: entities,
-      groupsByType: groups,
-      assignedColors,
-      uiState: {
-        colorMode,
-        selectedTokens,
-        selectedEntities,
-        activeEntityId,
-        hoveredGroupEntities,
-        hoveredEdgeEntityId,
-        contextMenu,
-        dialogs: {
-          showImportDialog,
-          showExportDialog,
-          showAnnotationDialog
-        }
-      },
-      summaries,
-      config: modelConfig
-    });
-
-    const nextState = spannotatorReducer(currentState, action);
-    setTokens(nextState.tokens);
-    setEntities(nextState.entitiesById);
-    setGroups(nextState.groupsByType);
-    setAssignedColors(nextState.assignedColors);
-    setSelectedTokens(new Set(nextState.uiState.selectedTokens || []));
-    setSelectedEntities(new Set(nextState.uiState.selectedEntities || []));
-    setActiveEntityId(nextState.uiState.activeEntityId || '');
-  }, [
-    tokens,
-    entities,
-    groups,
-    assignedColors,
-    colorMode,
-    selectedTokens,
-    selectedEntities,
-    activeEntityId,
-    hoveredGroupEntities,
-    hoveredEdgeEntityId,
-    contextMenu,
-    showImportDialog,
-    showExportDialog,
-    showAnnotationDialog,
-    summaries,
-    modelConfig
-  ]);
-
-  const groupSelected = () => {
-    if (colorMode === 'entities') return;
-    dispatchModelMutation({
-      type: 'GROUP_SELECTED',
-      groupType: colorMode
-    });
-  };
-
-  const ungroupSelected = () => {
-    if (colorMode === 'entities') return;
-    dispatchModelMutation({
-      type: 'UNGROUP_SELECTED',
-      groupType: colorMode
-    });
-  };
-
   const getEntityColor = useCallback((entity) => {
     if (colorMode === 'entities') {
       return ICON_MAP[entity.type]?.[1] || GLOBAL_DEFAULTS.DEFAULT_COLOR;
@@ -1654,53 +1647,6 @@ const changeEntityType = (entityId, entityType) => {
     return '';
   }, [annotationKeys, modelConfig]);
 
-  const getEntityRect = (entityId) => {
-    const box = rootRef.current?.querySelector(`#${CSS.escape(entityId)}`);
-    if (!box) return null;
-    return box.getBoundingClientRect();
-  };
-
-  const getAnchorPoint = (rect, anchor) => {
-    if (!rect) return null;
-    switch (anchor) {
-      case 'west': return { x: rect.left, y: rect.top + rect.height / 2 };
-      case 'east': return { x: rect.right, y: rect.top + rect.height / 2 };
-      case 'north': return { x: rect.left + rect.width / 2, y: rect.top };
-      case 'south': return { x: rect.left + rect.width / 2, y: rect.bottom };
-      case 'nw': return { x: rect.left, y: rect.top };
-      case 'ne': return { x: rect.right, y: rect.top };
-      case 'sw': return { x: rect.left, y: rect.bottom };
-      case 'se': return { x: rect.right, y: rect.bottom };
-      default: return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }
-  };
-
-  const chooseAnchors = (sourceRect, targetRect) => {
-    const sx = sourceRect.left + sourceRect.width / 2;
-    const sy = sourceRect.top + sourceRect.height / 2;
-    const tx = targetRect.left + targetRect.width / 2;
-    const ty = targetRect.top + targetRect.height / 2;
-    const dx = tx - sx;
-    const dy = ty - sy;
-
-    if (Math.abs(dx) > Math.abs(dy) * 1.3) {
-      return dx < 0
-        ? { source: 'west', target: 'east' }
-        : { source: 'east', target: 'west' };
-    }
-
-    if (Math.abs(dy) > Math.abs(dx) * 1.3) {
-      return dy < 0
-        ? { source: 'north', target: 'south' }
-        : { source: 'south', target: 'north' };
-    }
-
-    if (dx < 0 && dy < 0) return { source: 'nw', target: 'se' };
-    if (dx > 0 && dy < 0) return { source: 'ne', target: 'sw' };
-    if (dx < 0 && dy > 0) return { source: 'sw', target: 'ne' };
-    return { source: 'se', target: 'nw' };
-  };
-
   const hoveredEdgeConnections = useMemo(() => {
     if (!configuredEdges.includes(colorMode)) return [];
     if (!hoveredEdgeEntityId || !entities[hoveredEdgeEntityId]) return [];
@@ -1736,20 +1682,23 @@ const changeEntityType = (entityId, entityType) => {
     });
 
     return connections;
-  }, [hoveredEdgeEntityId, entities, colorMode, assignedColors, edgeDependentsByAntec, configuredEdges, getEntityColor]);
+  }, [hoveredEdgeEntityId, entities, colorMode, edgeDependentsByAntec, configuredEdges, getEntityColor]);
 
-  const edgeLinePaths = useMemo(() => {
-    if (!rootRef.current || hoveredEdgeConnections.length === 0) return [];
+  useEffect(() => {
+    if (!rootRef.current || hoveredEdgeConnections.length === 0) {
+      setEdgeLinePaths([]);
+      return;
+    }
 
     const rectCache = new Map();
     const getCachedRect = (entityId) => {
       if (rectCache.has(entityId)) return rectCache.get(entityId);
-      const rect = getEntityRect(entityId);
+      const rect = getEntityRect(rootRef.current, entityId);
       rectCache.set(entityId, rect);
       return rect;
     };
 
-    return hoveredEdgeConnections
+    const paths = hoveredEdgeConnections
       .map((conn) => {
         const srcRect = getCachedRect(conn.sourceId);
         const trgRect = getCachedRect(conn.targetId);
@@ -1764,6 +1713,8 @@ const changeEntityType = (entityId, entityType) => {
         return { ...conn, d };
       })
       .filter(Boolean);
+
+    setEdgeLinePaths(paths);
   }, [hoveredEdgeConnections]);
 
   const onTokenMouseDown = useCallback((event, tid) => {
@@ -2058,7 +2009,7 @@ const changeEntityType = (entityId, entityType) => {
     }
   };
 
-const runDynamicTool = useCallback(async (toolKey) => {
+  const runDynamicTool = useCallback(async (toolKey) => {
     if (typeof onRunTool !== 'function' || typeof onImportSgml !== 'function' || activeTools[toolKey]) return;
 
     setActiveTools((prev) => ({ ...prev, [toolKey]: true }));
@@ -2381,13 +2332,13 @@ const runDynamicTool = useCallback(async (toolKey) => {
     onEntityMouseMove,
     onEntityMouseDown,
     onEntityHover,
-    onEntityHoverOut,
     onEntityMouseLeave,
     onEntityDoubleClick,
     openTypeMenu,
     onDeleteEntityMouseDown,
     configuredEdges,
-    modelConfig
+    modelConfig,
+    summarySyncKey
   ]);
 
   const sentenceNumbers = Object.keys(sentenceMap).map(Number).sort((a, b) => a - b);
