@@ -1,15 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Plus, Trash2, Edit, X, Copy, Code } from 'lucide-react';
-import CodeMirror from '@uiw/react-codemirror';
-import { EditorView } from '@codemirror/view';
-import { xml } from '@codemirror/lang-xml';
-import { insertNewline } from '@codemirror/commands';
-import { Prec } from '@codemirror/state';
-import { keymap } from '@codemirror/view';
+import { Plus, Trash2, Edit, X, Copy } from 'lucide-react';
 import SpreadsheetEditor from './SpreadsheetEditor';
 import Spannotator from './Spannotator';
 import { Dendroid } from './Dendroid';
 import ValidationBadge from './ValidationBadge';
+import XmlEditor from './XmlEditor';
 import {
   DEFAULT_STATUS_CATEGORIES,
   formatStatusCategoryLabel,
@@ -60,10 +55,6 @@ export default function DocumentEditor({
   
   const [lastReadyValidation, setLastReadyValidation] = useState(null);
   const [prevValidation, setPrevValidation] = useState(null);
-
-  const cmRef = useRef(null);
-  const [xmlTagModalOpen, setXmlTagModalOpen] = useState(false);
-  const [xmlTagForm, setXmlTagForm] = useState({ tag: '', attr: '', val: '' });
 
   // Metadata States
   const [metadata, setMetadata] = useState([]); // Document metadata
@@ -1183,45 +1174,6 @@ export default function DocumentEditor({
   );
   const xmlAutoIndent = editorFonts?.xml?.auto_indent !== false;
   const xmlSchemaWarning = typeof editorFonts?.xml?.tags_schema_error === 'string' ? editorFonts.xml.tags_schema_error : '';
-  const xmlEditorExtensions = useMemo(() => {
-    const extensions = [];
-
-    extensions.push(
-      keymap.of([
-        {
-          key: 'Ctrl-e', 
-          mac: 'Cmd-e', 
-          run: () => {
-            setXmlTagModalOpen(true);
-            return true;
-          }
-        }
-      ])
-    );
-
-    if (!xmlAutoIndent) {
-      extensions.push(
-        Prec.highest(
-          keymap.of([
-            { key: 'Enter', run: insertNewline, shift: insertNewline }
-          ])
-        )
-      );
-    }
-
-    if (xmlTagCompletion?.elements?.length) {
-      extensions.push(xml(xmlTagCompletion));
-    } else {
-      extensions.push(xml());
-    }
-
-    // Add word wrap if desired using extensions={[EditorView.lineWrapping]}
-    if (editorFonts?.xml?.line_wrapping) {
-      extensions.push(EditorView.lineWrapping);
-    }
-
-    return extensions;
-  }, [xmlAutoIndent, xmlTagCompletion, editorFonts?.xml?.line_wrapping]);
 
   const isDocLoaded = doc !== null;
   useEffect(() => {
@@ -1308,48 +1260,6 @@ export default function DocumentEditor({
   const handleFindOpen = useCallback(() => {
     setValidationBadgeCollapseSignal((signal) => signal + 1);
   }, []);
-
-  const handleInsertXmlTag = (e) => {
-    e.preventDefault();
-    const { tag, attr, val } = xmlTagForm;
-    const cleanTag = tag.trim();
-    
-    // Disable OK if no tag
-    if (!cleanTag) return;
-
-    if (cmRef.current && cmRef.current.view) {
-      const view = cmRef.current.view;
-      const state = view.state;
-      const selection = state.selection.main;
-      const selectedText = state.sliceDoc(selection.from, selection.to);
-
-      // Build the tags
-      let openTag = `<${cleanTag}`;
-      if (attr.trim()) {
-        openTag += ` ${attr.trim()}="${val.trim()}"`;
-      }
-      openTag += '>';
-      const closeTag = `</${cleanTag}>`;
-
-      // Dispatch the change directly to CodeMirror
-      view.dispatch({
-        changes: {
-          from: selection.from,
-          to: selection.to,
-          insert: openTag + selectedText + closeTag
-        },
-        // Leave the wrapped text selected afterward
-        selection: { 
-          anchor: selection.from + openTag.length, 
-          head: selection.from + openTag.length + selectedText.length 
-        }
-      });
-      
-      // Refocus the editor
-      view.focus();
-    }
-    setXmlTagModalOpen(false);
-  };
 
 
   if (!doc) return <div className="p-8 text-center">Loading document...</div>;
@@ -1458,63 +1368,23 @@ export default function DocumentEditor({
           </div>
           
           {doc.mode === 'xml' ? (
-            <div className="flex-1 bg-white pt-10 flex flex-col min-h-0">
-              {xmlSchemaWarning && (
-                <div className="mx-4 mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  XML tag schema warning: {xmlSchemaWarning}
-                </div>
-              )}
-              <div className="flex-1 overflow-auto xml-editor-host" style={xmlFontFamily ? { '--xml-editor-font-family': xmlFontFamily } : undefined}>
-                <CodeMirror
-                  ref={cmRef}
-                  value={contentXml}
-                  height="100%"
-                  extensions={xmlEditorExtensions}
-                  basicSetup={xmlAutoIndent ? true : { indentOnInput: false }}
-                  onChange={(value) => {
-                    setContentXml(value);
-                    setHasUnsavedChanges(true);
-                    setIsXmlDirty(true);
-                  }}
-                  className="h-full text-sm border-t border-slate-100"
-                />
-              </div>
-              {/* 2. XML toolbar button */}
-              <div className="border-t border-slate-100 px-4 py-3 flex items-center gap-2 bg-slate-50">
-                <button
-                  type="button"
-                  onClick={() => setXmlTagModalOpen(true)}
-                  title="Insert XML Element (Ctrl+E)"
-                  className="p-1.5 mr-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded transition-colors bg-white border border-slate-200 shadow-sm"
-                >
-                  <Code size={18} />
-                </button>
-                {/* ----------------------- */}               
-                {Object.entries(mutationTools || {}).map(([toolKey, config]) => {
-                  // 1. Check if the tool belongs to the XML editor
-                  if (config.editor !== 'xml') return null;
-
-                  // 2. Check if the user has the required admin level
-                  const requiredLevel = config.level || 0;
-                  const userLevel = user?.adminlevel || 0;
-                  if (userLevel < requiredLevel) return null;
-
-                  // 3. Render the dynamic button
-                  return (
-                    <button
-                      key={toolKey}
-                      type="button"
-                      style={config.color ? { backgroundColor: config.color } : undefined}
-                      onClick={() => runXmlMutationTool(toolKey, config)}
-                      disabled={!!activeMutationTool}
-                      className="px-3 py-1.5 text-sm font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {activeMutationTool === toolKey ? `${config.caption}...` : config.caption}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <XmlEditor
+              value={contentXml}
+              onChange={(value) => {
+                setContentXml(value);
+                setHasUnsavedChanges(true);
+                setIsXmlDirty(true);
+              }}
+              xmlAutoIndent={xmlAutoIndent}
+              xmlTagCompletion={xmlTagCompletion}
+              lineWrapping={editorFonts?.xml?.line_wrapping}
+              fontFamily={xmlFontFamily}
+              schemaWarning={xmlSchemaWarning}
+              mutationTools={mutationTools}
+              user={user}
+              activeMutationTool={activeMutationTool}
+              onRunMutationTool={runXmlMutationTool}
+            />
           ) : doc.mode === 'entities' ? (
             <div className="flex-1 w-full h-full pt-10 overflow-hidden border-t border-slate-100 bg-white">
               <Spannotator
@@ -1842,69 +1712,6 @@ export default function DocumentEditor({
                 <button 
                   type="submit" 
                   className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 rounded-md shadow-sm"
-                >
-                  OK
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {/* XML Tag Insertion Modal */}
-      {xmlTagModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white p-6 rounded-xl shadow-xl w-96 max-w-full m-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Wrap with XML Tag</h3>
-              <button onClick={() => setXmlTagModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleInsertXmlTag} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tag Name</label>
-                <input 
-                  required 
-                  autoFocus
-                  className="w-full border border-slate-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  placeholder="e.g. hi"
-                  value={xmlTagForm.tag} 
-                  onChange={e => setXmlTagForm({...xmlTagForm, tag: e.target.value})} 
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Attribute <span className="text-slate-400 font-normal">(optional)</span></label>
-                  <input 
-                    className="w-full border border-slate-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                    placeholder="e.g. rend"
-                    value={xmlTagForm.attr} 
-                    onChange={e => setXmlTagForm({...xmlTagForm, attr: e.target.value})} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Value <span className="text-slate-400 font-normal">(optional)</span></label>
-                  <input 
-                    className="w-full border border-slate-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                    placeholder="e.g. italic"
-                    value={xmlTagForm.val} 
-                    onChange={e => setXmlTagForm({...xmlTagForm, val: e.target.value})} 
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                <button 
-                  type="button" 
-                  onClick={() => setXmlTagModalOpen(false)} 
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={!xmlTagForm.tag.trim()}
-                  className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   OK
                 </button>
