@@ -441,8 +441,10 @@ export default function Spannotator({
   const [selectedTokens, setSelectedTokens] = useState(new Set());
   const [selectedEntities, setSelectedEntities] = useState(new Set());
   const [activeEntityId, setActiveEntityId] = useState('');
-  const [sentenceMode, setSentenceMode] = useState('text');
-  const [hoveredGroupEntities, setHoveredGroupEntities] = useState(new Set());
+  const [sentenceMode, setSentenceMode] = useState(() => { // initially toggle sentence mode or text mode
+    const rawMode = config?.sentence_mode ?? config?.entities?.sentence_mode;
+    return rawMode != null && parseConfigBoolean(rawMode) ? 'sent' : 'text';
+  });  const [hoveredGroupEntities, setHoveredGroupEntities] = useState(new Set());
   const [contextMenu, setContextMenu] = useState({ open: false, x: 0, y: 0, entityId: '' });
   const [resizeHover, setResizeHover] = useState({ entityId: null, side: null });
   const [resizeDragUI, setResizeDragUI] = useState(null);

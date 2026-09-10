@@ -67,6 +67,7 @@ entities:
   guess_identities: true  # Whether to show the "Guess Identities" button in the Named Entity Linking interface
   require_identities: true  # Whether to show a validation error for documents with unidentified named entities
   sentences: sent  # Column name for sentence spans, should cover all tokens in the document
+  sentence_mode: true
   sentence_tooltip: translation
   show_entity_linking: true
   tokens: tok # Column name for underlying word forms
