@@ -2391,8 +2391,8 @@ export default function Spannotator({
       </div>
 
       {showNamedEntityLinkingPanel ? (
-        <div className="mt-2 border border-slate-300 rounded-md p-3 bg-slate-50 shadow-sm">
-          {Object.keys(namedEntityListing).length === 0 ? (
+      <div className="mt-2 border border-slate-300 rounded-md p-3 bg-slate-50 shadow-sm overflow-y-auto" style={{ maxHeight: '40vh' }}>
+        {Object.keys(namedEntityListing).length === 0 ? (
             <div>No named entities</div>
           ) : (
             <>
