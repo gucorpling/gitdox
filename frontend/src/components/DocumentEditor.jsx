@@ -1434,7 +1434,8 @@ export default function DocumentEditor({
                   ellipsis: Boolean(dendroidConfig?.ellipsis),
                   edeps: Boolean(getTokenAnn('edeps', '')),
                   feats: Boolean(getTokenAnn('feats', '')),
-                  misc: Boolean(getTokenAnn('misc', ''))
+                  misc: Boolean(getTokenAnn('misc', '')),
+                  hide_duplicate_edeps: Boolean(dendroidConfig?.hide_duplicate_edeps)
                 }}
                 tagsets={{
                   upos: dendroidConfig?.tagsets?.upos || [],
