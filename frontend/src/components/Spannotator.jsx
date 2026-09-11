@@ -437,7 +437,19 @@ export default function Spannotator({
   const [groups, setGroups] = useState({ coref: { 0: [] }, bridge: { 0: [] } });
   const [assignedColors, setAssignedColors] = useState({ coref: { 0: GLOBAL_DEFAULTS.DEFAULT_COLOR }, bridge: { 0: GLOBAL_DEFAULTS.DEFAULT_COLOR } });
   
-  const [colorMode, setColorMode] = useState('entities');
+  // Initialize color mode based on config, falling back to 'entities' if invalid
+  const [colorMode, setColorMode] = useState(() => {
+    const requestedMode = String(
+      config?.default_color_mode ?? 
+      config?.entities?.default_color_mode ?? 
+      'entities'
+    ).trim();
+    
+    if (requestedMode !== 'entities' && allColorModes.includes(requestedMode)) {
+      return requestedMode;
+    }
+    return 'entities';
+  });
   const [selectedTokens, setSelectedTokens] = useState(new Set());
   const [selectedEntities, setSelectedEntities] = useState(new Set());
   const [activeEntityId, setActiveEntityId] = useState('');
