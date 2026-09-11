@@ -286,6 +286,14 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
         if (features.edeps) {
           parseEdeps(ann.deps).forEach(edep => {
             const key = `${edep.head}->${node.id}`;
+
+            // Check for duplicate basic dependency if the setting is enabled
+            if (features.hide_duplicate_edeps) {
+              const standardLabels = edgesMap.get(key)?.labels || [];
+              const isDuplicate = standardLabels.some(l => l.user === user && l.rel === edep.deprel);
+              if (isDuplicate) return; // Skip rendering this edep
+            }
+
             if (!edepsMap.has(key)) edepsMap.set(key, { source: edep.head, target: node.id, labels: [] });
             edepsMap.get(key).labels.push({ user, rel: edep.deprel });
           });
@@ -856,7 +864,7 @@ export function Dendroid({
     annotator: 'dendroid:annotator', mwt: 'mwt'
   },
   features = {
-    mwt: true, ellipsis: true, edeps: true, feats: true, misc: true
+    mwt: true, ellipsis: true, edeps: true, feats: true, misc: true, hide_duplicate_edeps: false
   },
   tagsets = {
     upos: ["NOUN", "PUNCT", "VERB", "ADP", "PRON", "DET", "ADJ", "AUX", "PROPN", "ADV", "CCONJ", "PART", "NUM", "SCONJ", "INTJ", "X", "SYM"].sort(),

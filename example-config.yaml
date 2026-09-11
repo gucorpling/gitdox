@@ -89,6 +89,7 @@ dendroid:  # Syntax tree editor
   mwt: ""  # Name for CoNLL-U multiword token annotation, set to "" to turn off support
   ellipsis: false  # Support for 'empty' decimal tokens with IDs like 5.1
   default_annotator: "parser"
+  hide_duplicate_edeps: true
   token_annotations:
     word: tok
     xpos: pos
