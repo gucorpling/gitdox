@@ -2370,10 +2370,17 @@ def mutate_document_contents(
         else:
             raise HTTPException(status_code=400, detail="Provide content_xml")
         try:
+            # Remove XML comments and normalize spaces
+            source = re.sub(r'<!--.*?-->', '', source, flags=re.DOTALL)
+            source = re.sub(r'[ \t]+', ' ', source)
+            source = re.sub(r'\n+', '\n', source)
+            source = re.sub(r'\n\s*\n', '\n', source)
             sgml_valid = validate_tt(source)
             if sgml_valid:
                 transformed, _ = sgml_to_social(source)
                 return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
+            else:
+                raise HTTPException(status_code=400, detail="Input is not valid for tabulation - please check your data")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"tabulate failed: {str(e)}")
     elif tool == "coptic_nlp_tabulate":

@@ -20,7 +20,7 @@ def validate_tt(sgml):
         # Check for well-formed closing tag
         if re.match(r'</[A-Za-z0-9_:-]+>',line) is not None:
             continue
-        elif re.search(r'<[A-Za-z0-9_:-]+( [A-Za-z0-9_:-]+="[^"]+")*>',line) is not None:
+        elif re.search(r'<[A-Za-z0-9_:-]+( [A-Za-z0-9_:-]+="[^"]+")*/?>',line) is not None:
             continue
         elif not(line.startswith("<") and line.endswith(">")):
             continue
