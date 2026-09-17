@@ -371,6 +371,11 @@ w.c.
 
 def tokenize(text, abbr="eng", add_sents=False, from_pipes=False, aggressive_hyphenation=True):
 
+    # Preprocess XML comments to be single line
+    comments = re.findall(r'<!--.*?-->', text, re.DOTALL)
+    for comment in comments:
+        text = text.replace(comment, comment.replace('\n', ' '))
+
     if aggressive_hyphenation:
         text = re.sub(r'(?<=[א-ת])([–/־-])(?=[א-ת])',r' \1 ', text)
         text = re.sub(r'(?<= [0-9])([–:־-])(?=[0-9] )',r' \1 ', text)  # sports scores etc.
@@ -555,9 +560,10 @@ if __name__ == "__main__":
 <head>
 You’re Not Going to Get Accepted into a Top University on Merit Alone (Warikoo)
 </head>
-
+<!-- comment -->
 <p>By Natasha Warikoo</p>
-
+<!-- multiline comment
+continues here -->
 <figure rend="Students on a lawn at Harvard’s Boston campus">
 <caption><q><ref target="https://www.flickr.com/photos/59121133@N00/19321851540">“Boston – Harvard Campus” </ref></q> by <ref target="https://www.flickr.com/photos/59121133@N00">David@UNT</ref> is licensed under <ref target="https://creativecommons.org/licenses/by-nc-sa/2.0/?ref=ccsearch&amp;atype=rich">CC <w>BY - NC - SA</w> 2.0</ref></caption>
 </figure>
