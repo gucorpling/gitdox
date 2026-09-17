@@ -1235,8 +1235,8 @@ def create_user(project_name: str, user: UserCreate, current_user: dict = Depend
 
 
 @app.put("/projects/{project_name}/users/{username}")
-def update_user(project_name: str, username: str, data: UserUpdate, current_user: dict = Depends(require_admin(3))):
-    """Updates an existing user (Requires AdminLevel > 2)."""
+def update_user(project_name: str, username: str, data: UserUpdate, current_user: dict = Depends(require_admin(2))):
+    """Updates an existing user (Requires AdminLevel >= 2; managers cannot modify admins)."""
     if current_user['project_name'] != project_name:
         raise HTTPException(status_code=403, detail="Access denied to this project")
 
@@ -1247,6 +1247,9 @@ def update_user(project_name: str, username: str, data: UserUpdate, current_user
     target_user = r.hgetall(user_key)
     if not can_manage_user(current_user, target_user):
         raise HTTPException(status_code=403, detail="You cannot modify a user with a higher admin level than your own.")
+
+    if int(data.adminlevel or 0) > int(current_user.get('adminlevel', 0) or 0):
+        raise HTTPException(status_code=403, detail="You cannot grant an admin level higher than your own.")
 
     user_dict = data.model_dump(exclude_unset=True)
     if user_dict.get('password'):
