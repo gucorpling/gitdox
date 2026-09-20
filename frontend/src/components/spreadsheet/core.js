@@ -3194,6 +3194,14 @@ let findMatchIndex = -1;
 function openFindReplace() {
     const dialog = document.getElementById('find-replace-dialog');
     dialog.classList.remove('hidden');
+
+    // Make sure x-data-spreadsheet's global listeners release focus 
+    // so they don't intercept input meant for the Find dialog
+    if (mySpreadsheet && mySpreadsheet.sheet) {
+        mySpreadsheet.sheet.focusing = false;
+        mySpreadsheet.sheet.isFocus = false;
+    }
+
     onFindOpen?.();
     const input = document.getElementById('find-input');
     input.focus();
