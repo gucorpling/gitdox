@@ -2947,15 +2947,15 @@ function reorderSocialCalcColumns(socialCalcData, preferredOrder) {
 
 
 // --- 1. IMPORT LOGIC (SocialCalc -> X-Spreadsheet) ---
-function importSocialCalc(rawData, emitChange = true) {
-    // Intercept with column sorting first
+function parseSocialCalcToSheetData(rawData) {
+    // --- PARSE ONLY: SocialCalc string -> sheet data object (no side effects on existing mySpreadsheet) ---
     const sourceRaw = typeof rawData === 'string' ? rawData : '';
     const raw = reorderSocialCalcColumns(sourceRaw, currentPreferredColumnOrder);
     const didReorderColumns = normalizeLineEndings(raw) !== normalizeLineEndings(sourceRaw);
     const lines = raw.split('\n');
 
     let cellData = {};
-    let sheetMerges = []; 
+    let sheetMerges = [];
     let maxCol = 0;
     let maxRow = 0;
     
@@ -2984,7 +2984,7 @@ function importSocialCalc(rawData, emitChange = true) {
         if (state === 'PRE') {
             preSheetLines.push(cleanLine);
             if (cleanLine.startsWith('version:1.5')) state = 'SHEET';
-        } 
+        }
         else if (state === 'SHEET') {
             if (cleanLine.startsWith('--SocialCalcSpreadsheetControlSave')) {
                 state = 'POST';
@@ -3015,9 +3015,9 @@ function importSocialCalc(rawData, emitChange = true) {
                     const cIdx = parts.indexOf('colspan');
                     let rSpan = rIdx !== -1 ? parseInt(parts[rIdx + 1], 10) : 1;
                     let cSpan = cIdx !== -1 ? parseInt(parts[cIdx + 1], 10) : 1;
-                    
+
                     if (rSpan > 1 || cSpan > 1) {
-                        cellObj.merge = [rSpan - 1, cSpan - 1]; 
+                        cellObj.merge = [rSpan - 1, cSpan - 1];
                         let startCell = coord;
                         let endCell = xyToCoord(pos.x + cSpan - 1, pos.y + rSpan - 1);
                         sheetMerges.push(`${startCell}:${endCell}`);
@@ -3046,7 +3046,7 @@ function importSocialCalc(rawData, emitChange = true) {
                     cellData[pos.y].cells[pos.x] = cellObj;
                 }
             }
-        } 
+        }
         else if (state === 'POST') {
             postSheetLines.push(cleanLine);
         }
@@ -3055,52 +3055,77 @@ function importSocialCalc(rawData, emitChange = true) {
     cellData.len = Math.max(100, maxRow + 20);
     stylesList = applyConfiguredFontToStyles(stylesList);
 
-    const container = document.getElementById('spreadsheet-container');
-    container.innerHTML = ''; 
-    
-    mySpreadsheet = new Spreadsheet('#spreadsheet-container', {
-        showBottomBar: false, 
-        style: {
-            valign: 'top', 
-            align: 'left',
-            textwrap: true,
-            font: {
-                name: getEffectiveSpreadsheetFontFamily(),
-                size: 10,
-                bold: false,
-                italic: false,
-            }
+    return {
+        sheetData: {
+            name: 'Sheet1',
+            styles: stylesList,
+            cols: { len: Math.max(MAX_COLUMN_COUNT, maxCol + 1) },
+            rows: cellData,
+            merges: sheetMerges,
+            freeze: 'A2'
         },
-        view: {
-            height: () => container.clientHeight,
-            width: () => container.clientWidth,
-        }
-    });
+        didReorderColumns,
+    };
+}
 
-    _viewportSyncRequestId++;
-    mySpreadsheet.loadData([{
-        name: 'Sheet1',
-        styles: stylesList,
-        cols: { len: Math.max(MAX_COLUMN_COUNT, maxCol + 1) },
-        rows: cellData,
-        merges: sheetMerges,
-        freeze: 'A2'
-    }]);
+// --- IMPORT: parse + (re)construct or reuse the Spreadsheet instance ---
+function importSocialCalc(rawData, emitChange = true) {
+    //console.log('[IMPORT SOCIALCALC CALLED]', new Error().stack); // emit stack trace for debugging
 
-    customizeToolbar();
-    patchSelector();
-    patchContextMenu();
-    syncFormulaBarFromSelection({ force: true });
-    
-    appHistory = [];
-    appHistoryIndex = -1;
-    saveHistoryState();
-    
-    mySpreadsheet.change(() => {
+    const { sheetData, didReorderColumns } = parseSocialCalcToSheetData(rawData);
+
+    if (!mySpreadsheet) {
+        // First construction only.
+        const container = document.getElementById('spreadsheet-container');
+        container.innerHTML = '';
+
+        mySpreadsheet = new Spreadsheet('#spreadsheet-container', {
+            showBottomBar: false,
+            style: {
+                valign: 'top',
+                align: 'left',
+                textwrap: true,
+                font: {
+                    name: getEffectiveSpreadsheetFontFamily(),
+                    size: 10,
+                    bold: false,
+                    italic: false,
+                }
+            },
+            view: {
+                height: () => container.clientHeight,
+                width: () => container.clientWidth,
+            }
+        });
+
+        _viewportSyncRequestId++;
+        mySpreadsheet.loadData([sheetData]);
+
+        customizeToolbar();
+        patchSelector();
+        patchContextMenu();
+        syncFormulaBarFromSelection({ force: true });
+
+        appHistory = [];
+        appHistoryIndex = -1;
         saveHistoryState();
-        notifySerializedChange();
-        syncFormulaBarFromSelection();
-    });
+
+        mySpreadsheet.change(() => {
+            saveHistoryState();
+            notifySerializedChange();
+            syncFormulaBarFromSelection();
+        });
+    } else {
+        // Reuse the existing instance — avoids leaking another set of the
+        // library's window-level listeners (see ghost-paste-listener bug).
+        _viewportSyncRequestId++;
+        mySpreadsheet.loadData([sheetData]);
+        patchSelector();
+
+        appHistory = [];
+        appHistoryIndex = -1;
+        saveHistoryState();
+    }
 
     if (emitChange) {
         notifySerializedChange();

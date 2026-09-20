@@ -89,50 +89,65 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
     focusCell: (cellRef) => coreRef.current?.focusCell?.(cellRef) ?? false,
   }), []);
 
+  const cleanupTimeoutRef = useRef(null);
+
   useEffect(() => {
     if (!isPreferredColumnOrderResolved) return;
 
-    const onFetchSgml = (docId && apiCall)
-      ? (configName = null) => {
-        const query = configName ? `?config=${encodeURIComponent(configName)}` : '';
-        return apiCall(`/documents/${docId}/sgml${query}`);
-      }
-      : null;
-    const onFetchConfigs = apiCall
-      ? () => apiCall('/configs')
-      : null;
+    // If a StrictMode phantom cleanup just scheduled a destroy, cancel it -
+    // this remount is StrictMode's synchronous second pass, not a real unmount
+    if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+        cleanupTimeoutRef.current = null;
+    }
 
-    coreRef.current = createSpreadsheetCore({
-      initialValue: value || '',
-      fontFamily,
-      preferredColumnOrder,
-      allowDataTransfer: Boolean(canDataTransfer),
-      allowExternalClipboard: Boolean(allowExternalClipboard),
-      onChange: (nextValue) => {
-        if (suppressExternalChangeRef.current) {
-          return;
-        }
-        captureFormulaFocus();        
-        lastKnownValueRef.current = nextValue;
-        if (onChange) onChange(nextValue);
-        
-        restoreFormulaFocus();
-      },
-      onCanonicalized,
-      onFetchSgml,
-      onFetchConfigs,
-      onImportSgml,
-      onImportResult,
-      onFindOpen,
-    });
+    // Reuse the existing instance if the phantom cleanup never actually
+    // destroyed it (because we cancelled it above)
+    if (!coreRef.current) {
+        const onFetchSgml = (docId && apiCall)
+          ? (configName = null) => {
+            const query = configName ? `?config=${encodeURIComponent(configName)}` : '';
+            return apiCall(`/documents/${docId}/sgml${query}`);
+          }
+          : null;
+        const onFetchConfigs = apiCall
+          ? () => apiCall('/configs')
+          : null;
+
+        coreRef.current = createSpreadsheetCore({
+          initialValue: value || '',
+          fontFamily,
+          preferredColumnOrder,
+          allowDataTransfer: Boolean(canDataTransfer),
+          allowExternalClipboard: Boolean(allowExternalClipboard),
+          onChange: (nextValue) => {
+            if (suppressExternalChangeRef.current) return;
+            captureFormulaFocus();
+            lastKnownValueRef.current = nextValue;
+            if (onChange) onChange(nextValue);
+            restoreFormulaFocus();
+          },
+          onCanonicalized,
+          onFetchSgml,
+          onFetchConfigs,
+          onImportSgml,
+          onImportResult,
+          onFindOpen,
+        });
+    }
     setCoreReady(true);
 
     return () => {
-      setCoreReady(false);
-      if (coreRef.current) {
-        coreRef.current.destroy();
-        coreRef.current = null;
-      }
+        setCoreReady(false);
+        // Defer the real destroy - if this was a StrictMode phantom cleanup, the next synchronous 
+        // mount above will clearTimeout before it fires, so the instance will survive
+        cleanupTimeoutRef.current = setTimeout(() => {
+            if (coreRef.current) {
+                coreRef.current.destroy();
+                coreRef.current = null;
+            }
+            cleanupTimeoutRef.current = null;
+        }, 0);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPreferredColumnOrderResolved, canDataTransfer, allowExternalClipboard]);
