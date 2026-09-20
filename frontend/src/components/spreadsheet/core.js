@@ -2158,6 +2158,18 @@ function startSelectionEditWithInitialText(initialText) {
 }
 
 function handleSpreadsheetKeydown(e) {
+    // If the import/export modal is open, Esc acts like Cancel
+    const dataModal = document.getElementById('data-modal');
+    if (dataModal && !dataModal.classList.contains('hidden')) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            closeModal();
+        }
+        return;
+    }
+
     // If find dialog is open, don't let keyboard events reach the spreadsheet
     const findDialog = document.getElementById('find-replace-dialog');
     if (findDialog && !findDialog.classList.contains('hidden')) {
