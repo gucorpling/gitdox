@@ -734,7 +734,9 @@ function mergeDownSelection() {
 
         const mergeRefs = d.merges.map((rawMerge, rawIndex) => ({ rawIndex, merge: parseMergeEntry(rawMerge) }));
         const usedAreaMaxRow = getMaxBounds(d).maxR;
-        const rowLimit = Math.max(targetRange.sri + 1, usedAreaMaxRow + 1);
+        
+        // Use eri (end row index) here to ensure rowLimit accommodates a large multi-row selection
+        const rowLimit = Math.max(targetRange.eri + 1, usedAreaMaxRow + 1);
 
         const removeMergeRef = (mergeRef) => {
             if (!mergeRef || !mergeRef.merge || !Number.isInteger(mergeRef.rawIndex)) return;
@@ -756,50 +758,64 @@ function mergeDownSelection() {
         };
 
         for (let col = targetRange.sci; col <= targetRange.eci; col++) {
-            const startRow = targetRange.sri;
-            let effectiveBottom = startRow;
-
-            const containingMergeRef = mergeRefs.find((ref) => {
-                const merge = ref && ref.merge;
-                return !!(merge
-                    && startRow >= merge.sri
-                    && startRow <= merge.eri
-                    && col >= merge.sci
-                    && col <= merge.eci);
-            });
-
-            // Merge-down should always originate at the selected cell.
-            // If the selection is inside an existing merge, unmerge first.
-            if (containingMergeRef) {
-                removeMergeRef(containingMergeRef);
-            }
-
-            let nextFilledRow = null;
-            for (let row = effectiveBottom + 1; row < rowLimit; row++) {
-                const cell = d.rows[row] && d.rows[row].cells ? d.rows[row].cells[col] : null;
-                if (cellHasTextValue(cell)) {
-                    nextFilledRow = row;
-                    break;
+            // 1. Identify all "anchor rows" for this column within the selected range
+            const anchorRows = [];
+            for (let r = targetRange.sri; r <= targetRange.eri; r++) {
+                const cell = d.rows[r] && d.rows[r].cells ? d.rows[r].cells[col] : null;
+                // An anchor is either the start of the selection, or any filled cell inside the selection
+                if (r === targetRange.sri || cellHasTextValue(cell)) {
+                    anchorRows.push(r);
                 }
             }
 
-            const newEndRow = nextFilledRow === null ? rowLimit - 1 : nextFilledRow - 1;
-            if (newEndRow <= startRow) {
-                continue;
+            // 2. Execute the merge-down logic for each identified anchor
+            for (let i = 0; i < anchorRows.length; i++) {
+                const startRow = anchorRows[i];
+
+                const containingMergeRef = mergeRefs.find((ref) => {
+                    const merge = ref && ref.merge;
+                    return !!(merge
+                        && startRow >= merge.sri
+                        && startRow <= merge.eri
+                        && col >= merge.sci
+                        && col <= merge.eci);
+                });
+
+                // Unmerge if the current anchor is inside an existing merge
+                if (containingMergeRef) {
+                    removeMergeRef(containingMergeRef);
+                }
+
+                // Scan down from the anchor to find the next boundary limit
+                let nextFilledRow = null;
+                for (let row = startRow + 1; row < rowLimit; row++) {
+                    const cell = d.rows[row] && d.rows[row].cells ? d.rows[row].cells[col] : null;
+                    if (cellHasTextValue(cell)) {
+                        nextFilledRow = row;
+                        break;
+                    }
+                }
+
+                const newEndRow = nextFilledRow === null ? rowLimit - 1 : nextFilledRow - 1;
+                if (newEndRow <= startRow) {
+                    continue;
+                }
+
+                if (!d.rows[startRow]) d.rows[startRow] = { cells: {} };
+                if (!d.rows[startRow].cells) d.rows[startRow].cells = {};
+                const anchorCell = d.rows[startRow].cells[col] || {};
+                
+                // Set merge parameters
+                anchorCell.merge = [newEndRow - startRow, 0];
+                d.rows[startRow].cells[col] = anchorCell;
+
+                const mergeString = `${xyToCoord(col, startRow)}:${xyToCoord(col, newEndRow)}`;
+                d.merges.push(mergeString);
+                mergeRefs.push({
+                    rawIndex: d.merges.length - 1,
+                    merge: { sri: startRow, sci: col, eri: newEndRow, eci: col }
+                });
             }
-
-            if (!d.rows[startRow]) d.rows[startRow] = { cells: {} };
-            if (!d.rows[startRow].cells) d.rows[startRow].cells = {};
-            const anchorCell = d.rows[startRow].cells[col] || {};
-            anchorCell.merge = [newEndRow - startRow, 0];
-            d.rows[startRow].cells[col] = anchorCell;
-
-            const mergeString = `${xyToCoord(col, startRow)}:${xyToCoord(col, newEndRow)}`;
-            d.merges.push(mergeString);
-            mergeRefs.push({
-                rawIndex: d.merges.length - 1,
-                merge: { sri: startRow, sci: col, eri: newEndRow, eci: col }
-            });
         }
     });
 }
