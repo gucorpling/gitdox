@@ -6,6 +6,48 @@ import './xspreadsheet.patched.css';
 import { coordToXY, xyToCoord, getMaxBounds, getExpandedCellBounds, parseMergeEntry, rangesOverlap } from './utils.js';
 import { normalizeHexColor, isDefaultBackgroundColor, compactStyleObject, getOrCreateStyleIndex, normalizeSpreadsheetFontFamily } from './styles.js';
 import { getDefaultSocialCalcData, parseSocialCalcToSheetData, exportSocialCalc as exportSocialCalcFormat } from './io.js';
+import {
+    configureViewportHost,
+    getViewportScrollPosition,
+    restoreViewportScrollPosition,
+    jumpSelectionTo,
+    scheduleRestoreFocus,
+    patchSelector,
+    patchContextMenu,
+    bindScrollbarFeedbackGuard,
+    unbindScrollbarFeedbackGuard,
+    withScrollbarFeedbackSuppressed,
+    invalidateViewportSync,
+} from './viewport.js';
+import {
+    configureHistoryHost,
+    resetHistory,
+    saveHistoryState,
+    performUndo,
+    performRedo,
+} from './history.js';
+import {
+    configureUiHost,
+    resetExportConfigsCache,
+    closeModal,
+    executeModalAction,
+    handleExportFormatChange,
+    syncFormulaBarFromSelection,
+    handleFormulaBarInput,
+    handleFormulaBarFocus,
+    handleFormulaBarMouseDown,
+    handleFormulaBarClick,
+    handleFormulaBarClipboard,
+    handleFormulaBarKeydown,
+    customizeToolbar,
+    openFindReplace,
+    closeFindReplace,
+    runFindSearch,
+    findNext,
+    findPrev,
+    replaceOne,
+    replaceAll,
+} from './ui.js';
 
 // --- CORE LIFECYCLE STATE ---
 let onSerializedChange = null;
@@ -18,16 +60,12 @@ let onFindOpen = null;
 let isDomBound = false;
 let isKeyboardBound = false;
 const MAX_COLUMN_COUNT = 26 * 26;
-let exportConfigNames = [];
-let exportConfigsLoaded = false;
 let allowDataTransfer = true;
 let allowExternalClipboard = true;
 let exactScrollX = null;  // Accumulate fractional scrolls on trackpads (for Mac)
 let exactScrollY = null;
 let expectedEngineX = null;  // Track the last known engine scroll position to detect drift and correct it
 let expectedEngineY = null;
-
-const SOCIALCALC_SIGNATURE = '--SocialCalcSpreadsheetControlSave';
 
 function ensureColumnCapacity(sheetData, minColumns = MAX_COLUMN_COUNT) {
     if (!sheetData.cols || typeof sheetData.cols !== 'object') {
@@ -38,917 +76,64 @@ function ensureColumnCapacity(sheetData, minColumns = MAX_COLUMN_COUNT) {
     sheetData.cols.len = Math.max(currentLen, minColumns);
 }
 
-// --- MODAL LOGIC ---
-let modalMode = ''; // 'import' or 'export'
-
-function openModal(mode) {
-    if (!allowDataTransfer && (mode === 'import' || mode === 'export')) {
-        return;
-    }
-
-    modalMode = mode;
-    const modal = document.getElementById('data-modal');
-    const title = document.getElementById('modal-title');
-    const desc = document.getElementById('modal-desc');
-    const textarea = document.getElementById('modal-textarea');
-    const actionBtn = document.getElementById('data-modal-action-btn');
-    const formatRow = document.getElementById('modal-format-row');
-    const formatSelect = document.getElementById('export-format-select');
-    const configRow = document.getElementById('modal-config-row');
-    
-    modal.classList.remove('hidden');
-    
-    if (mode === 'import') {
-        title.textContent = 'Import Data';
-        desc.textContent = 'Paste SocialCalc or SGML data. SocialCalc is loaded directly; SGML is imported by the backend and then refreshed as SocialCalc.';
-        actionBtn.textContent = 'Load Data';
-        actionBtn.className = 'px-5 py-2 bg-blue-600 font-medium text-white rounded hover:bg-blue-700 transition shadow-sm';
-        textarea.value = '';
-        textarea.readOnly = false;
-        if (formatRow) {
-            formatRow.classList.add('hidden');
-            formatRow.style.display = 'none';
-        }
-        if (configRow) {
-            configRow.classList.add('hidden');
-            configRow.style.display = 'none';
-        }
-        setTimeout(() => textarea.focus(), 50);
-    } else {
-        title.textContent = 'Export Data';
-        desc.textContent = 'Copy the serialized output below to export your annotations.';
-        actionBtn.textContent = 'Copy to Clipboard';
-        actionBtn.className = 'px-5 py-2 bg-green-600 font-medium text-white rounded hover:bg-green-700 transition shadow-sm';
-        if (formatRow) {
-            formatRow.classList.remove('hidden');
-            formatRow.style.display = 'flex';
-        }
-        if (configRow) {
-            configRow.classList.add('hidden');
-            configRow.style.display = 'none';
-        }
-        if (formatSelect) {
-            formatSelect.value = 'sgml';
-            handleExportFormatChange();
-        } else {
-            textarea.value = exportSocialCalc();
-        }
-        textarea.readOnly = true;
-        setTimeout(() => textarea.select(), 50);
-    }
-}
-
-async function handleExportFormatChange() {
-    const formatSelect = document.getElementById('export-format-select');
-    const configRow = document.getElementById('modal-config-row');
-    const configSelect = document.getElementById('export-config-select');
-    const textarea = document.getElementById('modal-textarea');
-    if (!formatSelect || !textarea) return;
-
-    const format = formatSelect.value;
-    if (format === 'sgml') {
-        if (configRow) {
-            configRow.classList.remove('hidden');
-            configRow.style.display = 'flex';
-        }
-
-        await ensureExportConfigsLoaded();
-        if (!configSelect || !configSelect.value) {
-            textarea.value = '(No SGML schemas are available.)';
-            return;
-        }
-
-        if (!onFetchSgml) {
-            textarea.value = '(SGML export is not available - document ID is unknown.)';
-            return;
-        }
-        textarea.value = 'Loading...';
-        try {
-            const result = await onFetchSgml(configSelect.value);
-            // result is supposed to return an object with a key 'sgml' but we can be flexible in parsing it
-            if (typeof result === 'string') {
-                textarea.value = result;
-            } else if (result && typeof result === 'object') {
-                // Try common field names for text content
-                textarea.value = result.sgml ?? result.content ?? result.data ?? result.text ?? JSON.stringify(result, null, 2);
-            } else {
-                textarea.value = String(result ?? '');
-            }
-        } catch (err) {
-            textarea.value = `Error fetching SGML: ${err.message}`;
-        }
-    } else {
-        if (configRow) {
-            configRow.classList.add('hidden');
-            configRow.style.display = 'none';
-        }
-        textarea.value = exportSocialCalc();
-    }
-}
-
-async function ensureExportConfigsLoaded() {
-    const configSelect = document.getElementById('export-config-select');
-    if (!configSelect) return;
-
-    if (exportConfigsLoaded) {
-        return;
-    }
-
-    if (!onFetchConfigs) {
-        exportConfigsLoaded = true;
-        exportConfigNames = [];
-        renderExportConfigOptions(configSelect, exportConfigNames);
-        return;
-    }
-
-    try {
-        const result = await onFetchConfigs();
-        const nextConfigs = Array.isArray(result?.configs) ? result.configs : [];
-        exportConfigNames = nextConfigs
-            .filter((name) => typeof name === 'string' && name.trim())
-            .map((name) => name.trim());
-    } catch (err) {
-        console.warn("Error fetching export configs:", err);
-        exportConfigNames = [];
-    }
-
-    exportConfigsLoaded = true;
-    renderExportConfigOptions(configSelect, exportConfigNames);
-}
-
-function renderExportConfigOptions(selectEl, configNames) {
-    if (!selectEl) return;
-    const previousValue = selectEl.value;
-
-    selectEl.innerHTML = '';
-    if (!Array.isArray(configNames) || configNames.length === 0) {
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = 'No schemas available';
-        selectEl.appendChild(opt);
-        return;
-    }
-
-    configNames.forEach((name) => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        selectEl.appendChild(opt);
-    });
-
-    if (previousValue && configNames.includes(previousValue)) {
-        selectEl.value = previousValue;
-    }
-}
-
-function closeModal() {
-    document.getElementById('data-modal').classList.add('hidden');
-    scheduleRestoreFocus();
-}
-
-async function executeModalAction() {
-    if (!allowDataTransfer && (modalMode === 'import' || modalMode === 'export')) {
-        return;
-    }
-
-    if (modalMode === 'import') {
-        const textarea = document.getElementById('modal-textarea');
-        const rawData = textarea ? textarea.value : '';
-        if (!rawData.trim()) {
-            return;
-        }
-
-        const isSocialCalcImport = rawData.includes(SOCIALCALC_SIGNATURE);
-        if (isSocialCalcImport) {
-            importSocialCalc(rawData);
-            closeModal();
-            return;
-        }
-
-        if (!onImportSgml) {
-            if (textarea) {
-                textarea.value = '(SGML import is not available - document ID is unknown.)';
-            }
-            return;
-        }
-
-        const actionBtn = document.getElementById('data-modal-action-btn');
-        const originalLabel = actionBtn ? actionBtn.textContent : 'Load Data';
-        if (actionBtn) {
-            actionBtn.disabled = true;
-            actionBtn.textContent = 'Importing...';
-        }
-
-        try {
-            const importResponse = await onImportSgml(rawData);
-            if (importResponse && typeof importResponse === 'object' && typeof onImportResult === 'function') {
-                onImportResult(importResponse);
-            }
-
-            const refreshedSocialCalc = typeof importResponse === 'string'
-                ? importResponse
-                : importResponse?.content_spreadsheet ?? importResponse?.contents ?? '';
-
-            if (typeof refreshedSocialCalc === 'string' && refreshedSocialCalc.trim()) {
-                importSocialCalc(refreshedSocialCalc);
-                closeModal();
-            } else if (textarea) {
-                textarea.value = 'SGML import succeeded but no SocialCalc content was returned from the backend.';
-            }
-        } catch (err) {
-            if (textarea) {
-                textarea.value = `Error importing SGML: ${err.message}`;
-            }
-        } finally {
-            if (actionBtn) {
-                actionBtn.disabled = false;
-                actionBtn.textContent = originalLabel;
-            }
-        }
-    } else {
-        const textarea = document.getElementById('modal-textarea');
-        textarea.select();
-        document.execCommand('copy');
-        const btn = document.getElementById('data-modal-action-btn');
-        const origText = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = origText; }, 2000);
-    }
-}
-
-const restoreFocus = (selectionOverride = null, options = {}) => {
-    const skipSyntheticClick = !!options.skipSyntheticClick;
-    const findDialog = document.getElementById('find-replace-dialog');
-    if (findDialog && !findDialog.classList.contains('hidden') && findDialog.contains(document.activeElement)) {
-        return;
-    }
-
-    if (document.activeElement && document.activeElement !== document.body) {
-        document.activeElement.blur();
-    }
-
-    const toolbarFocused = document.querySelector('.x-spreadsheet-toolbar :focus');
-    if (toolbarFocused && typeof toolbarFocused.blur === 'function') {
-        toolbarFocused.blur();
-    }
-
-    const spreadsheetHost = document.querySelector('#spreadsheet-container .x-spreadsheet');
-    if (spreadsheetHost) {
-        if (!spreadsheetHost.hasAttribute('tabindex')) {
-            spreadsheetHost.setAttribute('tabindex', '-1');
-        }
-        spreadsheetHost.focus({ preventScroll: true });
-    }
-
-    const keyInput = document.querySelector('#spreadsheet-container .x-spreadsheet-selector .hide-input input');
-    if (keyInput) {
-        keyInput.focus({ preventScroll: true });
-    }
-    
-    const selectionRange = selectionOverride || getActiveSelectionRange();
-    
-    if (mySpreadsheet && mySpreadsheet.sheet) {
-        mySpreadsheet.sheet.focusing = true;
-        mySpreadsheet.sheet.isFocus = true; 
-        restoreSelectorRange(selectionRange);
-
-        // jumpSelectionTo etc. know exactly where to jump to;
-        // Lock the viewport scroll position if specified to prevent library scrolling drift
-        if (options.lockedViewportScroll) {
-            restoreViewportScrollPosition(options.lockedViewportScroll);
-        }
-
-        // Synthetic mouseclick strictly on the actively selected cell - 
-        // Wakes up the canvas engine without snapping selection to A1
-        const canvas = document.querySelector('.x-spreadsheet-sheet canvas');
-        const hiddenInputContainer = document.querySelector('#spreadsheet-container .x-spreadsheet-selector .hide-input');
-        
-        if (!skipSyntheticClick && canvas && hiddenInputContainer && mySpreadsheet.sheet.data) {
-            try {
-                const inputRect = hiddenInputContainer.getBoundingClientRect();
-                
-                // Add 5px padding to ensure the click hits inside the cell bounds
-                const clickX = inputRect.left + 5;
-                const clickY = inputRect.top + 5;
-                
-                // Only dispatch if coordinates are actually visually on-screen
-                if (clickX > 0 && clickY > 0) {
-                    // Mute the library's autoscroll for this click only
-                    window._isSyntheticFocusClick = true; 
-                    
-                    canvas.dispatchEvent(new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true, clientX: clickX, clientY: clickY }));
-                    canvas.dispatchEvent(new MouseEvent('mouseup', { view: window, bubbles: true, cancelable: true, clientX: clickX, clientY: clickY }));
-                    
-                    window._isSyntheticFocusClick = false;
-                }
-            } catch(e) {
-                window._isSyntheticFocusClick = false;
-                console.warn('Error during synthetic focus click:', e);
-            }
-        }
-    }
-};
-
-function lockOverlayerContentScroll() {
-    if (!mySpreadsheet || !mySpreadsheet.sheet) return;
-    const el = document.querySelector('.x-spreadsheet-overlayer-content');
-    if (!el || el._scrollLocked) return;
-
-    // This container should never scroll natively — all scrolling is handled
-    // via data.scroll.y/x and the custom scrollbar divs
-    el.addEventListener('scroll', () => {
-        if (el.scrollTop !== 0 || el.scrollLeft !== 0) {
-            el.scrollTop = 0;
-            el.scrollLeft = 0;
-        }
-    });
-    el._scrollLocked = true;
-}
-
-// Guard against scrollbar feedback loops when data.scroll is set, triggering
-// the library's moveFn -> Sheet.verticalScrollbarMove -> data.scrolly
-let _suppressScrollbarFeedback = 0;
-let _scrollbarFeedbackGuardBound = false;
-let _scrollbarFeedbackGuardHandler = null;
-
-function bindScrollbarFeedbackGuard() {
-    if (_scrollbarFeedbackGuardBound) return;
-    // Capture phase on document: runs before the library's own listener on the
-    // scrollbar element, so stopImmediatePropagation() will block moveFn 
-    _scrollbarFeedbackGuardHandler = (e) => {
-            if (_suppressScrollbarFeedback > 0 && e.target && e.target.classList
-                && e.target.classList.contains('x-spreadsheet-scrollbar')) {
-                e.stopImmediatePropagation();
-            }
-    };
-    document.addEventListener('scroll', _scrollbarFeedbackGuardHandler, true);
-    _scrollbarFeedbackGuardBound = true;
-}
-
-function unbindScrollbarFeedbackGuard() {
-    if (_scrollbarFeedbackGuardBound && _scrollbarFeedbackGuardHandler) {
-        document.removeEventListener('scroll', _scrollbarFeedbackGuardHandler, true);
-    }
-    _scrollbarFeedbackGuardHandler = null;
-    _scrollbarFeedbackGuardBound = false;
-    _suppressScrollbarFeedback = 0;
-}
-
-function withScrollbarFeedbackSuppressed(fn) {
-    _suppressScrollbarFeedback++;
-    try {
-        fn();
-    } finally {
-        // The native scroll event this can trigger fires asynchronously, not
-        // synchronously inside fn(), so hold the guard for a couple of frames.
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                _suppressScrollbarFeedback = Math.max(0, _suppressScrollbarFeedback - 1);
-            });
-        });
-    }
-}
-
-// --- MONKEY-PATCH THE SELECTION ENGINE (Fixes Navigation & Auto-Scrolling) ---
-function patchSelector() {
-    if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector) return;
-
-    const sheet = mySpreadsheet.sheet;
-
-    if (sheet.data && typeof sheet.data.copyToSystemClipboard === 'function' && !sheet.data._systemClipboardPatched) {
-        const originalCopyToSystemClipboard = sheet.data.copyToSystemClipboard.bind(sheet.data);
-        sheet.data.copyToSystemClipboard = () => {
-            if (allowExternalClipboard) {
-                return originalCopyToSystemClipboard();
-            }
-            return undefined;
-        };
-        sheet.data._systemClipboardPatched = true;
-    }
-    
-    // Prevent native browser scroll-jump when library internally focuses the hidden input or editor.
-    // By dynamically targeting the specific elements from the instance, we guarantee they exist.
-    if (sheet.selector && sheet.selector.hideInputDiv && sheet.selector.hideInputDiv.el) {
-        const hiddenInput = sheet.selector.hideInputDiv.el.querySelector('input');
-        if (hiddenInput && !hiddenInput._focusPatched) {
-            const origFocus = hiddenInput.focus;
-            hiddenInput.focus = function(opts) {
-                origFocus.call(this, { preventScroll: true, ...(opts || {}) });
-            };
-            hiddenInput._focusPatched = true;
-        }
-    }
-    if (sheet.editor && sheet.editor.textEl && sheet.editor.textEl.el) {
-        const textarea = sheet.editor.textEl.el;
-        if (textarea && !textarea._focusPatched) {
-            const origFocus = textarea.focus;
-            textarea.focus = function(opts) {
-                origFocus.call(this, { preventScroll: true, ...(opts || {}) });
-            };
-            textarea._focusPatched = true;
-        }
-    }
-
-    const sanitizeOffsetPayload = (payload) => {
-        if (!payload || typeof payload !== 'object') return payload;
-        const nextPayload = { ...payload };
-        ['left', 'top', 'width', 'height'].forEach((key) => {
-            if (!(key in nextPayload)) return;
-            const numericValue = Number(nextPayload[key]);
-            if (!Number.isFinite(numericValue)) {
-                nextPayload[key] = 0;
-                return;
-            }
-            if ((key === 'width' || key === 'height') && numericValue < 0) {
-                nextPayload[key] = 0;
-                return;
-            }
-            nextPayload[key] = numericValue;
-        });
-        return nextPayload;
-    };
-
-    const patchOffsetWriter = (target) => {
-        if (!target || typeof target.offset !== 'function' || target._offsetGuardPatched) return;
-        const originalOffset = target.offset.bind(target);
-        target.offset = (value) => {
-            if (value === undefined) return originalOffset();
-            return originalOffset(sanitizeOffsetPayload(value));
-        };
-        target._offsetGuardPatched = true;
-    };
-
-    const patchGeometryOffsetGuards = () => {
-        if (!sheet) return;
-        const selector = sheet.selector;
-        if (selector && !selector._offsetGuardsPatched) {
-            ['br', 't', 'l', 'tl'].forEach((regionKey) => {
-                const region = selector[regionKey];
-                if (!region) return;
-                patchOffsetWriter(region.el);
-                patchOffsetWriter(region.areaEl);
-                patchOffsetWriter(region.clipboardEl);
-                patchOffsetWriter(region.autofillEl);
-                patchOffsetWriter(region.hideInputDiv);
-            });
-            selector._offsetGuardsPatched = true;
-        }
-
-        const editor = sheet.editor;
-        if (editor && !editor._offsetGuardsPatched) {
-            patchOffsetWriter(editor.el);
-            patchOffsetWriter(editor.areaEl);
-            patchOffsetWriter(editor.textEl);
-            patchOffsetWriter(editor.textlineEl);
-            editor._offsetGuardsPatched = true;
-        }
-    };
-
-    patchGeometryOffsetGuards();
-    lockOverlayerContentScroll();
-    if (sheet.selector._isPatched) return;
-
-    let sel = sheet.selector;
-    const origSet = sel.set.bind(sel);
-    
-    sel.set = function(ri, ci, setArg = true) {
-        let data = mySpreadsheet.sheet.data;
-        const toolbarSnapshot = activeToolbarSelectionSnapshot;
-        const setOptions = (setArg && typeof setArg === 'object') ? setArg : null;
-        const indexesUpdated = setOptions
-            ? (setOptions.indexesUpdated !== undefined ? !!setOptions.indexesUpdated : true)
-            : !!setArg;
-        const autoScroll = setOptions
-            ? (setOptions.autoScroll !== undefined ? !!setOptions.autoScroll : true)
-            : (window._isSyntheticFocusClick ? false : true);
-        const preservedScroll = data && data.scroll
-            ? {
-                x: Number.isFinite(data.scroll.x) ? data.scroll.x : 0,
-                y: Number.isFinite(data.scroll.y) ? data.scroll.y : 0,
-            }
-            : null;
-        
-        let mergesArray = [];
-        if (data.merges) {
-            if (Array.isArray(data.merges)) mergesArray = data.merges;
-            else if (Array.isArray(data.merges.merges)) mergesArray = data.merges.merges;
-            else if (Array.isArray(data.merges._)) mergesArray = data.merges._;
-        }
-        
-        let targetBox = null;
-        for (let i = 0; i < mergesArray.length; i++) {
-            let m = mergesArray[i];
-            if (typeof m === 'string') {
-                let parts = m.split(':');
-                let start = coordToXY(parts[0]);
-                let end = coordToXY(parts[1]);
-                if (start && end && ri >= start.y && ri <= end.y && ci >= start.x && ci <= end.x) {
-                    targetBox = { sri: start.y, sci: start.x, eri: end.y, eci: end.x };
-                    break;
-                }
-            } else if (m && m.sri !== undefined) {
-                if (ri >= m.sri && ri <= m.eri && ci >= m.sci && ci <= m.eci) {
-                    targetBox = { sri: m.sri, sci: m.sci, eri: m.eri, eci: m.eci };
-                    break;
-                }
-            }
-        }
-        
-        if (targetBox) {
-            let lRi = typeof lastRi !== 'undefined' ? lastRi : 0;
-            let lCi = typeof lastCi !== 'undefined' ? lastCi : 0;
-            let isLastInside = (lRi >= targetBox.sri && lRi <= targetBox.eri && lCi >= targetBox.sci && lCi <= targetBox.eci);
-            
-            if (!isLastInside) {
-                ri = targetBox.sri;
-                ci = targetBox.sci;
-            } else {
-                let dRi = ri - lRi;
-                let dCi = ci - lCi;
-                if (dRi > 0) ri = targetBox.eri + 1;
-                else if (dRi < 0) ri = targetBox.sri - 1;
-                if (dCi > 0) ci = targetBox.eci + 1;
-                else if (dCi < 0) ci = targetBox.sci - 1;
-            }
-            if (ri < 0) ri = 0;
-            if (ci < 0) ci = 0;
-        }
-        
-        lastRi = ri;
-        lastCi = ci;
-
-        let origDataX = data.scrollx;
-        let origDataY = data.scrolly;
-        let origSheetX = sheet ? sheet.scrollx : null;
-        let origSheetY = sheet ? sheet.scrolly : null;
-        let origVScroll = sheet && sheet.verticalScrollbar ? sheet.verticalScrollbar.move : null;
-        let origHScroll = sheet && sheet.horizontalScrollbar ? sheet.horizontalScrollbar.move : null;
-
-        if (autoScroll === false) {
-            data.scrollx = () => {};
-            data.scrolly = () => {};
-            if (sheet) {
-                sheet.scrollx = () => {};
-                sheet.scrolly = () => {};
-                if (sheet.verticalScrollbar) sheet.verticalScrollbar.move = () => {};
-                if (sheet.horizontalScrollbar) sheet.horizontalScrollbar.move = () => {};
-            }
-        }
-
-        let ret = origSet(ri, ci, indexesUpdated);
-
-        if (autoScroll !== false) {
-            const expectedRi = ri;
-            const expectedCi = ci;
-            
-            const doSnap = () => {
-                const data = mySpreadsheet?.sheet?.data;
-                const curSel = data?.selector;
-                if (!data || !curSel || curSel.ri !== expectedRi || curSel.ci !== expectedCi) return;
-                
-                if (typeof data.getSelectedRect !== 'function' || typeof sheet.getTableOffset !== 'function') return;
-
-                const selectedRect = data.getSelectedRect();
-                const tableOffset = sheet.getTableOffset();
-                const selectionHeight = Number(selectedRect && selectedRect.height) || 0;
-                const viewportHeight = Number(tableOffset && tableOffset.height) || 0;
-                
-                if (selectionHeight <= 0 || viewportHeight <= 0 || selectionHeight <= viewportHeight) return;
-
-                const freezeH = typeof data.freezeTotalHeight === 'function' ? data.freezeTotalHeight() : 0;
-                const targetTop = Math.max(0, (Number(selectedRect.t) || 0) - 1 - freezeH);
-                const currentY = data.scroll && Number.isFinite(data.scroll.y) ? data.scroll.y : 0;
-
-                // Only force UI rendering and scrolling if we are not already at the desired absolute coordinate
-                if (Math.abs(currentY - targetTop) > 1 && typeof data.scrolly === 'function') {
-                    data.scrolly(targetTop, () => {
-                        withScrollbarFeedbackSuppressed(() => {
-                            if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                                try { sheet.verticalScrollbar.move(data.scroll.y); } catch (e) {console.warn('Error moving vertical scrollbar during snap:', e);}
-                            }
-                        });
-                        if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
-                            sheet.selector.resetAreaOffset();
-                            if (typeof sheet.selector.resetBRTAreaOffset === 'function') sheet.selector.resetBRTAreaOffset();
-                            if (typeof sheet.selector.resetBRLAreaOffset === 'function') sheet.selector.resetBRLAreaOffset();
-                        }
-                        if (typeof sheet.render === 'function') {
-                            sheet.render();
-                        } else if (sheet.table && typeof sheet.table.render === 'function') {
-                            sheet.table.render();
-                        }
-                    });
-                }
-            };
-
-            // Wait for the library's internal keydown loop (which fires synchronously after sel.set returns)
-            // to finish messing with the viewport, then enforce our boundary
-            setTimeout(() => {
-                doSnap();
-                // Secondary safety net catch in case the library defers via requestAnimationFrame natively
-                requestAnimationFrame(doSnap);
-            }, 0);
-        }
-
-        if (autoScroll === false) {
-            data.scrollx = origDataX;
-            data.scrolly = origDataY;
-            if (sheet) {
-                if (origSheetX) sheet.scrollx = origSheetX;
-                if (origSheetY) sheet.scrolly = origSheetY;
-                if (origVScroll) sheet.verticalScrollbar.move = origVScroll;
-                if (origHScroll) sheet.horizontalScrollbar.move = origHScroll;
-            }
-
-            if (preservedScroll) {
-                if (!data.scroll || typeof data.scroll !== 'object') data.scroll = {};
-                data.scroll.x = preservedScroll.x;
-                data.scroll.y = preservedScroll.y;
-            }
-        }
-
-        if (
-            toolbarSnapshot &&
-            ri === toolbarSnapshot.sri &&
-            ci === toolbarSnapshot.sci &&
-            (toolbarSnapshot.eri !== toolbarSnapshot.sri || toolbarSnapshot.eci !== toolbarSnapshot.sci)
-        ) {
-            sel.setEnd(toolbarSnapshot.eri, toolbarSnapshot.eci);
-        }
-
-        syncFormulaBarFromSelection();
-        
-        return ret;
-    };
-    sel._isPatched = true;
-}
-
-// --- MONKEY-PATCH THE CONTEXT MENU ---
-// This removes context menu items we don't want users to see, such as "Data Validation" and "Enable/Disable Export".
-function patchContextMenu() {
-    const container = document.getElementById('spreadsheet-container');
-    if (!container) return;
-
-    // x-data-spreadsheet statically renders the context menu inside the main wrapper on init
-    const menuItems = container.querySelectorAll('.x-spreadsheet-contextmenu .x-spreadsheet-item');
-
-    menuItems.forEach(item => {
-        const text = (item.textContent || '').trim().toLowerCase();
-        
-        if (
-            text.includes('data validation') || 
-            text.includes('enable export') || 
-            text.includes('disable export')
-        ) {
-            // Hide the item
-            item.style.display = 'none';
-
-            // Clean up the adjacent divider to prevent awkward double borders in the UI
-            const nextSibling = item.nextElementSibling;
-            if (nextSibling && nextSibling.classList.contains('divider')) {
-                nextSibling.style.display = 'none';
-            }
-        }
-    });
-}
-
-// --- DEBOUNCED SCHEDULERS TO PREVENT PILE-UP AND RACE CONDITIONS ---
-let _restoreFocusTimeout = null;
-let _restoreFocusRaf = null;
-
-function scheduleRestoreFocus(selectionOverride = null, options = {}) {
-    if (_restoreFocusTimeout) clearTimeout(_restoreFocusTimeout);
-    if (_restoreFocusRaf) cancelAnimationFrame(_restoreFocusRaf);
-    _restoreFocusTimeout = setTimeout(() => {
-        restoreFocus(selectionOverride, options);
-        _restoreFocusRaf = requestAnimationFrame(() => restoreFocus(selectionOverride, options));
-    }, 0);
-}
-
-let _viewportSyncRequestId = 0;
-
-function syncViewportFromSheetData(options = {}) {
-    if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
-    const requestId = Number.isInteger(options.requestId) ? options.requestId : ++_viewportSyncRequestId;
-    const sheet = mySpreadsheet.sheet;
-    const data = sheet.data;
-    const preserveHorizontal = !!options.preserveHorizontal;
-    const lockedScrollX = Number.isFinite(options.lockedScrollX) ? options.lockedScrollX : null;
-
-    const applyViewport = (horizontalTarget = null) => {
-        if (requestId !== _viewportSyncRequestId) return;
-        if (lockedScrollX !== null) {
-            if (!data.scroll || typeof data.scroll !== 'object') data.scroll = {};
-            data.scroll.x = lockedScrollX;
-        }
-        
-        // 1. Recalculate blue selection box offsets against the new scroll position
-        if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
-            sheet.selector.resetAreaOffset();
-        }
-        if (sheet.selector && typeof sheet.selector.resetBRTAreaOffset === 'function') {
-            sheet.selector.resetBRTAreaOffset();
-        }
-        if (sheet.selector && typeof sheet.selector.resetBRLAreaOffset === 'function') {
-            sheet.selector.resetBRLAreaOffset();
-        }
-        
-        // 2. Render Canvas FIRST. 
-        if (typeof sheet.render === 'function') {
-            sheet.render();
-        } else if (sheet.table && typeof sheet.table.render === 'function') {
-            sheet.table.render();
-        }
-
-        // 3. WAIT FOR PAINT, THEN MOVE SCROLLBARS
-        requestAnimationFrame(() => {
-            withScrollbarFeedbackSuppressed(() => {
-                if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                   try { sheet.verticalScrollbar.move(data.scroll ? {top: data.scroll.y} : {top: 0}); } catch (e) {
-                        console.warn('Error moving vertical scrollbar:', e);
-                    }
-                }
-                if (horizontalTarget !== null && sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-                    try { sheet.horizontalScrollbar.move({left: horizontalTarget}); } catch (e) {
-                        console.warn('Error moving horizontal scrollbar:', e);
-                    }
-                }
-            });
-        });
-    };
-
-    const selectedRect = typeof data.getSelectedRect === 'function' ? data.getSelectedRect() : null;
-    const tableOffset = typeof sheet.getTableOffset === 'function' ? sheet.getTableOffset() : null;
-    if (selectedRect && tableOffset) {
-        const contentLeft = selectedRect.l || 0;
-        const contentTop = selectedRect.t || 0;
-        const viewLeft = selectedRect.left || 0;
-        const viewTop = selectedRect.top || 0;
-        const width = selectedRect.width || 0;
-        const height = selectedRect.height || 0;
-
-        let horizontalPending = false;
-        let verticalPending = false;
-
-        if (!preserveHorizontal && sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-            let targetLeft = null;
-            if (viewLeft + width > tableOffset.width) {
-                targetLeft = contentLeft + width - tableOffset.width;
-            } else {
-                const freezeW = typeof data.freezeTotalWidth === 'function' ? data.freezeTotalWidth() : 0;
-                if (viewLeft < freezeW) {
-                    targetLeft = contentLeft - 1 - freezeW;
-                }
-            }
-            if (targetLeft !== null && typeof data.scrollx === 'function') {
-                horizontalPending = true;
-                try { data.scrollx(targetLeft, () => applyViewport(targetLeft)); } catch (e) {console.warn('Error scrolling horizontally:', e);}
-            }
-        }
-
-        if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-            let targetTop = null;
-            const freezeH = typeof data.freezeTotalHeight === 'function' ? data.freezeTotalHeight() : 0;
-            if (height > tableOffset.height) {
-                targetTop = Math.max(0, contentTop - 1 - freezeH);
-            } else if (viewTop + height > tableOffset.height) {
-                targetTop = contentTop + height - tableOffset.height - 1;
-            } else if (viewTop < 0) {
-                targetTop = contentTop - 1 - freezeH;
-            }
-            if (targetTop !== null && typeof data.scrolly === 'function') {
-                verticalPending = true;
-                try { data.scrolly(targetTop, applyViewport); } catch (e) {console.warn('Error scrolling vertically:', e);}
-            }
-        }
-        if (!horizontalPending && !verticalPending) {
-            applyViewport();
-        }
-    } else {
-        applyViewport();
-    }
-}
-
-function getViewportScrollPosition() {
-    if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) {
-        return { x: 0, y: 0, ri: 0, ci: 0 };
-    }
-
-    const scroll = mySpreadsheet.sheet.data.scroll || {};
-    return {
-        x: Number.isFinite(scroll.x) ? scroll.x : 0,
-        y: Number.isFinite(scroll.y) ? scroll.y : 0,
-        ri: Number.isInteger(scroll.ri) ? scroll.ri : 0,
-        ci: Number.isInteger(scroll.ci) ? scroll.ci : 0,
-    };
-}
-
-function restoreViewportScrollPosition(position) {
-    if (!position || !mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
-
-    const sheet = mySpreadsheet.sheet;
-    const data = sheet.data;
-    const targetX = Number.isFinite(position.x) ? position.x : 0;
-    const targetY = Number.isFinite(position.y) ? position.y : 0;
-    const fallbackRi = Number.isInteger(position.ri) ? position.ri : 0;
-    const fallbackCi = Number.isInteger(position.ci) ? position.ci : 0;
-
-    if (!data.scroll || typeof data.scroll !== 'object') data.scroll = {};
-    data.scroll.y = targetY;
-    data.scroll.ri = fallbackRi;
-    data.scroll.x = targetX;
-    data.scroll.ci = fallbackCi;
-
-    // Claim this as the authoritative in-flight request. Any earlier calls
-    // to restoreViewportScrollPosition/syncViewportFromSheetData that are
-    // still pending in a rAF callback will see a mismatched requestId and bail,
-    // so only the most recently requested scroll position ever gets applied.
-    const requestId = ++_viewportSyncRequestId;
-
-    const applyViewport = () => {
-        // 1. RECALCULATE SELECTION BOX OFFSETS
-        if (sheet.selector && typeof sheet.selector.resetBRTAreaOffset === 'function') {
-            sheet.selector.resetBRTAreaOffset();
-        }
-        if (sheet.selector && typeof sheet.selector.resetBRLAreaOffset === 'function') {
-            sheet.selector.resetBRLAreaOffset();
-        }
-        if (sheet.selector && typeof sheet.selector.resetAreaOffset === 'function') {
-            sheet.selector.resetAreaOffset();
-        }
-
-        // 2. RENDER CANVAS FIRST
-        // This forces the internal engine to update DOM bounds (scrollbar max-heights)
-        if (typeof sheet.render === 'function') {
-            sheet.render();
-        } else if (sheet.table && typeof sheet.table.render === 'function') {
-            sheet.table.render();
-        }
-        
-        // 3. WAIT FOR PAINT, THEN MOVE SCROLLBARS
-        requestAnimationFrame(() => {
-            if (requestId !== _viewportSyncRequestId) return; // a newer scroll request superseded this one
-
-            const vScrollEl = document.querySelector('.x-spreadsheet-scrollbar.vertical');
-            if (vScrollEl) vScrollEl.scrollHeight; // force layout calculation
-            
-            withScrollbarFeedbackSuppressed(() => {
-                if (sheet.verticalScrollbar && typeof sheet.verticalScrollbar.move === 'function') {
-                    try { sheet.verticalScrollbar.move({ top: data.scroll ? data.scroll.y : targetY }); } catch (e) {
-                        console.warn('Error moving vertical scrollbar:', e);
-                    }
-                }
-                if (sheet.horizontalScrollbar && typeof sheet.horizontalScrollbar.move === 'function') {
-                    try { sheet.horizontalScrollbar.move({ left: data.scroll ? data.scroll.x : targetX }); } catch (e) {
-                        console.warn('Error moving horizontal scrollbar:', e);
-                    }
-                }
-            });
-        });
-    };
-
-    applyViewport();
-}
-
-function jumpSelectionTo(ri, ci, skipFocusRestore = false, options = {}) {
-    if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.selector) return;
-    
-    const preserveHorizontal = !!options.preserveHorizontal;
-    const lockedScrollX = preserveHorizontal
-        ? (Number.isFinite(mySpreadsheet.sheet?.data?.scroll?.x) ? mySpreadsheet.sheet.data.scroll.x : 0)
-        : null;
-    const requestId = ++_viewportSyncRequestId;
-    
-    const targetBounds = getExpandedCellBounds(mySpreadsheet.sheet.data, ri, ci);
-    
-    restoreSelectorRange(targetBounds);
-
-    syncViewportFromSheetData({ preserveHorizontal, requestId, lockedScrollX });
-
-
-    if (!skipFocusRestore) {
-        // lockedViewportScroll makes every restoreFocus pass scheduleRestoreFocus
-        // queues (both the immediate and the rAF-deferred one) re-assert the
-        // scroll position we just computed - see restoreFocus for why this is
-        // needed instead of just calling scheduleRestoreFocus plain.
-        scheduleRestoreFocus(null, {
-            skipSyntheticClick: true,
-            lockedViewportScroll: getViewportScrollPosition(),
-        });
-    }
-}
-
 // --- GLOBAL STATE & CUSTOM HISTORY ENGINE ---
 let mySpreadsheet = null;
 let currentPreferredColumnOrder = [];
 
-let appHistory = [];
-let appHistoryIndex = -1;
 let lastRi = 0;
 let lastCi = 0;
 let activeToolbarSelectionSnapshot = null;
-const BG_COLOR_OPTIONS = ['#ffffff', '#efc990', '#fee2e2', '#dcfce7', '#dbeafe', '#ede9fe', '#fce7f3', '#e5e7eb'];
 let configuredSpreadsheetFontFamily = null;
+
+// Bridges viewport.js to this module's live spreadsheet instance & selection state
+// (viewport.js never imports core.js, avoiding a circular dependency).
+configureViewportHost({
+    getSpreadsheet: () => mySpreadsheet,
+    getLastSelection: () => ({ ri: lastRi, ci: lastCi }),
+    setLastSelection: (ri, ci) => { lastRi = ri; lastCi = ci; },
+    getToolbarSelectionSnapshot: () => activeToolbarSelectionSnapshot,
+    isExternalClipboardAllowed: () => allowExternalClipboard,
+    getActiveSelectionRange: () => getActiveSelectionRange(),
+    restoreSelectorRange: (range) => restoreSelectorRange(range),
+    notifySelectionSet: () => syncFormulaBarFromSelection(),
+});
+
+// Bridges history.js to this module's live spreadsheet instance & selection helpers.
+configureHistoryHost({
+    getSpreadsheet: () => mySpreadsheet,
+    getActiveSelectionRange: () => getActiveSelectionRange(),
+    restoreSelectorRange: (range) => restoreSelectorRange(range),
+    notifySerializedChange: () => notifySerializedChange(),
+});
+
+// Bridges ui.js (modal/toolbar/find-replace/formula-bar) to this module's live state.
+configureUiHost({
+    getSpreadsheet: () => mySpreadsheet,
+    isDataTransferAllowed: () => allowDataTransfer,
+    exportSocialCalc: () => exportSocialCalc(),
+    importSocialCalc: (rawData, emitChange) => importSocialCalc(rawData, emitChange),
+    getOnFetchSgml: () => onFetchSgml,
+    getOnFetchConfigs: () => onFetchConfigs,
+    getOnImportSgml: () => onImportSgml,
+    getOnImportResult: () => onImportResult,
+    getOnFindOpen: () => onFindOpen,
+    getTopLeftSelectionPosition: () => getTopLeftSelectionPosition(),
+    getCellTextFromData: (data, ri, ci) => getCellTextFromData(data, ri, ci),
+    notifySerializedChange: () => notifySerializedChange(),
+    getActiveSelectionRange: () => getActiveSelectionRange(),
+    restoreSelectorRange: (range) => restoreSelectorRange(range),
+    getToolbarSelectionSnapshot: () => activeToolbarSelectionSnapshot,
+    setToolbarSelectionSnapshot: (value) => { activeToolbarSelectionSnapshot = value; },
+    executeStateChange: (fn) => executeStateChange(fn),
+    applyDataMutation: (fn) => applyDataMutation(fn),
+    applyBackgroundColorToSelection: (color) => applyBackgroundColorToSelection(color),
+    toggleBoldForSelection: () => toggleBoldForSelection(),
+    mergeSelectionSafely: () => mergeSelectionSafely(),
+    joinSelectionContentsSafely: () => joinSelectionContentsSafely(),
+    mergeDownSelection: () => mergeDownSelection(),
+    insertRowAtSelection: () => insertRowAtSelection(),
+    deleteRowAtSelection: () => deleteRowAtSelection(),
+});
 
 function getEffectiveSpreadsheetFontFamily() {
     return configuredSpreadsheetFontFamily || 'Arial';
@@ -963,92 +148,6 @@ function getCellTextFromData(data, ri, ci) {
     const cell = data?.rows?.[ri]?.cells?.[ci];
     if (!cell || cell.text === undefined || cell.text === null) return '';
     return String(cell.text);
-}
-
-function syncFormulaBarFromSelection(options = {}) {
-    const force = !!options.force;
-    const formulaInput = document.getElementById('spreadsheet-formula-input');
-    if (!formulaInput) return;
-    if (!mySpreadsheet) {
-        formulaInput.value = '';
-        return;
-    }
-    if (!force && document.activeElement === formulaInput) return;
-
-    const { ri, ci } = getTopLeftSelectionPosition();
-    const data = mySpreadsheet.getData()[0] || {};
-    const nextValue = getCellTextFromData(data, ri, ci);
-    if (formulaInput.value !== nextValue) {
-        formulaInput.value = nextValue;
-    }
-}
-
-function updateTopLeftSelectedCellFromFormulaBar(nextValue) {
-    if (!mySpreadsheet || !mySpreadsheet.sheet) return;
-    const textValue = typeof nextValue === 'string' ? nextValue : '';
-    const { ri, ci } = getTopLeftSelectionPosition();
-
-    // Bypass applyDataMutation's loadData() and mutate the active object reference in-place
-    const data = mySpreadsheet.getData()[0];
-    
-    if (!data.rows) data.rows = { len: 100 };
-    if (!data.rows[ri]) data.rows[ri] = { cells: {} };
-    if (!data.rows[ri].cells) data.rows[ri].cells = {};
-
-    const existingCell = data.rows[ri].cells[ci] ? { ...data.rows[ri].cells[ci] } : {};
-    if (textValue === '') {
-        delete existingCell.text;
-        if (Object.keys(existingCell).length === 0) {
-            delete data.rows[ri].cells[ci];
-        }
-    } else {
-        existingCell.text = textValue;
-        data.rows[ri].cells[ci] = existingCell;
-    }
-
-    data.rows.len = Math.max(Number.isInteger(data.rows.len) ? data.rows.len : 100, ri + 1);
-
-    // Redraw the canvas. This prevents x-data-spreadsheet from resetting its UI layer and firing the delayed timeouts that steal focus
-    const sheet = mySpreadsheet.sheet;
-    if (typeof sheet.render === 'function') {
-        sheet.render();
-    } else if (sheet.table && typeof sheet.table.render === 'function') {
-        sheet.table.render();
-    }
-
-    // Manually push to history and notify React
-    saveHistoryState();
-    notifySerializedChange();
-}
-
-function handleFormulaBarInput(event) {
-    updateTopLeftSelectedCellFromFormulaBar(event.target.value);
-} 
-
-function handleFormulaBarFocus() {
-    syncFormulaBarFromSelection({ force: true });
-}
-
-function handleFormulaBarMouseDown(event) {
-    event.stopPropagation();
-}
-
-function handleFormulaBarClick(event) {
-    event.stopPropagation();
-}
-
-function handleFormulaBarClipboard(event) {
-    event.stopPropagation();
-}
-
-function handleFormulaBarKeydown(event) {
-    // Add stopPropagation to prevent the spreadsheet engine from catching Ctrl+C / Ctrl+X
-    event.stopPropagation(); 
-    
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        scheduleRestoreFocus();
-    }
 }
 
 function enforceHeaderRowStyles() {
@@ -1431,29 +530,6 @@ function toggleBoldForSelection() {
     });
 }
 
-function saveHistoryState() {
-    if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data) return;
-    
-    let dataSnapshot = mySpreadsheet.getData()[0];
-    const selectionRange = getActiveSelectionRange();
-    
-    let currentState = JSON.stringify({
-        data: dataSnapshot,
-        sel: selectionRange
-    });
-    
-    if (appHistoryIndex >= 0) {
-        let prev = JSON.parse(appHistory[appHistoryIndex]);
-        if (JSON.stringify(prev.data) === JSON.stringify(dataSnapshot)) {
-            return; // Prevent duplicate identical data states
-        }
-    }
-    
-    appHistory.length = appHistoryIndex + 1; 
-    appHistory.push(currentState);
-    appHistoryIndex++;
-}
-
 function mergeSelectionSafely() {
     if (!mySpreadsheet || !mySpreadsheet.sheet || !mySpreadsheet.sheet.data || !mySpreadsheet.sheet.selector) return;
 
@@ -1817,74 +893,6 @@ function deleteRowAtSelection() {
     });
 }
 
-function performUndo() {
-    if (appHistoryIndex > 0) {
-        const viewportScroll = getViewportScrollPosition();
-        appHistoryIndex--;
-        let state = JSON.parse(appHistory[appHistoryIndex]);
-        _viewportSyncRequestId++;
-        mySpreadsheet.loadData([state.data]);
-        patchSelector();
-
-        // Restore viewport first
-        restoreViewportScrollPosition(viewportScroll);
-
-        if (state.sel && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
-            if (
-                Number.isInteger(state.sel.sri) &&
-                Number.isInteger(state.sel.sci) &&
-                Number.isInteger(state.sel.eri) &&
-                Number.isInteger(state.sel.eci)
-            ) {
-                restoreSelectorRange(state.sel);
-            } else if (Number.isInteger(state.sel.ri) && Number.isInteger(state.sel.ci)) {
-                // Preserve indexes while preventing viewport movement during restore.
-                mySpreadsheet.sheet.selector.set(state.sel.ri, state.sel.ci, { autoScroll: false, indexesUpdated: true });
-            }
-        }
-
-        // Enforce original viewport after selector restoration.
-        restoreViewportScrollPosition(viewportScroll);
-        
-        requestAnimationFrame(() => restoreViewportScrollPosition(viewportScroll));
-        notifySerializedChange();
-    }
-}
-
-function performRedo() {
-    if (appHistoryIndex < appHistory.length - 1) {
-        const viewportScroll = getViewportScrollPosition();
-        appHistoryIndex++;
-        let state = JSON.parse(appHistory[appHistoryIndex]);
-        _viewportSyncRequestId++;
-        mySpreadsheet.loadData([state.data]);
-        patchSelector();
-
-        // Restore viewport first
-        restoreViewportScrollPosition(viewportScroll);
-
-        if (state.sel && mySpreadsheet.sheet && mySpreadsheet.sheet.selector) {
-            if (
-                Number.isInteger(state.sel.sri) &&
-                Number.isInteger(state.sel.sci) &&
-                Number.isInteger(state.sel.eri) &&
-                Number.isInteger(state.sel.eci)
-            ) {
-                restoreSelectorRange(state.sel);
-            } else if (Number.isInteger(state.sel.ri) && Number.isInteger(state.sel.ci)) {
-                // Preserve indexes while preventing viewport movement during restore.
-                mySpreadsheet.sheet.selector.set(state.sel.ri, state.sel.ci, { autoScroll: false, indexesUpdated: true });
-            }
-        }
-
-        // Enforce original viewport after selector restoration.
-        restoreViewportScrollPosition(viewportScroll);
-
-        requestAnimationFrame(() => restoreViewportScrollPosition(viewportScroll));
-        notifySerializedChange();
-    }
-}
-
 // Intercept hardware keyboard shortcuts (Overpowering library defaults)
 function isSelectorHiddenInputTarget(target) {
     return !!(target
@@ -2131,296 +1139,6 @@ function handleWindowResize() {
 }
 
 // --- TOOLBAR ISOLATION LOGIC ---
-function customizeToolbar() {
-    const toolbarHost = document.getElementById('custom-toolbar-host');
-    if (!toolbarHost) return;
-    
-    if (!toolbarHost._focusPatched) {
-        toolbarHost.addEventListener('mousedown', (e) => {
-            if (e.target.tagName !== 'INPUT') e.preventDefault();
-        }, true);
-        toolbarHost._focusPatched = true;
-    }
-
-    if (toolbarHost.querySelector('.custom-toolbar-group')) return;
-
-    const customGroup = document.createElement('div');
-    customGroup.className = 'custom-toolbar-group';
-    customGroup.style.display = 'flex';
-    customGroup.style.alignItems = 'center';
-    customGroup.style.flexWrap = 'wrap';
-    customGroup.style.gap = '2px';
-
-    const createSvgBtn = (svgHTML, tooltip, onClick, options = {}) => {
-        const btn = document.createElement('div');
-        btn.className = 'custom-btn';
-        btn.title = tooltip; 
-        btn.innerHTML = svgHTML;
-        btn.addEventListener('mousedown', (e) => {
-            btn._selectionSnapshot = getActiveSelectionRange();
-            activeToolbarSelectionSnapshot = btn._selectionSnapshot;
-            e.preventDefault();
-        });
-        btn.onclick = () => {
-            const selectionSnapshot = btn._selectionSnapshot || getActiveSelectionRange();
-            activeToolbarSelectionSnapshot = selectionSnapshot;
-            onClick();
-            if (!options.skipPostSelectionRestore) {
-                restoreSelectorRange(selectionSnapshot);
-                scheduleRestoreFocus(selectionSnapshot);
-            }
-            setTimeout(() => {
-                if (activeToolbarSelectionSnapshot === selectionSnapshot) {
-                    activeToolbarSelectionSnapshot = null;
-                }
-            }, 100);
-        };
-        customGroup.appendChild(btn);
-        return btn;
-    };
-
-    const createBgColorDropdown = () => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'custom-color-dropdown';
-
-        const trigger = document.createElement('div');
-        trigger.className = 'custom-btn';
-        trigger.title = 'Background Color';
-        const defaultColor = BG_COLOR_OPTIONS[0];
-        trigger.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 16l6-12 6 12"/></svg><span class="custom-color-indicator" style="background:${defaultColor}"></span>`;
-        trigger.addEventListener('mousedown', (e) => {
-            wrapper._selectionSnapshot = getActiveSelectionRange();
-            activeToolbarSelectionSnapshot = wrapper._selectionSnapshot;
-            e.preventDefault();
-        });
-
-        const menu = document.createElement('div');
-        menu.className = 'custom-color-menu';
-
-        BG_COLOR_OPTIONS.forEach((hexColor) => {
-            const swatch = document.createElement('button');
-            swatch.type = 'button';
-            swatch.className = 'custom-color-swatch';
-            swatch.title = hexColor;
-            swatch.style.background = hexColor;
-            swatch.addEventListener('mousedown', (e) => {
-                activeToolbarSelectionSnapshot = wrapper._selectionSnapshot || getActiveSelectionRange();
-                e.preventDefault();
-            });
-            swatch.addEventListener('click', (e) => {
-                e.stopPropagation();
-                activeToolbarSelectionSnapshot = wrapper._selectionSnapshot || getActiveSelectionRange();
-                applyBackgroundColorToSelection(hexColor);
-                const indicator = trigger.querySelector('.custom-color-indicator');
-                if (indicator) indicator.style.background = hexColor;
-                menu.classList.remove('open');
-                restoreSelectorRange(activeToolbarSelectionSnapshot);
-                scheduleRestoreFocus(activeToolbarSelectionSnapshot);
-                setTimeout(() => {
-                    activeToolbarSelectionSnapshot = null;
-                }, 100);
-            });
-            menu.appendChild(swatch);
-        });
-
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            menu.classList.toggle('open');
-            const selectionSnapshot = wrapper._selectionSnapshot || getActiveSelectionRange();
-            activeToolbarSelectionSnapshot = selectionSnapshot;
-            restoreSelectorRange(selectionSnapshot);
-            scheduleRestoreFocus(selectionSnapshot);
-            setTimeout(() => {
-                if (activeToolbarSelectionSnapshot === selectionSnapshot) {
-                    activeToolbarSelectionSnapshot = null;
-                }
-            }, 100);
-        });
-
-        if (!document._bgColorMenuBound) {
-            document.addEventListener('click', () => {
-                document.querySelectorAll('.custom-color-menu.open').forEach((openMenu) => {
-                    openMenu.classList.remove('open');
-                });
-            });
-            document._bgColorMenuBound = true;
-        }
-
-        wrapper.appendChild(trigger);
-        wrapper.appendChild(menu);
-        customGroup.appendChild(wrapper);
-    };
-
-    // --- Custom SVG Icons ---
-    // Import: Document with arrow pointing IN
-    const iconImport = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>`;
-    // Export: Document with arrow pointing OUT
-    const iconExport = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 12 15 15"></polyline></svg>`;
-
-    const iconUndo = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>`;
-    const iconRedo = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>`;
-    const iconBold = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><text x="7" y="18" fill="#4b5563" font-size="17" font-family="Arial, sans-serif" font-weight="900">B</text></svg>`;
-    const iconMerge = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7" height="6"/><rect x="14" y="5" width="7" height="6"/><rect x="3" y="13" width="18" height="6" fill="#facc15"/><path d="M10 8h4"/><path d="M12 8v5"/></svg>`;
-    const iconJoin = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7" height="6" fill="#facc15"/><rect x="14" y="5" width="7" height="6" fill="#facc15"/><rect x="3" y="13" width="18" height="6" fill="#facc15"/><path d="M10 8h4"/><path d="M12 8v5"/></svg>`;
-    const iconMergeDown = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6"/><rect x="9" y="15" width="6" height="6" fill="#facc15"/><path d="M12 9v5"/><path d="M9.5 12.5 12 15l2.5-2.5"/></svg>`;
-    const iconFreeze = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><rect x="3" y="3" width="18" height="6" fill="#cbd5e1" stroke="none"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>`;
-    
-    // Red Delete Icons
-    const iconDelRow = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><rect x="3" y="9" width="18" height="6" fill="#ef4444" stroke="none"/></svg>`;
-    const iconDelCol = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><rect x="9" y="3" width="6" height="18" fill="#ef4444" stroke="none"/></svg>`;
-    
-    // Green Insert Icons with Plus Overlay
-    const iconAddRow = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="4" y="4" width="18" height="18" rx="2" ry="2"/><line x1="4" y1="10" x2="22" y2="10"/><line x1="4" y1="16" x2="22" y2="16"/><rect x="4" y="10" width="18" height="6" fill="#22c55e" stroke="none"/><circle cx="4" cy="4" r="5" fill="#22c55e" stroke="none"/><line x1="4" y1="2" x2="4" y2="6" stroke="white" stroke-width="2"/><line x1="2" y1="4" x2="6" y2="4" stroke="white" stroke-width="2"/></svg>`;
-    const iconAddCol = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2"><rect x="4" y="4" width="18" height="18" rx="2" ry="2"/><line x1="10" y1="4" x2="10" y2="22"/><line x1="16" y1="4" x2="16" y2="22"/><rect x="10" y="4" width="6" height="18" fill="#22c55e" stroke="none"/><circle cx="4" cy="4" r="5" fill="#22c55e" stroke="none"/><line x1="4" y1="2" x2="4" y2="6" stroke="white" stroke-width="2"/><line x1="2" y1="4" x2="6" y2="4" stroke="white" stroke-width="2"/></svg>`;
-
-    // Modal triggers
-    if (allowDataTransfer) {
-        createSvgBtn(iconImport, 'Import Data', () => openModal('import'));
-        createSvgBtn(iconExport, 'Export Data', () => openModal('export'));
-    }
-
-    const divider0 = document.createElement('div');
-    divider0.className = 'x-spreadsheet-toolbar-divider';
-    divider0.style.display = 'inline-block';
-    customGroup.appendChild(divider0);
-
-    createSvgBtn(iconUndo, 'Undo (Ctrl+Z)', performUndo);
-    createSvgBtn(iconRedo, 'Redo (Ctrl+Y)', performRedo);
-    createSvgBtn(iconBold, 'Bold (Ctrl+B)', () => toggleBoldForSelection());
-    createSvgBtn(iconMerge, 'Merge (Ctrl+M)', () => mergeSelectionSafely(), { skipPostSelectionRestore: true });
-    createSvgBtn(iconJoin, 'Join Contents (Ctrl+J)', () => joinSelectionContentsSafely(), { skipPostSelectionRestore: true });
-    createSvgBtn(iconMergeDown, 'Merge Down (Ctrl+D)', () => mergeDownSelection());
-
-    const divider1 = document.createElement('div');
-    divider1.className = 'x-spreadsheet-toolbar-divider';
-    divider1.style.display = 'inline-block';
-    customGroup.appendChild(divider1);
-
-    const iconSearch = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
-    createSvgBtn(iconSearch, 'Find & Replace (Ctrl+F)', () => openFindReplace());
-
-    const syncFreezeButtonState = (btn) => {
-        if (!btn || !mySpreadsheet || typeof mySpreadsheet.getData !== 'function') return;
-        const data = mySpreadsheet.getData()[0] || {};
-        btn.classList.toggle('custom-btn-active', data.freeze === 'A2');
-    };
-
-    const freezeBtn = createSvgBtn(iconFreeze, 'Toggle Freeze Header', () => { 
-        executeStateChange((d) => {
-            if (d.freeze === 'A2') delete d.freeze;
-            else d.freeze = 'A2'; 
-        });
-        syncFreezeButtonState(freezeBtn);
-    });
-    syncFreezeButtonState(freezeBtn);
-
-    createBgColorDropdown();
-
-    const divider2 = document.createElement('div');
-    divider2.className = 'x-spreadsheet-toolbar-divider';
-    divider2.style.display = 'inline-block';
-    customGroup.appendChild(divider2);
-
-    createSvgBtn(iconAddRow, 'Insert Row (Ctrl+L)', () => insertRowAtSelection());
-
-    createSvgBtn(iconDelRow, 'Delete Row (Ctrl+K)', () => deleteRowAtSelection());
-
-    createSvgBtn(iconAddCol, 'Insert Column', () => { 
-        executeStateChange((d) => {
-            let targetCol = mySpreadsheet.sheet.data.selector.ci;
-            Object.keys(d.rows).forEach(rStr => {
-                if (rStr === 'len') return;
-                let row = d.rows[rStr];
-                if (row && row.cells) {
-                    let newCells = {};
-                    Object.keys(row.cells).forEach(cStr => {
-                        let c = parseInt(cStr);
-                        if (c < targetCol) { newCells[c] = row.cells[c]; } 
-                        else if (c >= targetCol) { newCells[c + 1] = row.cells[c]; }
-                    });
-                    row.cells = newCells;
-                }
-            });
-
-            let newMerges = [];
-            (d.merges || []).forEach(mergeStr => {
-                const parsedMerge = parseMergeEntry(mergeStr);
-                if (!parsedMerge) {
-                    newMerges.push(mergeStr);
-                    return;
-                }
-                let start = { x: parsedMerge.sci, y: parsedMerge.sri };
-                let end = { x: parsedMerge.eci, y: parsedMerge.eri };
-                if (start.x < targetCol && end.x >= targetCol) {
-                    end.x += 1;
-                    newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
-                    let row = d.rows[start.y];
-                    if (row && row.cells && row.cells[start.x] && row.cells[start.x].merge) {
-                        row.cells[start.x].merge[1] += 1;
-                    }
-                } else if (start.x >= targetCol) {
-                    start.x += 1; end.x += 1;
-                    newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
-                } else { newMerges.push(mergeStr); }
-            });
-            d.merges = newMerges;
-        });
-    });
-
-    createSvgBtn(iconDelCol, 'Delete Column', () => { 
-        executeStateChange((d) => {
-            let targetCol = mySpreadsheet.sheet.data.selector.ci;
-            Object.keys(d.rows).forEach(rStr => {
-                if (rStr === 'len') return;
-                let row = d.rows[rStr];
-                if (row && row.cells) {
-                    let newCells = {};
-                    Object.keys(row.cells).forEach(cStr => {
-                        let c = parseInt(cStr);
-                        if (c < targetCol) { newCells[c] = row.cells[c]; } 
-                        else if (c > targetCol) { newCells[c - 1] = row.cells[c]; }
-                    });
-                    row.cells = newCells;
-                }
-            });
-
-            let newMerges = [];
-            (d.merges || []).forEach(mergeStr => {
-                const parsedMerge = parseMergeEntry(mergeStr);
-                if (!parsedMerge) {
-                    newMerges.push(mergeStr);
-                    return;
-                }
-                let start = { x: parsedMerge.sci, y: parsedMerge.sri };
-                let end = { x: parsedMerge.eci, y: parsedMerge.eri };
-                if (start.x === targetCol) {
-                    // Drops merge
-                } else if (start.x < targetCol && end.x >= targetCol) {
-                    end.x -= 1;
-                    if (end.x > start.x || end.y > start.y) {
-                        newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
-                        let row = d.rows[start.y];
-                        if (row && row.cells && row.cells[start.x] && row.cells[start.x].merge) {
-                            row.cells[start.x].merge[1] -= 1;
-                        }
-                    } else {
-                        let row = d.rows[start.y];
-                        if (row && row.cells && row.cells[start.x]) {
-                            delete row.cells[start.x].merge;
-                        }
-                    }
-                } else if (start.x > targetCol) {
-                    start.x -= 1; end.x -= 1;
-                    newMerges.push(`${xyToCoord(start.x, start.y)}:${xyToCoord(end.x, end.y)}`);
-                } else { newMerges.push(mergeStr); }
-            });
-            d.merges = newMerges;
-        });
-    });
-
-    toolbarHost.appendChild(customGroup);
-}
-
 function executeStateChange(mutationCallback) {
     applyDataMutation(mutationCallback);
 }
@@ -2461,7 +1179,7 @@ function importSocialCalc(rawData, emitChange = true) {
             }
         });
 
-        _viewportSyncRequestId++;
+        invalidateViewportSync();
         mySpreadsheet.loadData([sheetData]);
 
         customizeToolbar();
@@ -2469,8 +1187,7 @@ function importSocialCalc(rawData, emitChange = true) {
         patchContextMenu();
         syncFormulaBarFromSelection({ force: true });
 
-        appHistory = [];
-        appHistoryIndex = -1;
+        resetHistory();
         saveHistoryState();
 
         mySpreadsheet.change(() => {
@@ -2481,12 +1198,11 @@ function importSocialCalc(rawData, emitChange = true) {
     } else {
         // Reuse the existing instance — avoids leaking another set of the
         // library's window-level listeners (see ghost-paste-listener bug).
-        _viewportSyncRequestId++;
+        invalidateViewportSync();
         mySpreadsheet.loadData([sheetData]);
         patchSelector();
 
-        appHistory = [];
-        appHistoryIndex = -1;
+        resetHistory();
         saveHistoryState();
     }
 
@@ -2504,172 +1220,6 @@ function exportSocialCalc() {
     return exportSocialCalcFormat(mySpreadsheet.getData()[0]);
 }
 
-// --- FIND & REPLACE ---
-let findMatches = [];
-let findMatchIndex = -1;
-
-function openFindReplace() {
-    const dialog = document.getElementById('find-replace-dialog');
-    dialog.classList.remove('hidden');
-
-    // Make sure x-data-spreadsheet's global listeners release focus 
-    // so they don't intercept input meant for the Find dialog
-    if (mySpreadsheet && mySpreadsheet.sheet) {
-        mySpreadsheet.sheet.focusing = false;
-        mySpreadsheet.sheet.isFocus = false;
-    }
-
-    onFindOpen?.();
-    const input = document.getElementById('find-input');
-    input.focus();
-    input.select();
-    runFindSearch();
-}
-
-function closeFindReplace() {
-    document.getElementById('find-replace-dialog').classList.add('hidden');
-    findMatches = [];
-    findMatchIndex = -1;
-    scheduleRestoreFocus();
-}
-
-function getAllCellsForSearch() {
-    if (!mySpreadsheet) return [];
-    const data = mySpreadsheet.getData()[0];
-    const rows = data.rows || {};
-    const cells = [];
-    Object.keys(rows).forEach(rStr => {
-        if (rStr === 'len') return;
-        const y = parseInt(rStr);
-        const row = rows[y];
-        if (row && row.cells) {
-            Object.keys(row.cells).forEach(cStr => {
-                const x = parseInt(cStr);
-                const cell = row.cells[x];
-                if (cell && cell.text !== undefined && cell.text !== null && cell.text !== '') {
-                    cells.push({ ri: y, ci: x, text: String(cell.text) });
-                }
-            });
-        }
-    });
-    cells.sort((a, b) => a.ri !== b.ri ? a.ri - b.ri : a.ci - b.ci);
-    return cells;
-}
-
-function buildSearchRegex(query, caseSensitive, useRegex, global = false) {
-    const flags = (caseSensitive ? '' : 'i') + (global ? 'g' : '');
-    const pattern = useRegex ? query : escapeRegex(query);
-    return new RegExp(pattern, flags);
-}
-
-function runFindSearch() {
-    const query = document.getElementById('find-input').value;
-    const caseSensitive = document.getElementById('find-case-sensitive').checked;
-    const useRegex = document.getElementById('find-use-regex').checked;
-    const findInput = document.getElementById('find-input');
-    
-    // Removed the line causing the ReferenceError since it is undefined and unused
-    
-    findMatches = [];
-    findMatchIndex = -1;
-    const info = document.getElementById('find-match-info');
-    if (!query) { 
-        info.textContent = ''; 
-        findInput.style.borderColor = ''; 
-        return; 
-    }
-
-    let regex;
-    try {
-        regex = buildSearchRegex(query, caseSensitive, useRegex);
-        findInput.style.borderColor = '';
-        findInput.title = '';
-    } catch (e) {
-        info.textContent = 'Invalid regex';
-        info.style.color = '#ef4444';
-        findInput.style.borderColor = '#ef4444';
-        findInput.title = e.message;
-        return;
-    }
-
-    getAllCellsForSearch().forEach(({ ri, ci, text }) => {
-        if (regex.test(text)) findMatches.push({ ri, ci });
-    });
-    
-    if (findMatches.length === 0) {
-        info.textContent = 'No matches';
-        info.style.color = '#ef4444';
-    } else {
-        navigateToMatch(0);
-    }
-}
-
-function navigateToMatch(idx) {
-    if (findMatches.length === 0) return;
-    idx = ((idx % findMatches.length) + findMatches.length) % findMatches.length;
-    findMatchIndex = idx;
-    const match = findMatches[idx];
-    const info = document.getElementById('find-match-info');
-    info.textContent = `${idx + 1} / ${findMatches.length}`;
-    info.style.color = '#6b7280';
-
-    // Verify the match still falls within the spreadsheet's current dimensions
-    const data = mySpreadsheet.getData()[0];
-    const rowsLen = data.rows && typeof data.rows.len === 'number' ? data.rows.len : 100;
-    const colsLen = data.cols && typeof data.cols.len === 'number' ? data.cols.len : 676;
-
-    if (match.ri >= rowsLen || match.ci >= colsLen) {
-        // Match is out of bounds. Gracefully ignore jumping but keep the state.
-        return; 
-    }
-
-    // Capture focus before jumping to the match so user can stay in Find box while navigating
-    const activeEl = document.activeElement;
-    const findDialog = document.getElementById('find-replace-dialog');
-    const findInput = document.getElementById('find-input');
-    const wasInDialog = findDialog && findDialog.contains(activeEl);
-
-    jumpSelectionTo(match.ri, match.ci, true);
-
-    // Restore focus with multiple strategies to ensure it survives all async operations
-    if (findDialog && !findDialog.classList.contains('hidden') && wasInDialog) {
-        const restoreFocusToElement = (el) => {
-            if (el && typeof el.focus === 'function') {
-                el.focus({ preventScroll: true });
-                return true;
-            }
-            return false;
-        };
-
-        const targetEl = activeEl || findInput;
-        
-        // Immediate attempt (might not work if operations are still ongoing)
-        restoreFocusToElement(targetEl);
-        
-        // Delayed attempt after the find operation completes
-        setTimeout(() => restoreFocusToElement(targetEl), 50);
-        
-        // Secondary safety net after requestAnimationFrame
-        requestAnimationFrame(() => {
-            setTimeout(() => restoreFocusToElement(targetEl), 0);
-        });
-    }
-}
-
-function findNext() {
-    if (findMatches.length === 0) { runFindSearch(); return; }
-    navigateToMatch(findMatchIndex + 1);
-}
-
-function findPrev() {
-    if (findMatches.length === 0) { runFindSearch(); return; }
-    navigateToMatch(findMatchIndex - 1);
-}
-
-function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
  function applyDataMutation(mutationCallback) {
 
     let d = JSON.parse(JSON.stringify(mySpreadsheet.getData()[0]));
@@ -2680,7 +1230,7 @@ function escapeRegex(str) {
     mutationCallback(d);
 
     ensureColumnCapacity(d);
-    _viewportSyncRequestId++;
+    invalidateViewportSync();
     mySpreadsheet.loadData([d]);
     patchSelector();
 
@@ -2696,90 +1246,6 @@ function escapeRegex(str) {
     saveHistoryState();
     notifySerializedChange();
 } 
-
-function replaceOne() {
-    if (findMatches.length === 0 || findMatchIndex < 0) return;
-    const match = findMatches[findMatchIndex];
-    const query = document.getElementById('find-input').value;
-    const replaceVal = document.getElementById('replace-input').value;
-    const caseSensitive = document.getElementById('find-case-sensitive').checked;
-    const useRegex = document.getElementById('find-use-regex').checked;
-    let regex;
-    try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { console.error('Error building search regex:', e); return; }
-
-    const data = mySpreadsheet.getData()[0];
-    const rowsLen = data.rows && typeof data.rows.len === 'number' ? data.rows.len : 100;
-    const colsLen = data.cols && typeof data.cols.len === 'number' ? data.cols.len : 676;
-    if (match.ri >= rowsLen || match.ci >= colsLen) {
-        return; 
-    }
-
-    // Capture focus before mutation
-    const activeEl = document.activeElement;
-    const findDialog = document.getElementById('find-replace-dialog');
-    const wasInDialog = findDialog && findDialog.contains(activeEl);
-
-    applyDataMutation((d) => {
-        const row = d.rows[match.ri];
-        if (row && row.cells && row.cells[match.ci]) {
-            const cell = row.cells[match.ci];
-            cell.text = String(cell.text || '').replace(regex, replaceVal);
-        }
-    });
-
-    // Restore focus after mutation
-    if (findDialog && !findDialog.classList.contains('hidden') && wasInDialog) {
-        setTimeout(() => {
-            if (activeEl && typeof activeEl.focus === 'function') {
-                activeEl.focus();
-            } else {
-                document.getElementById('find-input').focus();
-            }
-        }, 0);
-    }
-}
-
-function replaceAll() {
-    const query = document.getElementById('find-input').value;
-    if (!query) return;
-    const replaceVal = document.getElementById('replace-input').value;
-    const caseSensitive = document.getElementById('find-case-sensitive').checked;
-    const useRegex = document.getElementById('find-use-regex').checked;
-    let regex;
-    try { regex = buildSearchRegex(query, caseSensitive, useRegex, true); } catch (e) { console.error('Error building search regex:', e); return; }
-    
-    // Capture focus before mutation
-    const activeEl = document.activeElement;
-    const findDialog = document.getElementById('find-replace-dialog');
-    const wasInDialog = findDialog && findDialog.contains(activeEl);
-
-    applyDataMutation((d) => {
-        const rows = d.rows;
-        Object.keys(rows).forEach(rStr => {
-            if (rStr === 'len') return;
-            const row = rows[rStr];
-            if (row && row.cells) {
-                Object.keys(row.cells).forEach(cStr => {
-                    const cell = row.cells[cStr];
-                    if (cell && cell.text !== undefined && cell.text !== null && cell.text !== '') {
-                        cell.text = String(cell.text).replace(regex, replaceVal);
-                    }
-                });
-            }
-        });
-    });
-
-    // Restore focus after mutation
-    if (findDialog && !findDialog.classList.contains('hidden') && wasInDialog) {
-        setTimeout(() => {
-            if (activeEl && typeof activeEl.focus === 'function') {
-                activeEl.focus();
-            } else {
-                document.getElementById('find-input').focus();
-            }
-        }, 0);
-    }
-}
 
 // --- WHEEL SCROLLING FIXES ---
 
@@ -3225,8 +1691,7 @@ export function createSpreadsheetCore({ initialValue = '', fontFamily = null, pr
     onImportSgml = importSgml;
     onImportResult = importResult;
     onFindOpen = findOpen;
-    exportConfigNames = [];
-    exportConfigsLoaded = false;
+    resetExportConfigsCache();
     bindDomEvents();
 
     const firstValue = typeof initialValue === 'string' && initialValue.trim()
@@ -3410,8 +1875,7 @@ export function createSpreadsheetCore({ initialValue = '', fontFamily = null, pr
             onImportSgml = null;
             onImportResult = null;
             onFindOpen = null;
-            exportConfigNames = [];
-            exportConfigsLoaded = false;
+            resetExportConfigsCache();
             unbindDomEvents();
             mySpreadsheet = null;
         }
