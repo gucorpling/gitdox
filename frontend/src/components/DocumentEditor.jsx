@@ -7,6 +7,7 @@ import ValidationBadge from './ValidationBadge';
 import XmlEditor from './XmlEditor';
 import {
   DEFAULT_STATUS_CATEGORIES,
+  API_ROOT,
   formatStatusCategoryLabel,
   normalizeCssStyleValue,
   getMetadataValidationViolationKeys,
@@ -23,6 +24,7 @@ export default function DocumentEditor({
   docId, 
   onCorpusChange,
   user, 
+  token,
   projectName, 
   mutationTools, 
   spannotatorConfig = {}, 
@@ -657,6 +659,42 @@ export default function DocumentEditor({
       throw err;
     }
   };
+
+  const currentDocName = doc?.docname || 'document';
+  const currentToken = token || user?.token || '';
+
+  const handleFetchXlsx = useCallback(async () => {
+    if (!docId) {
+      throw new Error('Document ID is unknown.');
+    }
+    
+    try {
+      const response = await fetch(`${API_ROOT}/documents/${docId}/xlsx`, {
+        method: 'GET',
+        headers: {
+          // Attach the auth token exactly like AdminView does using the extracted primitive
+          ...(currentToken ? { token: currentToken } : {})
+        }
+      });
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || `Server returned ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentDocName}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download Excel file: ' + err.message);
+    }
+  }, [docId, currentDocName, currentToken]);
 
   const runXmlMutationTool = async (toolKey, toolConfig) => {
     if (!doc || !contentXml.trim()) {
@@ -1462,6 +1500,7 @@ export default function DocumentEditor({
                   onCanonicalized={handleSpreadsheetCanonicalized}
                   onImportResult={handleSpreadsheetImportResult}
                   onImportSgml={importSpreadsheetSgml}
+                  onFetchXlsx={handleFetchXlsx}
                   onFindOpen={handleFindOpen}
                   docId={docId}
                   apiCall={apiCall}

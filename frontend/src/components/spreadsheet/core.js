@@ -52,6 +52,7 @@ import {
 // --- CORE LIFECYCLE STATE ---
 let onSerializedChange = null;
 let onFetchSgml = null;
+let onFetchXlsx = null;
 let onFetchConfigs = null;
 let onImportSgml = null;
 let onImportResult = null;
@@ -113,6 +114,7 @@ configureUiHost({
     exportSocialCalc: () => exportSocialCalc(),
     importSocialCalc: (rawData, emitChange) => importSocialCalc(rawData, emitChange),
     getOnFetchSgml: () => onFetchSgml,
+    getOnFetchXlsx: () => onFetchXlsx,
     getOnFetchConfigs: () => onFetchConfigs,
     getOnImportSgml: () => onImportSgml,
     getOnImportResult: () => onImportResult,
@@ -1694,7 +1696,7 @@ function unbindDomEvents() {
     isDomBound = false;
 }
 
-export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], allowDataTransfer: allowTransfer = true, allowExternalClipboard: allowClipboard = true, onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null, onFindOpen: findOpen = null } = {}) {
+export function createSpreadsheetCore({ initialValue = '', fontFamily = null, preferredColumnOrder = [], allowDataTransfer: allowTransfer = true, allowExternalClipboard: allowClipboard = true, onChange = null, onCanonicalized: canonicalized = null, onFetchSgml: fetchSgml = null, onFetchXlsx: fetchXlsx = null, onFetchConfigs: fetchConfigs = null, onImportSgml: importSgml = null, onImportResult: importResult = null, onFindOpen: findOpen = null } = {}) {
     configuredSpreadsheetFontFamily = normalizeSpreadsheetFontFamily(fontFamily);
     currentPreferredColumnOrder = Array.isArray(preferredColumnOrder) ? preferredColumnOrder : []; 
     allowDataTransfer = Boolean(allowTransfer);
@@ -1703,6 +1705,7 @@ export function createSpreadsheetCore({ initialValue = '', fontFamily = null, pr
     onSerializedChange = onChange;
     onCanonicalized = canonicalized;
     onFetchSgml = fetchSgml;
+    onFetchXlsx = fetchXlsx;
     onFetchConfigs = fetchConfigs;
     onImportSgml = importSgml;
     onImportResult = importResult;
@@ -1887,6 +1890,7 @@ export function createSpreadsheetCore({ initialValue = '', fontFamily = null, pr
         destroy() {
             onSerializedChange = null;
             onFetchSgml = null;
+            onFetchXlsx = null;
             onFetchConfigs = null;
             onImportSgml = null;
             onImportResult = null;

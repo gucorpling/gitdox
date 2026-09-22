@@ -7,14 +7,16 @@ import sys, os, zipfile, re
 import xml.etree.ElementTree as ET
 import yaml
 import redis
-from io import BytesIO
+import tempfile
 from typing import Optional, Any, Literal, List, Tuple, Callable
 from fastapi import FastAPI, HTTPException, Header, Depends, Body, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from io import BytesIO
 from pydantic import BaseModel, Field, field_validator
 from gdutils import social_to_sgml, sgml_to_social, get_social_stylesheets
 from github_utils import GitHubUtility
+from excel import parse_socialcalc_to_xlsx, parse_xlsx_to_socialcalc
 from validate import run_all_validations    
 from pathlib import Path
 from redis.exceptions import RedisError
@@ -2574,6 +2576,159 @@ def export_corpus_zip(
             media_type="application/zip",
             headers={
                 "Content-Disposition": f"attachment; filename={project_name}_{corpus_name}_{fmt}.zip"
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export error: {str(e)}")
+
+
+@app.get("/documents/{doc_id}/xlsx")
+def export_document_xlsx(
+    doc_id: str, 
+    background_tasks: BackgroundTasks, 
+    current_user: dict = Depends(require_admin(0))
+):
+    """Exports a single document's spreadsheet contents to an Excel (.xlsx) file."""
+    doc_key = f"doc:{doc_id}"
+    if not r.exists(doc_key):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc_data = r.hgetall(doc_key)
+    content_spreadsheet = doc_data.get("content_spreadsheet", "")
+
+    if not content_spreadsheet:
+        raise HTTPException(status_code=400, detail="Document has no spreadsheet content to export")
+
+    docname = doc_data.get("docname", "document")
+    filename = f"{docname}.xlsx"
+
+    try:
+        # 1. Create a secure temporary file
+        fd, temp_path = tempfile.mkstemp(suffix=".xlsx")
+        os.close(fd)  # Close the file descriptor so the parser can write to it safely
+
+        # 2. Tell the parser to write directly to the temp file
+        parse_socialcalc_to_xlsx(content_spreadsheet, temp_path, no_fonts=True)
+        
+        # 3. Schedule cleanup after the response finishes streaming
+        background_tasks.add_task(os.remove, temp_path)
+        
+        # 4. Return the file using FastAPI's built-in FileResponse
+        return FileResponse(
+            path=temp_path,
+            filename=filename,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise HTTPException(status_code=500, detail=f"Error converting to XLSX: {str(e)}")
+
+
+@app.get("/projects/{project_name}/corpora/{corpus_name}/export-xlsx-zip")
+def export_corpus_xlsx_zip(
+        project_name: str,
+        corpus_name: str,
+        current_user: dict = Depends(require_admin(0))
+):
+    """Batch-export all documents in a corpus to a ZIP archive of Excel (.xlsx) files."""
+    if current_user.get('project_name') != project_name: 
+        raise HTTPException(status_code=403, detail="Access denied to this project")
+    if not user_has_corpus_access(current_user, corpus_name):
+        raise HTTPException(status_code=403, detail="This user is not allowed to access that corpus.")
+
+    # Get all documents in the project that match the corpus
+    doc_ids = r.smembers(f"project:{project_name}:docs")
+    matching_docs = []
+
+    for doc_id in doc_ids:
+        doc_data = r.hgetall(f"doc:{doc_id}")
+        if doc_data and doc_data.get("corpus") == corpus_name:
+            matching_docs.append((doc_id, doc_data))
+
+    if not matching_docs:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No documents found in corpus '{corpus_name}' for project '{project_name}'"
+        )
+
+    # Load corpus-level metadata to include as a separate tab file when present.
+    corpus_meta_pairs = []
+    raw_corpus_metadata = r.get(f"corpus:{corpus_name}:metadata")
+    if raw_corpus_metadata:
+        try:
+            parsed_corpus_metadata = json.loads(raw_corpus_metadata)
+            if isinstance(parsed_corpus_metadata, dict):
+                for meta_key, meta_value in parsed_corpus_metadata.items():
+                    key_text = str(meta_key).strip()
+                    if not key_text:
+                        continue
+                    
+                    if isinstance(meta_value, (dict, list)):
+                        value_text = json.dumps(meta_value, ensure_ascii=False)
+                    elif meta_value is None:
+                        value_text = ""
+                    else:
+                        value_text = str(meta_value)
+
+                    safe_key = key_text.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+                    safe_value = value_text.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+                    corpus_meta_pairs.append((safe_key, safe_value))
+        except Exception:
+            corpus_meta_pairs = []
+
+    # Build the ZIP file in memory
+    zip_buffer = BytesIO()
+
+    try:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for doc_id, doc_data in matching_docs:
+                docname = doc_data.get("docname", "untitled")
+                filename = f"{docname}.xlsx"
+                
+                content_spreadsheet = doc_data.get("content_spreadsheet", "")
+                if not content_spreadsheet:
+                    continue
+
+                try:
+                    # 1. Create a temp file for this specific document
+                    fd, temp_path = tempfile.mkstemp(suffix=".xlsx")
+                    os.close(fd)
+                    
+                    try:
+                        # 2. Parser writes to disk
+                        parse_socialcalc_to_xlsx(content_spreadsheet, temp_path, no_fonts=True)
+                        
+                        # 3. Read the bytes back from disk into memory
+                        with open(temp_path, "rb") as f:
+                            xlsx_bytes = f.read()
+                            
+                        # 4. Write into the ZIP archive
+                        zf.writestr(filename, xlsx_bytes)
+                    finally:
+                        # Always clean up the temp file
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
+                except Exception:
+                    # Skip individual documents that fail to convert without crashing the whole zip
+                    continue
+
+            # Add corpus metadata
+            if corpus_meta_pairs:
+                corpus_meta_pairs.sort(key=lambda kv: kv[0].lower())
+                corpus_meta_tab = "\n".join(f"{k}\t{v}" for k, v in corpus_meta_pairs)
+                zf.writestr("corpus-meta.tab", corpus_meta_tab)
+
+        # Reset buffer position for reading
+        zip_buffer.seek(0)
+
+        # Return ZIP as streaming response
+        return StreamingResponse(
+            iter([zip_buffer.getvalue()]),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{project_name}_{corpus_name}_xlsx.zip"'
             }
         )
 

@@ -35,6 +35,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
   onCanonicalized,
   onImportResult, 
   onImportSgml,
+  onFetchXlsx,
   onFindOpen,
   docId = null, 
   apiCall = null, 
@@ -129,6 +130,7 @@ const SpreadsheetEditor = forwardRef(function SpreadsheetEditor({
           },
           onCanonicalized,
           onFetchSgml,
+          onFetchXlsx,
           onFetchConfigs,
           onImportSgml,
           onImportResult,
@@ -277,6 +279,7 @@ useEffect(() => {
               <select id="export-format-select" className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="sgml">SGML</option>
                 <option value="socialcalc">SocialCalc</option>
+                <option value="xlsx">Excel (.xlsx)</option>
               </select>
             </div>
             <div id="modal-config-row" className="hidden items-center gap-2 mb-3">

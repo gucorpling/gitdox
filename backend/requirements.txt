@@ -1,4 +1,5 @@
 fastapi
+openpyxl
 pydantic
 python-multipart
 redis
@@ -6,3 +7,4 @@ requests
 PyGithub
 pyyaml
 uvicorn
+xlsxwriter

@@ -1224,22 +1224,29 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
       return;
     }
 
-    const params = new URLSearchParams();
-    params.set('mode', corpusExportMode);
+    let fetchUrl;
+    
+    if (corpusExportMode === 'xlsx') {
+      fetchUrl = `${API_ROOT}/projects/${encodeURIComponent(projectName)}/corpora/${encodeURIComponent(corpusName)}/export-xlsx-zip`;
+    } else {
+      const params = new URLSearchParams();
+      params.set('mode', corpusExportMode);
 
-    const extension = corpusExportExtension.trim();
-    if (extension) {
-      params.set('extension', extension.replace(/^\./, ''));
-    }
-    if (corpusExportMode === 'spreadsheet' && corpusExportConfig) {
-      params.set('config', corpusExportConfig);
+      const extension = corpusExportExtension.trim();
+      if (extension) {
+        params.set('extension', extension.replace(/^\./, ''));
+      }
+      if (corpusExportMode === 'spreadsheet' && corpusExportConfig) {
+        params.set('config', corpusExportConfig);
+      }
+      fetchUrl = `${API_ROOT}/projects/${encodeURIComponent(projectName)}/corpora/${encodeURIComponent(corpusName)}/export-zip?${params.toString()}`;
     }
 
     setIsExportingCorpusZip(true);
     setCorpusExportResult(null);
     try {
       const response = await fetch(
-        `${API_ROOT}/projects/${encodeURIComponent(projectName)}/corpora/${encodeURIComponent(corpusName)}/export-zip?${params.toString()}`,
+        fetchUrl,
         {
           method: 'GET',
           headers: {
@@ -1983,6 +1990,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                     >
                       <option value="xml">XML</option>
                       <option value="spreadsheet">Spreadsheet (SGML)</option>
+                      <option value="xlsx">Spreadsheet (.xlsx)</option>
                     </select>
                   </div>
 
@@ -2010,10 +2018,11 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                   <div>
                     <label className="block text-slate-600 mb-1">File Extension (optional)</label>
                     <input
-                      className="w-full border p-2 rounded"
-                      value={corpusExportExtension}
+                      className="w-full border p-2 rounded disabled:bg-slate-100 disabled:text-slate-400"
+                      value={corpusExportMode === 'xlsx' ? '' : corpusExportExtension}
                       onChange={(e) => setCorpusExportExtension(e.target.value)}
-                      placeholder={corpusExportMode === 'spreadsheet' ? 'Default: sgml' : 'Default: xml'}
+                      disabled={corpusExportMode === 'xlsx'}
+                      placeholder={corpusExportMode === 'spreadsheet' ? 'Default: sgml' : corpusExportMode === 'xlsx' ? 'N/A (.xlsx only)' : 'Default: xml'}
                     />
                     <p className="text-xs text-slate-500 mt-1">Use extension name without dot, for example: xml, sgml, txt.</p>
                   </div>

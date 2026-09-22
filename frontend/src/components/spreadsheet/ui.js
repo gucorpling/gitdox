@@ -60,7 +60,7 @@ export function openModal(mode) {
         setTimeout(() => textarea.focus(), 50);
     } else {
         title.textContent = 'Export Data';
-        desc.textContent = 'Copy the serialized output below to export your annotations.';
+        desc.textContent = 'Select your format below to export your annotations.';
         actionBtn.textContent = 'Copy to Clipboard';
         actionBtn.className = 'px-5 py-2 bg-green-600 font-medium text-white rounded hover:bg-green-700 transition shadow-sm';
         if (formatRow) {
@@ -87,9 +87,15 @@ export async function handleExportFormatChange() {
     const configRow = document.getElementById('modal-config-row');
     const configSelect = document.getElementById('export-config-select');
     const textarea = document.getElementById('modal-textarea');
+    const actionBtn = document.getElementById('data-modal-action-btn');
     if (!formatSelect || !textarea) return;
 
     const format = formatSelect.value;
+    
+    if (actionBtn) {
+        actionBtn.textContent = format === 'xlsx' ? 'Download Excel' : 'Copy to Clipboard';
+    }
+
     if (format === 'sgml') {
         if (configRow) {
             configRow.classList.remove('hidden');
@@ -110,11 +116,9 @@ export async function handleExportFormatChange() {
         textarea.value = 'Loading...';
         try {
             const result = await onFetchSgml(configSelect.value);
-            // result is supposed to return an object with a key 'sgml' but we can be flexible in parsing it
             if (typeof result === 'string') {
                 textarea.value = result;
             } else if (result && typeof result === 'object') {
-                // Try common field names for text content
                 textarea.value = result.sgml ?? result.content ?? result.data ?? result.text ?? JSON.stringify(result, null, 2);
             } else {
                 textarea.value = String(result ?? '');
@@ -122,6 +126,12 @@ export async function handleExportFormatChange() {
         } catch (err) {
             textarea.value = `Error fetching SGML: ${err.message}`;
         }
+    } else if (format === 'xlsx') {
+        if (configRow) {
+            configRow.classList.add('hidden');
+            configRow.style.display = 'none';
+        }
+        textarea.value = 'Click the button below to download the Excel (.xlsx) file.';
     } else {
         if (configRow) {
             configRow.classList.add('hidden');
@@ -254,13 +264,45 @@ export async function executeModalAction() {
             }
         }
     } else {
-        const textarea = document.getElementById('modal-textarea');
-        textarea.select();
-        document.execCommand('copy');
-        const btn = document.getElementById('data-modal-action-btn');
-        const origText = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = origText; }, 2000);
+        const formatSelect = document.getElementById('export-format-select');
+        const format = formatSelect ? formatSelect.value : '';
+
+        if (format === 'xlsx') {
+            const onFetchXlsx = host.getOnFetchXlsx && host.getOnFetchXlsx();
+            if (!onFetchXlsx) {
+                alert('Excel export function is not bound to the host.');
+                return;
+            }
+
+            const actionBtn = document.getElementById('data-modal-action-btn');
+            const originalLabel = actionBtn ? actionBtn.textContent : 'Download Excel';
+            
+            if (actionBtn) {
+                actionBtn.disabled = true;
+                actionBtn.textContent = 'Downloading...';
+            }
+
+            try {
+                await onFetchXlsx();
+                closeModal();
+            } catch (err) {
+                console.error("Error exporting XLSX:", err);
+                alert(`Export failed: ${err.message}`);
+            } finally {
+                if (actionBtn) {
+                    actionBtn.disabled = false;
+                    actionBtn.textContent = originalLabel;
+                }
+            }
+        } else {
+            const textarea = document.getElementById('modal-textarea');
+            textarea.select();
+            document.execCommand('copy');
+            const btn = document.getElementById('data-modal-action-btn');
+            const origText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = origText; }, 2000);
+        }
     }
 }
 
@@ -712,8 +754,6 @@ export function runFindSearch() {
     const caseSensitive = document.getElementById('find-case-sensitive').checked;
     const useRegex = document.getElementById('find-use-regex').checked;
     const findInput = document.getElementById('find-input');
-    
-    // Removed the line causing the ReferenceError since it is undefined and unused
     
     findMatches = [];
     findMatchIndex = -1;
