@@ -587,24 +587,6 @@ export default function App() {
             </div>
 
             <div className="hidden md:flex space-x-2">
-              {user?.adminlevel >= 1 && (
-                <a
-                  href={buildFrontendPath(ADMIN_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}
-                  onClick={(e) => {
-                    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                      e.preventDefault();
-                      navigateToAdmin();
-                    }
-                  }}
-                  className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
-                    currentView === 'admin' 
-                      ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
-                      : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
-                  }`}
-                >
-                  <Users size={18} /> Admin
-                </a>
-              )}
               <a
                 href={buildFrontendPath(DASHBOARD_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}
                 onClick={(e) => {
@@ -635,6 +617,24 @@ export default function App() {
                   }`}
                 >
                   <FolderOpen size={18} /> Corpus
+                </a>
+              )}
+              {user?.adminlevel >= 1 && (
+                <a
+                  href={buildFrontendPath(ADMIN_PATH, EFFECTIVE_FRONTEND_BASE_PATH)}
+                  onClick={(e) => {
+                    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                      e.preventDefault();
+                      navigateToAdmin();
+                    }
+                  }}
+                  className={`px-3 py-2 rounded-md flex items-center gap-2 transition-colors ${
+                    currentView === 'admin' 
+                      ? (isNavDark ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700') 
+                      : (isNavDark ? 'text-slate-200 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')
+                  }`}
+                >
+                  <Users size={18} /> Admin
                 </a>
               )}
             </div>
