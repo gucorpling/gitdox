@@ -1473,7 +1473,8 @@ export default function DocumentEditor({
                   edeps: Boolean(getTokenAnn('edeps', '')),
                   feats: Boolean(getTokenAnn('feats', '')),
                   misc: Boolean(getTokenAnn('misc', '')),
-                  hide_duplicate_edeps: Boolean(dendroidConfig?.hide_duplicate_edeps)
+                  hide_duplicate_edeps: Boolean(dendroidConfig?.hide_duplicate_edeps),
+                  hover_highlight: Boolean(dendroidConfig?.hover_highlight)
                 }}
                 tagsets={{
                   upos: dendroidConfig?.tagsets?.upos || [],

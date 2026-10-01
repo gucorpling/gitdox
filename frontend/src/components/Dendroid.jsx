@@ -226,6 +226,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
   const [lassoState, setLassoState] = useState({ active: false, startX: 0, currentX: 0 });
   const [inlineEditor, setInlineEditor] = useState(null);
   const [featuresModalTokenId, setFeaturesModalTokenId] = useState(null);
+  const [hoveredEdgeKey, setHoveredEdgeKey] = useState(null);
   
   const displayAnnName = activeAnn;
   
@@ -558,6 +559,9 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
     const distance = Math.abs(targetX - sourceX), direction = targetX > sourceX ? 1 : -1, heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (distance * 0.2)); 
     return `M ${sourceX + (direction * 5)} ${BASE_Y + startOffset} C ${sourceX + (direction * 5) + (direction * distance * 0.25)} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
   };
+
+  const combinedEdges = [...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))];
+  const hoveredEdge = features.hover_highlight && hoveredEdgeKey ? combinedEdges.find(e => `${e.isEdep ? 'enh' : 'std'}-${e.source}-${e.target}` === hoveredEdgeKey) : null;
   
   return (
     <div className="relative w-full border border-gray-200 rounded-lg bg-gray-50 shadow-inner overflow-hidden group/graph" onMouseLeave={handleSvgMouseUp} onMouseUp={handleSvgMouseUp} onMouseMove={(e) => updateDragPos(e.clientX, e.clientY, e)}>
@@ -585,19 +589,22 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
           )}
   
           {/* PASS 1: Render all arcs first so they stay in the background under the deprel labels */}
-          {[...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))].map((edge, idx) => {
+          {combinedEdges.map((edge, idx) => {
             const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
             if (!isRoot && !headNode) return null;
             
             const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
             const pathD = getArcPath(sourceX, targetX, isRoot, edge.stackIndex, edge.isEdep);
+            const edgeKey = `${edge.isEdep ? 'enh' : 'std'}-${edge.source}-${edge.target}`;
+            const isHovered = features.hover_highlight && hoveredEdgeKey === edgeKey;
+            const edgeStrokeWidth = isHovered ? "3" : "1.5";
 
             return (
-              <g key={`arc-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group">
+              <g key={`arc-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group" onMouseEnter={() => setHoveredEdgeKey(edgeKey)} onMouseLeave={() => setHoveredEdgeKey(null)}>
                 <path d={pathD} stroke="transparent" strokeWidth="15" fill="none" />
                 
                 {edge.isUniversal ? (
-                    <path d={pathD} stroke="#94a3b8" strokeWidth="1.5" fill="none" markerEnd={`url(#arrowhead-94a3b8)`} className="transition-all duration-200" />
+                    <path d={pathD} stroke="#94a3b8" strokeWidth={edgeStrokeWidth} fill="none" markerEnd={`url(#arrowhead-94a3b8)`} className="transition-all duration-200" />
                 ) : (
                     edge.rels.map((relObj, i) => {
                         const arcColor = relObj.color;
@@ -607,7 +614,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
                         const dashOffset = edge.rels.length > 1 ? `-${i * dashLength}` : '0';
 
                         return (
-                            <path key={`path-${i}`} d={pathD} stroke={arcColor} strokeWidth="1.5" fill="none" strokeDasharray={dashArray} strokeDashoffset={dashOffset} markerEnd={`url(#arrowhead-${arcColor.replace(/[^a-zA-Z0-9]/g, '')})`} className="transition-all duration-200" />
+                            <path key={`path-${i}`} d={pathD} stroke={arcColor} strokeWidth={edgeStrokeWidth} fill="none" strokeDasharray={dashArray} strokeDashoffset={dashOffset} markerEnd={`url(#arrowhead-${arcColor.replace(/[^a-zA-Z0-9]/g, '')})`} className="transition-all duration-200" />
                         );
                     })
                 )}
@@ -616,7 +623,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
           })}
 
           {/* PASS 2: Render all labels second so they sit above all arcs and remain clickable */}
-          {[...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))].map((edge, idx) => {
+          {combinedEdges.map((edge, idx) => {
             const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
             if (!isRoot && !headNode) return null;
             
@@ -624,9 +631,11 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
             const textX = isRoot ? targetX + 5 : (sourceX + targetX) / 2;
             const heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetX - sourceX) * 0.2));
             const baseTextY = isRoot ? (edge.isEdep ? BASE_Y + (MAX_ARC_HEIGHT / 2) + 10 : (BASE_Y / 2)) : (edge.isEdep ? BASE_Y + 50 + (heightOffset * 0.75) + 12 : BASE_Y - 35 - (heightOffset * 0.75) - 5);
+            const edgeKey = `${edge.isEdep ? 'enh' : 'std'}-${edge.source}-${edge.target}`;
+            const isHovered = features.hover_highlight && hoveredEdgeKey === edgeKey;
 
             return (
-              <g key={`labels-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group">
+              <g key={`labels-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group" onMouseEnter={() => features.hover_highlight && setHoveredEdgeKey(edgeKey)} onMouseLeave={() => features.hover_highlight && setHoveredEdgeKey(null)}>
                 {edge.rels.map((relObj, i) => {
                     const stackOffset = (i - (edge.rels.length - 1) / 2) * 16;
                     const textY = baseTextY + stackOffset;
@@ -634,12 +643,12 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
 
                     return (
                         <g key={`label-${i}`}>
-                            <rect x={textX - (relObj.rel.length * 4)} y={textY - 10} width={relObj.rel.length * 8} height="14" fill="#f9fafb" rx="4" className={isCompareMode ? '' : 'cursor-pointer'} onClick={(e) => {
+                            <rect x={textX - (relObj.rel.length * 4)} y={textY - 10} width={relObj.rel.length * 8} height="14" fill="#f9fafb" rx="4" opacity="0.5" className={isCompareMode ? '' : 'cursor-pointer'} onClick={(e) => {
                                 e.stopPropagation();
                                 if (isCompareMode) return;
                                 setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
                             }} />
-                            <text x={textX} y={textY} textAnchor="middle" fill={displayColor} className={`text-[11px] font-semibold ${isCompareMode ? '' : 'cursor-pointer hover:font-bold hover:underline'} transition-all`} onClick={(e) => {
+                            <text x={textX} y={textY} textAnchor="middle" fill={displayColor} className={`text-[11px] ${isHovered ? 'font-bold' : 'font-semibold'} ${isCompareMode ? '' : 'cursor-pointer hover:font-bold hover:underline'} transition-all`} onClick={(e) => {
                                 e.stopPropagation();
                                 if (isCompareMode) return;
                                 setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
@@ -703,6 +712,24 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
               </g>
             );
           })}
+
+          {/* Overlay: redraw the hovered edge last so it renders above every other edge/label/node */}
+          {hoveredEdge && (() => {
+            const isRoot = hoveredEdge.source === '0', headNode = layout.nodePositions[hoveredEdge.source], targetNode = layout.nodePositions[hoveredEdge.target];
+            if (!isRoot && !headNode) return null;
+            const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
+            const pathD = getArcPath(sourceX, targetX, isRoot, hoveredEdge.stackIndex, hoveredEdge.isEdep);
+
+            if (hoveredEdge.isUniversal) {
+              return <path d={pathD} stroke="#94a3b8" strokeWidth="3" fill="none" markerEnd={`url(#arrowhead-94a3b8)`} className="pointer-events-none" />;
+            }
+            return hoveredEdge.rels.map((relObj, i) => {
+              const dashLength = 10, gapLength = dashLength * (hoveredEdge.rels.length - 1);
+              const dashArray = hoveredEdge.rels.length > 1 ? `${dashLength} ${gapLength}` : 'none';
+              const dashOffset = hoveredEdge.rels.length > 1 ? `-${i * dashLength}` : '0';
+              return <path key={`overlay-${i}`} d={pathD} stroke={relObj.color} strokeWidth="3" fill="none" strokeDasharray={dashArray} strokeDashoffset={dashOffset} markerEnd={`url(#arrowhead-${relObj.color.replace(/[^a-zA-Z0-9]/g, '')})`} className="pointer-events-none" />;
+            });
+          })()}
           </svg>
   
           {inlineEditor && (
@@ -864,7 +891,7 @@ export function Dendroid({
     annotator: 'dendroid:annotator', mwt: 'mwt'
   },
   features = {
-    mwt: true, ellipsis: true, edeps: true, feats: true, misc: true, hide_duplicate_edeps: false
+    mwt: true, ellipsis: true, edeps: true, feats: true, misc: true, hide_duplicate_edeps: false, hover_highlight: false
   },
   tagsets = {
     upos: ["NOUN", "PUNCT", "VERB", "ADP", "PRON", "DET", "ADJ", "AUX", "PROPN", "ADV", "CCONJ", "PART", "NUM", "SCONJ", "INTJ", "X", "SYM"].sort(),
@@ -1606,6 +1633,7 @@ export function Dendroid({
             {perUserMode && <span className="bg-indigo-800 text-xs px-2 py-1 rounded ml-4">Editing as: <strong>{currentUser}</strong></span>}
           </div>
           <div className="flex items-center gap-2">
+            <span className="px-3 py-1.5 text-sm text-indigo-300 whitespace-nowrap">{sentences.length} {sentences.length === 1 ? 'syntax tree' : 'syntax trees'}</span>
             <div className="flex bg-indigo-950/50 rounded-lg p-1 mr-4 border border-indigo-800">
               <button onClick={() => setViewMode('editor')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>Tree Editor</button>
               <button onClick={() => { setRawData(exportCoNLLU(sentences, globalPreferredAnnotator)); setViewMode('conllu'); }} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'conllu' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>CoNLL-U Source</button>

@@ -37,7 +37,7 @@ const INITIAL_CONFIG = {
       misc: 'misc',
       mwt: 'mwt'
     },
-    features: { mwt: true, ellipsis: true, edeps: true, feats: true, misc: true, hide_duplicate_edeps: true }
+    features: { mwt: true, ellipsis: true, edeps: true, feats: true, misc: true, hide_duplicate_edeps: true, hover_highlight: true }
   },
   spreadsheet: {
     column_order: ['tok', 'word', 'text_id', 'p', 'hi_rend', 's_type', 'lemma', 'upos', 'xpos', 'word_id', 'head', 'deprel', 'deps', 'misc', 'mwt', 'dendroid:annotator'],
