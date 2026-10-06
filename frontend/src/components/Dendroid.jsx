@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+﻿import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronRight, Upload, X, ChevronLeft, Info, Users, GitBranch } from 'lucide-react';
 
 const COLORS = ['#94a3b8', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#f43f5e', '#14b8a6', '#d946ef', '#f97316'];
@@ -581,6 +581,43 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
     return (sourceInView && targetInView) ? showLocalEdges : showLongEdges;
   });
   const hoveredEdge = features.hover_highlight && hoveredEdgeKey ? combinedEdges.find(e => `${e.isEdep ? 'enh' : 'std'}-${e.source}-${e.target}` === hoveredEdgeKey) : null;
+
+  // When overlay is true, this draws the hovered edge's labels a second time on top of everything;
+  // the original copy is then made non-interactive so only one copy is ever clickable.
+  const renderEdgeLabels = (edge, key, overlay) => {
+    const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
+    if (!isRoot && !headNode) return null;
+
+    const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
+    const textX = isRoot ? targetX + 5 : (sourceX + targetX) / 2;
+    const heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetX - sourceX) * 0.2));
+    const baseTextY = isRoot ? (edge.isEdep ? BASE_Y + (MAX_ARC_HEIGHT / 2) + 10 : (BASE_Y / 2)) : (edge.isEdep ? BASE_Y + 50 + (heightOffset * 0.75) + 12 : BASE_Y - 35 - (heightOffset * 0.75) - 5);
+    const edgeKey = `${edge.isEdep ? 'enh' : 'std'}-${edge.source}-${edge.target}`;
+    const isHovered = features.hover_highlight && hoveredEdgeKey === edgeKey;
+    const inert = isHovered && !overlay;
+
+    return (
+      <g key={key} className="group" pointerEvents={inert ? 'none' : undefined} onMouseEnter={() => features.hover_highlight && setHoveredEdgeKey(edgeKey)} onMouseLeave={() => features.hover_highlight && setHoveredEdgeKey(null)}>
+        {edge.rels.map((relObj, i) => {
+          const stackOffset = (i - (edge.rels.length - 1) / 2) * 16;
+          const textY = baseTextY + stackOffset;
+          const displayColor = edge.isUniversal ? '#64748b' : relObj.color;
+          const openEditor = (e) => {
+            e.stopPropagation();
+            if (isCompareMode) return;
+            setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
+          };
+
+          return (
+            <g key={`label-${i}`}>
+              <rect x={textX - (relObj.rel.length * 4)} y={textY - 10} width={relObj.rel.length * 8} height="14" fill="#f9fafb" rx="4" opacity={overlay ? 0.9 : 0.5} className={isCompareMode ? '' : 'cursor-pointer'} onClick={openEditor} />
+              <text x={textX} y={textY} textAnchor="middle" fill={displayColor} className={`text-[11px] ${isHovered ? 'font-bold' : 'font-semibold'} ${isCompareMode ? '' : 'cursor-pointer hover:font-bold hover:underline'} transition-all`} onClick={openEditor}>{relObj.rel}</text>
+            </g>
+          );
+        })}
+      </g>
+    );
+  };
   
   return (
     <div className="relative w-full border border-gray-200 rounded-lg bg-gray-50 shadow-inner overflow-hidden group/graph" onMouseLeave={handleSvgMouseUp} onMouseUp={handleSvgMouseUp} onMouseMove={(e) => updateDragPos(e.clientX, e.clientY, e)}>
@@ -642,42 +679,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
           })}
 
           {/* PASS 2: Render all labels second so they sit above all arcs and remain clickable */}
-          {combinedEdges.map((edge, idx) => {
-            const isRoot = edge.source === '0', headNode = layout.nodePositions[edge.source], targetNode = layout.nodePositions[edge.target];
-            if (!isRoot && !headNode) return null;
-            
-            const sourceX = isRoot ? targetNode.x : headNode.x, targetX = targetNode.x;
-            const textX = isRoot ? targetX + 5 : (sourceX + targetX) / 2;
-            const heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (Math.abs(targetX - sourceX) * 0.2));
-            const baseTextY = isRoot ? (edge.isEdep ? BASE_Y + (MAX_ARC_HEIGHT / 2) + 10 : (BASE_Y / 2)) : (edge.isEdep ? BASE_Y + 50 + (heightOffset * 0.75) + 12 : BASE_Y - 35 - (heightOffset * 0.75) - 5);
-            const edgeKey = `${edge.isEdep ? 'enh' : 'std'}-${edge.source}-${edge.target}`;
-            const isHovered = features.hover_highlight && hoveredEdgeKey === edgeKey;
-
-            return (
-              <g key={`labels-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`} className="group" onMouseEnter={() => features.hover_highlight && setHoveredEdgeKey(edgeKey)} onMouseLeave={() => features.hover_highlight && setHoveredEdgeKey(null)}>
-                {edge.rels.map((relObj, i) => {
-                    const stackOffset = (i - (edge.rels.length - 1) / 2) * 16;
-                    const textY = baseTextY + stackOffset;
-                    const displayColor = edge.isUniversal ? '#64748b' : relObj.color;
-
-                    return (
-                        <g key={`label-${i}`}>
-                            <rect x={textX - (relObj.rel.length * 4)} y={textY - 10} width={relObj.rel.length * 8} height="14" fill="#f9fafb" rx="4" opacity="0.5" className={isCompareMode ? '' : 'cursor-pointer'} onClick={(e) => {
-                                e.stopPropagation();
-                                if (isCompareMode) return;
-                                setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
-                            }} />
-                            <text x={textX} y={textY} textAnchor="middle" fill={displayColor} className={`text-[11px] ${isHovered ? 'font-bold' : 'font-semibold'} ${isCompareMode ? '' : 'cursor-pointer hover:font-bold hover:underline'} transition-all`} onClick={(e) => {
-                                e.stopPropagation();
-                                if (isCompareMode) return;
-                                setInlineEditor({ active: true, type: 'select', field: edge.isEdep ? 'edeprel' : 'deprel', tokenId: edge.target, sourceId: edge.source, value: relObj.rel, x: textX, y: textY, options: edge.isEdep ? tagsets.edeprel : tagsets.deprel });
-                            }}>{relObj.rel}</text>
-                        </g>
-                    )
-                })}
-              </g>
-            );
-          })}
+          {combinedEdges.map((edge, idx) => renderEdgeLabels(edge, `labels-${edge.isEdep ? 'enh' : 'std'}-${edge.target}-${edge.source}-${idx}`, false))}
   
           {layout.mwts.map(mwt => (
             <g key={`mwt-${mwt.id}`} className="group">
@@ -749,6 +751,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
               return <path key={`overlay-${i}`} d={pathD} stroke={relObj.color} strokeWidth="3" fill="none" strokeDasharray={dashArray} strokeDashoffset={dashOffset} markerEnd={`url(#arrowhead-${relObj.color.replace(/[^a-zA-Z0-9]/g, '')})`} className="pointer-events-none" />;
             });
           })()}
+          {hoveredEdge && renderEdgeLabels(hoveredEdge, 'label-overlay', true)}
           </svg>
   
           {inlineEditor && (
