@@ -210,7 +210,7 @@ const FeaturesModal = ({ token, onClose, onSave, config }) => {
 };
 
 const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode, compareUsers, annotatorColors, config }) => {
-  const { features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap } = config;
+  const { features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges = true, showLongEdges = true } = config;
   
   const containerRef = useRef(null);
   const scrollRef = useRef(null);
@@ -227,6 +227,19 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
   const [inlineEditor, setInlineEditor] = useState(null);
   const [featuresModalTokenId, setFeaturesModalTokenId] = useState(null);
   const [hoveredEdgeKey, setHoveredEdgeKey] = useState(null);
+  const [viewport, setViewport] = useState({ left: 0, width: 0 });
+  const filterEdges = !showLocalEdges || !showLongEdges;
+
+  // Track the visible horizontal region, only needed while an edge filter is active
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !filterEdges) return;
+    const update = () => setViewport(prev => (prev.left === el.scrollLeft && prev.width === el.clientWidth) ? prev : { left: el.scrollLeft, width: el.clientWidth });
+    update();
+    el.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    return () => { el.removeEventListener('scroll', update); window.removeEventListener('resize', update); };
+  }, [filterEdges]);
   
   const displayAnnName = activeAnn;
   
@@ -560,7 +573,13 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
     return `M ${sourceX + (direction * 5)} ${BASE_Y + startOffset} C ${sourceX + (direction * 5) + (direction * distance * 0.25)} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
   };
 
-  const combinedEdges = [...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))];
+  const isInView = (x) => x >= viewport.left && x <= viewport.left + viewport.width;
+  const combinedEdges = [...layout.standardEdges.map(e => ({ ...e, isEdep: false })), ...layout.enhancedEdges.map(e => ({ ...e, isEdep: true }))].filter(e => {
+    if (!filterEdges) return true;
+    const targetInView = isInView(e.tNode.x);
+    const sourceInView = e.source === '0' ? targetInView : isInView(e.sNode.x);
+    return (sourceInView && targetInView) ? showLocalEdges : showLongEdges;
+  });
   const hoveredEdge = features.hover_highlight && hoveredEdgeKey ? combinedEdges.find(e => `${e.isEdep ? 'enh' : 'std'}-${e.source}-${e.target}` === hoveredEdgeKey) : null;
   
   return (
@@ -909,11 +928,13 @@ export function Dendroid({
   const [showHelp, setShowHelp] = useState(false);
   const [globalPreferredAnnotator, setGlobalPreferredAnnotator] = useState('LATEST');
   const [colorMap, setColorMap] = useState({});
+  const [showLocalEdges, setShowLocalEdges] = useState(true);
+  const [showLongEdges, setShowLongEdges] = useState(true);
 
   // Bundle the context necessary for the extracted components
   const editorConfig = useMemo(() => ({
-    features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap
-  }), [features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap]);
+    features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges, showLongEdges
+  }), [features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges, showLongEdges]);
 
   // --- GitDOX Integration Helper ---
   const notifyChange = (nextSents) => {
@@ -1634,6 +1655,10 @@ export function Dendroid({
           </div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1.5 text-sm text-indigo-300 whitespace-nowrap">{sentences.length} {sentences.length === 1 ? 'syntax tree' : 'syntax trees'}</span>
+            <div className="flex flex-col text-xs text-indigo-200 mr-4 leading-tight">
+              <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={showLocalEdges} onChange={e => setShowLocalEdges(e.target.checked)} />show local edges</label>
+              <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={showLongEdges} onChange={e => setShowLongEdges(e.target.checked)} />show long distance edges</label>
+            </div>
             <div className="flex bg-indigo-950/50 rounded-lg p-1 mr-4 border border-indigo-800">
               <button onClick={() => setViewMode('editor')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>Tree Editor</button>
               <button onClick={() => { setRawData(exportCoNLLU(sentences, globalPreferredAnnotator)); setViewMode('conllu'); }} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'conllu' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>CoNLL-U Source</button>
