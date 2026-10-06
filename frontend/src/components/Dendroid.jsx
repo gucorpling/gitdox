@@ -808,6 +808,12 @@ const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentenc
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [compareUsers, setCompareUsers] = useState([]);
 
+  // Tokens in the selected tree lacking a parent (head 0 / root is valid)
+  const missingParentCount = sentence.tokens.filter(t => {
+    const head = t.annotations[activeAnn]?.head;
+    return head === undefined || head === null || head === '' || head === '_';
+  }).length;
+
   const annotatorColors = useMemo(() => {
       const map = {};
       const palette = COLORS.slice(1);
@@ -828,7 +834,10 @@ const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentenc
           <div className={`p-1 rounded-md transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400'}`}>
             {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
           </div>
-          <span className="font-mono text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md shrink-0">{index + 1}</span>
+          <span
+            className={`font-mono text-sm px-2 py-1 rounded-md shrink-0 ${missingParentCount > 0 ? 'text-red-700 bg-red-100' : 'text-gray-500 bg-gray-100'}`}
+            title={missingParentCount > 0 ? `${missingParentCount} ${missingParentCount === 1 ? 'token has' : 'tokens have'} no parent set` : undefined}
+          >{index + 1}</span>
           <h3 className={`text-base truncate font-medium ${isExpanded ? 'text-indigo-900' : 'text-gray-800'}`}>
             {sentence.text}
           </h3>
