@@ -381,6 +381,22 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
   const startAutoScroll = (direction) => { if (scrollInterval.current) return; scrollInterval.current = setInterval(() => { if (scrollRef.current) { scrollRef.current.scrollLeft += direction * 10; if (dragState.active || lassoState.active) updateDragPos(latestMousePos.current.x, latestMousePos.current.y); } }, 16); };
   const stopAutoScroll = () => { if (scrollInterval.current) { clearInterval(scrollInterval.current); scrollInterval.current = null; } };
   useEffect(() => () => stopAutoScroll(), []);
+
+  const graphWrapperRef = useRef(null);
+  const cancelDrag = () => {
+    stopAutoScroll();
+    setDragState(prev => prev.active ? { active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, hoveredTargetId: null, isEdep: false } : prev);
+    setLassoState(prev => prev.active ? { active: false, startX: 0, currentX: 0 } : prev);
+  };
+  // Releasing the button outside the widget cancels the drag; re-entering with the button held continues it.
+  useEffect(() => {
+    const onWindowMouseUp = (e) => {
+      if (graphWrapperRef.current && graphWrapperRef.current.contains(e.target)) return;
+      cancelDrag();
+    };
+    window.addEventListener('mouseup', onWindowMouseUp);
+    return () => window.removeEventListener('mouseup', onWindowMouseUp);
+  }, []);
   
   const updateDragPos = (clientX, clientY, e = null) => {
     latestMousePos.current = { x: clientX, y: clientY };
@@ -620,7 +636,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
   };
   
   return (
-    <div className="relative w-full border border-gray-200 rounded-lg bg-gray-50 shadow-inner overflow-hidden group/graph" onMouseLeave={handleSvgMouseUp} onMouseUp={handleSvgMouseUp} onMouseMove={(e) => updateDragPos(e.clientX, e.clientY, e)}>
+    <div className="relative w-full border border-gray-200 rounded-lg bg-gray-50 shadow-inner overflow-hidden group/graph" ref={graphWrapperRef} onMouseLeave={stopAutoScroll} onMouseEnter={(e) => { if (e.buttons === 0) cancelDrag(); }} onMouseUp={handleSvgMouseUp} onMouseMove={(e) => updateDragPos(e.clientX, e.clientY, e)}>
       <div className="absolute left-0 top-0 bottom-0 w-12 z-20 opacity-0 group-hover/graph:opacity-100 transition-opacity flex items-center justify-start cursor-pointer" onPointerDown={() => startAutoScroll(-1)} onPointerUp={stopAutoScroll} onPointerLeave={stopAutoScroll} onMouseEnter={() => { if (dragState.active || lassoState.active) startAutoScroll(-1); }} onMouseLeave={stopAutoScroll}><div className="bg-white/90 h-full w-8 shadow-[2px_0_8px_rgba(0,0,0,0.15)] flex items-center justify-center hover:bg-gray-100"><ChevronLeft size={24} className="text-gray-500" /></div></div>
       <div className="absolute right-0 top-0 bottom-0 w-12 z-20 opacity-0 group-hover/graph:opacity-100 transition-opacity flex items-center justify-end cursor-pointer" onPointerDown={() => startAutoScroll(1)} onPointerUp={stopAutoScroll} onPointerLeave={stopAutoScroll} onMouseEnter={() => { if (dragState.active || lassoState.active) startAutoScroll(1); }} onMouseLeave={stopAutoScroll}><div className="bg-white/90 h-full w-8 shadow-[-2px_0_8px_rgba(0,0,0,0.15)] flex items-center justify-center hover:bg-gray-100"><ChevronRight size={24} className="text-gray-500" /></div></div>
   
