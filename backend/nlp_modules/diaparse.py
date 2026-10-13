@@ -1,11 +1,14 @@
 from argparse import ArgumentParser
 from diaparser.parsers import Parser
+from random import randint, seed
 import sys, re, os
+
+seed(42)
 
 parser = None
 script_dir = os.path.dirname(os.path.realpath(__file__))
 # You will need a diaparser model file in the same directory as this script for it to work:
-model_name = 'en_gum11.electra-base.pt'
+model_name = 'en_gum12.electra-base.pt'
 
 if not os.path.exists(script_dir + os.sep + model_name):
     sys.stderr.write(f"ERROR: The diaparser model file '{model_name}' is missing in the script directory '{script_dir}'.\n")
@@ -107,7 +110,38 @@ def merge(conllu, deprels):
     return "\n".join(output).strip() + "\n\n"
 
 
-def conllu2sgml(tt_sgml, conllu):
+def ablate_deps(deps):
+    # Divide the token indices into 5 quintiles:
+    # Quintile 1: keep all deps
+    # Quintile 2: keep all deps
+    # Quintile 3: replace parent and peprel with "_" at a 0.10 probability; punct and root are always kept
+    # Quintile 4: replace parent and peprel with "_" at a 0.20 probability; punct is always kept
+    # Quintile 5: replace all tags and lemmas with "_"; punct is always kept
+    output = []
+    quintile_size = len(deps) // 5
+    for i, tup in enumerate(deps):
+        snum, tid, head, deprel = tup
+        keep = True
+        if i < quintile_size:
+            pass
+        elif i < 2 * quintile_size:
+            pass
+        elif i < 3 * quintile_size:
+            if randint(1,100) <= 10 and deprel not in ["punct", "root"]:
+                keep = False
+        elif i < 4 * quintile_size and deprel not in ["punct"]:
+            if randint(1,100) <= 20:
+                keep = False
+        else:
+            keep = False
+        if keep:
+            output.append(tup)
+        else:
+            output.append((snum, tid, "_", "_"))
+    return output
+
+
+def conllu2sgml(tt_sgml, conllu, ablate=False):
     """
     A function that converts CoNLL-U formatted data back into SGML format. 
     It takes two strings as input: `tt_sgml`, which is the original SGML string, and `conllu`, which contains the 
@@ -130,17 +164,22 @@ def conllu2sgml(tt_sgml, conllu):
                 if "." in fields[0] or "-" in fields[0]:
                     continue
                 toknum += 1
+                fields[7] = fields[7].replace(":outer","")
                 mapping[(snum, fields[0])] = str(toknum)
                 deps.append([snum, fields[0], fields[6], fields[7]])
 
     output = []
     toknum = 0
+
+    if ablate:
+        deps = ablate_deps(deps)
+
     for line in tt_sgml.replace("\r","").split("\n"):
         if len(line.strip()) > 0:
             if not (line.startswith("<") and line.endswith(">")):  # Do not make tokens out of XML elements
                 snum, tid, head, deprel = deps[toknum]
                 mapped_tid = mapping.get((int(snum), tid))
-                mapped_head = mapping.get((int(snum), head)) if head != "0" else "0"
+                mapped_head = mapping.get((int(snum), head)) if head not in ["0","_"] else head
                 line = f'<_ deprel="{deprel}" parent="{mapped_head}" uid="{mapped_tid}">\n{line}\n</_>'
                 toknum += 1
             output.append(line)
@@ -148,7 +187,7 @@ def conllu2sgml(tt_sgml, conllu):
     return "\n".join(output).strip() + "\n"
 
 
-def diaparse(tt_sgml, parser=None, tag=None, element="s_type"):
+def diaparse(tt_sgml, parser=None, tag=None, element="s_type", ablate=True):
 
     if parser is None:
         parser = Parser.load(script_dir + os.sep + model_name)
@@ -169,7 +208,7 @@ def diaparse(tt_sgml, parser=None, tag=None, element="s_type"):
         out_parses.append(str(sent).strip())
 
     conllu = "\n\n".join(out_parses) + "\n\n"
-    sgml = conllu2sgml(tt_sgml, conllu)
+    sgml = conllu2sgml(tt_sgml, conllu, ablate=ablate)
 
     return sgml
 

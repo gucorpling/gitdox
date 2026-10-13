@@ -32,6 +32,7 @@ from nlp_modules.indent import reindent
 from nlp_modules.stype_classifier import STypeClassifier
 from nlp_modules.diaparse import diaparse
 from nlp_modules.stanza_tag import main as stanza_tag
+from nlp_modules.flair_tag import main as flair_tag
 
 MASTER_INIT_SECRET = "my_super_secret_master_password"  # CHANGE THIS BEFORE DEPLOYMENT!
 API_PREFIX = (os.environ.get("GITDOX_API_PREFIX", "/gdapi") or "/gdapi").strip()
@@ -137,6 +138,18 @@ def get_project_config(project_name: Optional[str] = None) -> dict:
             return loaded if isinstance(loaded, dict) else {}
     except Exception:
         return {}
+
+
+def get_tool_ablate(project_name: Optional[str], tool: str) -> bool:
+    """Read the boolean 'ablate' option of a tool from the project's yaml config (default False)."""
+    tools = get_project_config(project_name).get("tools")
+    tool_conf = tools.get(tool) if isinstance(tools, dict) else None
+    if not isinstance(tool_conf, dict):
+        return False
+    value = tool_conf.get("ablate", False)
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "1")
+    return bool(value)
 
 
 VALID_DOCUMENT_MODES = {"xml", "spreadsheet", "entities", "dendroid"}
@@ -2322,13 +2335,29 @@ def mutate_document_contents(
             raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
         try:
             sgml = social_to_sgml(source)
-            transformed = stanza_tag(sgml)
+            transformed = stanza_tag(sgml, ablate=get_tool_ablate(current_user.get("project_name"), tool))
             sgml_valid = validate_tt(transformed)
             if sgml_valid:
                 transformed, _ = sgml_to_social(transformed)
                 return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Stanza tagging failed: {str(e)}")
+
+        return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
+    elif tool == "flair_tag":
+        if data.content_spreadsheet is not None:
+            source = data.content_spreadsheet
+        else:
+            raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
+        try:
+            sgml = social_to_sgml(source)
+            transformed = flair_tag(sgml)
+            sgml_valid = validate_tt(transformed)
+            if sgml_valid:
+                transformed, _ = sgml_to_social(transformed)
+                return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Flair tagging failed: {str(e)}")
 
         return NlpMutationResponse(tool=tool, content_spreadsheet=transformed)
     elif tool == "reindent":

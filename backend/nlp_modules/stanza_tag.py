@@ -3,12 +3,17 @@
 
 import io, os
 import stanza
+from random import seed, randint
 from argparse import ArgumentParser
 
+seed(42)
 script_dir = os.path.dirname(os.path.realpath(__file__)) + os.sep
 vocab = set(io.open(script_dir + "eng_vocab.tab",encoding="utf8").read().strip().split("\n"))
 
 def fix_lemma(word, pos, lemma):
+    if lemma is None:
+        lemma = "_"
+
     non_lemmas = {"them":"they", "me":"I", "him":"he", "n't":"not",'vlogg':"vlog","whom":"who","worshippe":"worship"}
     non_lemma_combos = {("PRP", "her"): "she", ("MD", "wo"): "will", ("PRP", "us"):"we", ("DT", "an"):"a",
                         ("POS","be"):"'s", ("POS","have"):"'s",("NN","datum"):"data", ("NNS","datum"):"data"}
@@ -81,6 +86,10 @@ def fix_lemma(word, pos, lemma):
 
 
 def extend_ptb(pos, lemma):
+    if pos is None:
+        pos = "_"
+    if lemma is None:
+        lemma = "_"
     lemma = lemma.lower()
     if lemma=="be" and pos.startswith("VB"):
         pass
@@ -115,7 +124,38 @@ def extend_ptb(pos, lemma):
 
     return pos
 
-def stanza_tag(tokens):
+
+def ablate_pos_lemmas(words):
+    # Divide the token indices into 5 quintiles:
+    # Quintile 1: keep all tags
+    # Quintile 2: replace tags and lemmas with "_" at a 0.30 probability
+    # Quintile 3: replace tags and lemmas with "_" at a 0.40 probability
+    # Quintile 4: replace tags and lemmas with "_" at a 0.80 probability
+    # Quintile 5: replace all tags and lemmas with "_"
+    quintile_size = len(words) // 5
+    for i, word in enumerate(words):
+        if i < quintile_size:
+            continue  # Keep all tags in the first quartile
+        elif i < 2 * quintile_size:
+            if randint(1,100) <= 40:  # 30% chance to replace
+                word.xpos = "_"
+                word.lemma = "_"
+        elif i < 3 * quintile_size:
+            if randint(1,100) <= 55:  # 40% chance to replace
+                word.xpos = "_"
+                word.lemma = "_"
+        elif i < 4 * quintile_size:
+            if randint(1,100) <= 85:  # 80% chance to replace
+                word.xpos = "_"
+                word.lemma = "_"
+        else:
+            word.xpos = "_"
+            word.lemma = "_"
+
+    return words
+
+
+def stanza_tag(tokens, ablate=False, add_lemmas=True):
     import stanza
     from stanza.pipeline.core import DownloadMethod
 
@@ -125,16 +165,22 @@ def stanza_tag(tokens):
 
     words = [word for sent in doc.sentences for word in sent.words]
 
+    if ablate:
+        words = ablate_pos_lemmas(words)
+
     output = []
     for word in words:
         lemma = fix_lemma(word.text, word.xpos, word.lemma)
         pos = extend_ptb(word.xpos, lemma)
-        line = "\t".join([pos, pos, lemma])  # word.text,
+        if add_lemmas:
+            line = "\t".join([pos, pos, lemma])
+        else:
+            line = "\t".join([pos, pos])
         output.append(line)
     return "\n".join(output)
 
 
-def main(sgml="", s_tag="s_type"):
+def main(sgml="", s_tag="s_type", ablate=False, add_lemmas=False):
     if sgml:
         to_tag = []
         if s_tag:
@@ -157,6 +203,10 @@ def main(sgml="", s_tag="s_type"):
         # Collect pos and lemma for each token
         doc = nlp(to_tag)
         words = [word for sent in doc.sentences for word in sent.words]
+
+        if ablate:
+            words = ablate_pos_lemmas(words)
+
         pos_lemmas = []
         for word in words:
             lemma = fix_lemma(word.text, word.xpos, word.lemma)
@@ -171,7 +221,10 @@ def main(sgml="", s_tag="s_type"):
             if not (line.startswith("<") and line.endswith(">")):
                 if word_index < len(pos_lemmas):
                     word, pos, lemma = pos_lemmas[word_index]
-                    tagged = f"""<_ pos="{pos}" lemma="{lemma}">\n{word}\n</_>"""
+                    if add_lemmas:
+                        tagged = f"""<_ pos="{pos}" lemma="{lemma}">\n{word}\n</_>"""
+                    else:
+                        tagged = f"""<_ pos="{pos}">\n{word}\n</_>"""
                     output.append(tagged)
                     word_index += 1
                     continue

@@ -14,6 +14,9 @@ tools:
   tabulate: {editor: xml, caption: "Tabulate", level: 3, return: "spreadsheet", color: "indigo"}
   #ssplit: {editor: xml, caption: "Split sentences", level: 3, return: "xml", color: "olive"}
   #stype: {editor: xml, caption: "Sentence types", level: 3, return: "xml", color: "olive"}
+  #flair_tag: {editor: spreadsheet, caption: "Sparse Flair Tag", level: 2, return: "spreadsheet", color: "indigo"}
+  #stanza_tag: {editor: spreadsheet, caption: "Stanza Tag", level: 2, return: "spreadsheet", color: "indigo", ablate: false}
+  #diaparse: {editor: spreadsheet, caption: "Parse", level: 3, return: "dendroid", color: "olive", ablate: true}  # ablate will randomly delete some tags based on a budget distribution
   reindent: {editor: xml, caption: "Indent XML", level: 2, return: "xml", color: "olive"}
 
 
