@@ -39,6 +39,7 @@ export default function DocumentEditor({
   isAppConfigLoaded = false 
 }) {
   const [doc, setDoc] = useState(null);
+  const [accessDenied, setAccessDenied] = useState('');
   const [contentXml, setContentXml] = useState('');
   const [contentSpreadsheet, setContentSpreadsheet] = useState('');
   const [activeMutationTool, setActiveMutationTool] = useState('');
@@ -320,6 +321,7 @@ export default function DocumentEditor({
       // content/dirty-flag/timestamp from the old document can ever be attributed to the
       // newly-opened one while the new document is still loading.
       setDoc(null);
+      setAccessDenied('');
       setContentXml('');
       setContentSpreadsheet('');
       setHasUnsavedChanges(false);
@@ -379,6 +381,10 @@ export default function DocumentEditor({
         lastModifiedAtRef.current = serverTime;
       } catch (err) {
         console.warn("Failed to fetch document contents", err);
+        if (err?.status === 403) {
+          setDoc(null);
+          setAccessDenied(err.message || "You do not have permission to open this document.");
+        }
       }
     };
     init();
@@ -1305,6 +1311,7 @@ export default function DocumentEditor({
   }, []);
 
 
+  if (accessDenied) return <div className="p-8 text-center text-red-600">{accessDenied}</div>;
   if (!doc) return <div className="p-8 text-center">Loading document...</div>;
 
   return (

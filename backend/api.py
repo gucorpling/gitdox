@@ -269,6 +269,16 @@ def user_has_editor_access(user_data: Optional[dict], mode: Optional[str], proje
     return bool(allowed_editors.get(normalized_mode, True))
 
 
+def require_document_editor_access(current_user: Optional[dict], doc_data: dict) -> None:
+    """Raises 403 if a non-superadmin user may not use the editor mode the document is currently in."""
+    if not current_user or int(current_user.get("adminlevel", 0)) >= 2:
+        return
+    project_config = get_project_config(doc_data.get("project"))
+    current_mode = normalize_document_mode(doc_data.get("mode")) or get_default_document_mode(project_config)
+    if not user_has_editor_access(current_user, current_mode, project_config):
+        raise HTTPException(status_code=403, detail=f"This user is not allowed to use the '{current_mode}' editor mode.")
+
+
 def can_manage_user(current_user: Optional[dict], target_user: Optional[dict]) -> bool:
     if not current_user or not target_user:
         return False
@@ -1721,6 +1731,7 @@ def update_document(
     if int(current_user.get("adminlevel", 0)) < 2:
         if not user_has_corpus_access(current_user, old_doc_data.get("corpus")):
             raise HTTPException(status_code=403, detail="This user is not allowed to edit documents in that corpus.")
+        require_document_editor_access(current_user, old_doc_data)
         requested_mode = normalize_document_mode(data.mode) or old_doc_data.get("mode") or get_default_document_mode(project_config)
         if not user_has_editor_access(current_user, requested_mode, project_config):
             raise HTTPException(status_code=403, detail=f"This user is not allowed to use the '{requested_mode}' editor mode.")
@@ -1799,6 +1810,8 @@ def read_document_contents(doc_id: str, current_user: dict = Depends(require_adm
     doc_key = f"doc:{doc_id}"
     if not r.exists(doc_key):
         raise HTTPException(status_code=404, detail="Document not found")
+
+    require_document_editor_access(current_user, r.hgetall(doc_key))
 
     content_xml = r.hget(doc_key, "content_xml")
     content_spreadsheet = r.hget(doc_key, "content_spreadsheet")
@@ -1942,6 +1955,7 @@ def get_document_sgml(doc_id: str, config: str = None, current_user: dict = Depe
         raise HTTPException(status_code=404, detail="Document not found")
 
     doc_data = r.hgetall(doc_key)
+    require_document_editor_access(current_user, doc_data)
     content_spreadsheet = doc_data.get("content_spreadsheet", "")
 
     if not content_spreadsheet:
@@ -2634,6 +2648,7 @@ def export_document_xlsx(
         raise HTTPException(status_code=404, detail="Document not found")
 
     doc_data = r.hgetall(doc_key)
+    require_document_editor_access(current_user, doc_data)
     content_spreadsheet = doc_data.get("content_spreadsheet", "")
 
     if not content_spreadsheet:
