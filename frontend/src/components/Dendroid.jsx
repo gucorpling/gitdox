@@ -5,6 +5,14 @@ const COLORS = ['#94a3b8', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b'
 
 // --- Data Formatting Helpers ---
 
+const isEmptyValue = (v) => v === undefined || v === null || String(v).trim() === '' || v === '_';
+
+// A token is incomplete when it has no parent (head 0 / root is valid) or no deprel label
+const isTokenIncomplete = (token, annName) => {
+  const ann = token.annotations?.[annName];
+  return isEmptyValue(ann?.head) || isEmptyValue(ann?.deprel);
+};
+
 const parseEdeps = (depsStr) => {
   if (!depsStr || depsStr === '_') return [];
   return depsStr.split('|').map(edge => {
@@ -210,7 +218,7 @@ const FeaturesModal = ({ token, onClose, onSave, config }) => {
 };
 
 const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode, compareUsers, annotatorColors, config }) => {
-  const { features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges = true, showLongEdges = true } = config;
+  const { features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges = true, showLongEdges = true, tokenDistance = 30 } = config;
   
   const containerRef = useRef(null);
   const scrollRef = useRef(null);
@@ -218,7 +226,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
   const latestMousePos = useRef({ x: 0, y: 0 });
   
   const BASE_Y = 260; 
-  const WORD_SPACING = 30; 
+  const WORD_SPACING = Number.isFinite(Number(tokenDistance)) && Number(tokenDistance) >= 0 ? Number(tokenDistance) : 30;
   const CHAR_WIDTH_ESTIMATE = 8.5; 
   const MAX_ARC_HEIGHT = 160;
   
@@ -365,7 +373,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
     };
   
     return { nodes, nodePositions, mwts, totalWidth: Math.max(800, currentX + 40), standardEdges: processStacking(edges), enhancedEdges: processStacking(edeps) };
-  }, [sentence.tokens, sentence.mwts, displayAnnName, isCompareMode, compareUsers, annotatorColors, features.edeps, colorMap]);
+  }, [sentence.tokens, sentence.mwts, displayAnnName, isCompareMode, compareUsers, annotatorColors, features.edeps, colorMap, WORD_SPACING]);
   
   const allArrowColors = useMemo(() => {
     const s = new Set(['#94a3b8']);
@@ -586,7 +594,8 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
     const startOffset = isEdep ? 50 : -35, stackSpacing = 10; 
     if (isRoot) return `M ${targetX} ${isEdep ? BASE_Y + MAX_ARC_HEIGHT : 20} L ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
     const distance = Math.abs(targetX - sourceX), direction = targetX > sourceX ? 1 : -1, heightOffset = Math.min(MAX_ARC_HEIGHT, 30 + (distance * 0.2)); 
-    return `M ${sourceX + (direction * 5)} ${BASE_Y + startOffset} C ${sourceX + (direction * 5) + (direction * distance * 0.25)} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
+    const inset = Math.min(5, distance * 0.1);
+    return `M ${sourceX + (direction * inset)} ${BASE_Y + startOffset} C ${sourceX + (direction * inset) + (direction * distance * 0.25)} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${isEdep ? (BASE_Y + 50 + heightOffset) : (BASE_Y - 35 - heightOffset)}, ${targetX} ${BASE_Y + startOffset + (isEdep ? (stackIndex * stackSpacing) : -(stackIndex * stackSpacing))}`;
   };
 
   const isInView = (x) => x >= viewport.left && x <= viewport.left + viewport.width;
@@ -725,6 +734,7 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
             
             return (
               <g key={`node-${node.id}`} transform={`translate(${node.x}, ${BASE_Y})`} onMouseDown={(e) => handleWordMouseDown(e, node.id)}>
+                {!isEllipsis && isTokenIncomplete(node, displayAnnName) && <rect x={-(node.width/2)} y="-32" width={node.width} height="67" fill="#fee2e2" stroke="#fca5a5" rx="6"><title>Missing parent or dependency relation</title></rect>}
                 {dragState.active && dragState.hoveredTargetId === node.id && <rect x={-(node.width/2) - 10} y={dragState.isEdep ? "-20" : "-45"} width={node.width + 20} height="100" fill="#fbcfe8" opacity="0.4" rx="8" className="pointer-events-none" />}
                 
                 <text y="-15" textAnchor="middle" className={`text-[15px] ${isCompareMode ? '' : 'cursor-text hover:fill-indigo-600 hover:underline'} ${dragState.sourceId === node.id ? 'font-bold fill-pink-600' : (isEllipsis ? 'fill-blue-500 font-medium' : 'fill-gray-900')} transition-colors select-none`} onDoubleClick={(e) => openTextEditor(e, node, 'form', -15)}>{node.form}</text>
@@ -828,10 +838,7 @@ const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentenc
   const [compareUsers, setCompareUsers] = useState([]);
 
   // Tokens in the selected tree lacking a parent (head 0 / root is valid)
-  const missingParentCount = sentence.tokens.filter(t => {
-    const head = t.annotations[activeAnn]?.head;
-    return head === undefined || head === null || head === '' || head === '_';
-  }).length;
+  const missingParentCount = sentence.tokens.filter(t => isTokenIncomplete(t, activeAnn)).length;
 
   const annotatorColors = useMemo(() => {
       const map = {};
@@ -946,6 +953,7 @@ export function Dendroid({
     deprel: ["punct", "case", "det", "nsubj", "root", "advmod", "amod", "obj", "obl", "nmod", "conj", "cc", "mark", "compound", "aux", "cop", "advcl", "nmod:poss", "xcomp", "acl:relcl", "flat", "acl", "discourse", "ccomp", "aux:pass", "parataxis", "nsubj:pass", "nummod", "appos", "compound:prt", "obl:unmarked", "fixed", "expl", "dep", "reparandum", "nmod:unmarked", "iobj", "obl:agent", "csubj", "advcl:relcl", "nmod:desc", "det:predet", "vocative", "list", "orphan", "cc:preconj", "dislocated", "goeswith", "csubj:pass"].sort(),
     edeprel: ["punct", "case", "det", "nsubj", "root", "advmod", "amod", "obj", "obl", "nmod", "conj", "cc", "mark", "compound", "aux", "cop", "advcl", "nmod:poss", "xcomp", "acl:relcl", "flat", "acl", "discourse", "ccomp", "aux:pass", "parataxis", "nsubj:pass", "nummod", "appos", "compound:prt", "obl:unmarked", "fixed", "expl", "dep", "reparandum", "nmod:unmarked", "iobj", "obl:agent", "csubj", "advcl:relcl", "nmod:desc", "det:predet", "vocative", "list", "orphan", "cc:preconj", "dislocated", "goeswith", "csubj:pass", "nsubj:xsubj"].sort()
   },
+  tokenDistance = 30,
   onChange
 }) {
 
@@ -961,8 +969,8 @@ export function Dendroid({
 
   // Bundle the context necessary for the extracted components
   const editorConfig = useMemo(() => ({
-    features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges, showLongEdges
-  }), [features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges, showLongEdges]);
+    features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser,     colorMap, showLocalEdges, showLongEdges, tokenDistance
+      }), [features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges, showLongEdges, tokenDistance]);
 
   // --- GitDOX Integration Helper ---
   const notifyChange = (nextSents) => {

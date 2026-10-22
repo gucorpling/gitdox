@@ -24,6 +24,7 @@ const INITIAL_CONFIG = {
     currentUser: "DemoUser",
     defaultAnnotator: "Parser",
     perUserMode: true,
+    token_distance: 30,
     token_annotations: {
       word_id: 'uid',
       word: 'tok',
@@ -106,6 +107,7 @@ function DendroidAdapter({ content, format, config, fontFamily, onChange }) {
         defaultAnnotator={config.defaultAnnotator}
         perUserMode={config.perUserMode}
         features={config.features}
+        tokenDistance={config.token_distance ?? 30}
         onChange={onChange}
         colMappings={{
           id: getTokenAnn('word_id', 'word_id'),

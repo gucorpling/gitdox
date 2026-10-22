@@ -1453,6 +1453,7 @@ export default function DocumentEditor({
                 textCol={dendroidConfig?.sentence_text ?? ''}
                 sentBoundCol={dendroidConfig?.sentence_span ?? 'sent_id'}
                 sentenceAnnotations={dendroidConfig?.sentence_annotations ?? []}
+                tokenDistance={dendroidConfig?.token_distance ?? 30}
                 colMappings={{
                   id: getTokenAnn('word_id', 'word_id'),
                   form: getTokenAnn('word', 'tok'),
