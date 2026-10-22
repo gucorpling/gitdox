@@ -954,6 +954,7 @@ export function Dendroid({
     edeprel: ["punct", "case", "det", "nsubj", "root", "advmod", "amod", "obj", "obl", "nmod", "conj", "cc", "mark", "compound", "aux", "cop", "advcl", "nmod:poss", "xcomp", "acl:relcl", "flat", "acl", "discourse", "ccomp", "aux:pass", "parataxis", "nsubj:pass", "nummod", "appos", "compound:prt", "obl:unmarked", "fixed", "expl", "dep", "reparandum", "nmod:unmarked", "iobj", "obl:agent", "csubj", "advcl:relcl", "nmod:desc", "det:predet", "vocative", "list", "orphan", "cc:preconj", "dislocated", "goeswith", "csubj:pass", "nsubj:xsubj"].sort()
   },
   tokenDistance = 30,
+  canUseSourceViews = true,
   onChange
 }) {
 
@@ -1695,17 +1696,17 @@ export function Dendroid({
               <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={showLocalEdges} onChange={e => setShowLocalEdges(e.target.checked)} />show local edges</label>
               <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={showLongEdges} onChange={e => setShowLongEdges(e.target.checked)} />show long distance edges</label>
             </div>
-            <div className="flex bg-indigo-950/50 rounded-lg p-1 mr-4 border border-indigo-800">
+            {canUseSourceViews && <div className="flex bg-indigo-950/50 rounded-lg p-1 mr-4 border border-indigo-800">
               <button onClick={() => setViewMode('editor')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>Tree Editor</button>
               <button onClick={() => { setRawData(exportCoNLLU(sentences, globalPreferredAnnotator)); setViewMode('conllu'); }} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'conllu' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>CoNLL-U Source</button>
               <button onClick={() => { setRawData(exportSocialCalc(sentences, globalAllAnnotators)); setViewMode('socialcalc'); }} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'socialcalc' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>SocialCalc Source</button>
-            </div>
+                          </div>}
           </div>
         </div>
       </nav>
 
       <main className="flex-1 w-full p-6 overflow-y-auto">
-        {viewMode === 'editor' ? (
+        {viewMode === 'editor' || !canUseSourceViews ? (
           <div className="flex flex-col gap-3">
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-1">
               <button onClick={() => setShowHelp(!showHelp)} className="w-full flex items-center justify-between p-3 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-900 transition-colors focus:outline-none">
@@ -1731,7 +1732,7 @@ export function Dendroid({
             {sentences.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
                 <p className="text-gray-500 mb-4">No sentences loaded.</p>
-                <button onClick={() => setViewMode('conllu')} className="px-4 py-2 bg-indigo-50 text-indigo-700 font-medium rounded-lg hover:bg-indigo-100 transition-colors">Import Data</button>
+                {canUseSourceViews && <button onClick={() => setViewMode('conllu')} className="px-4 py-2 bg-indigo-50 text-indigo-700 font-medium rounded-lg hover:bg-indigo-100 transition-colors">Import Data</button>}
               </div>
             ) : (
               <div className="flex flex-col gap-3 pb-20">

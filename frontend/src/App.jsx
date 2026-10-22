@@ -339,6 +339,38 @@ export default function App() {
     }
   }, [token, handleLogout]);
 
+  // Permissions may change while logged in; re-sync the cached user on load, view change and tab focus.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const refreshUser = async () => {
+      try {
+        const fresh = await apiCall('/auth/me', 'GET', null, { silent: true });
+        if (cancelled) return;
+        setUser((prev) => {
+          if (!prev) return prev;
+          const next = {
+            ...prev,
+            adminlevel: fresh.adminlevel ?? prev.adminlevel,
+            allowed_corpora: fresh.allowed_corpora ?? prev.allowed_corpora,
+            allowed_editors: fresh.allowed_editors ?? prev.allowed_editors
+          };
+          if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
+          localStorage.setItem('auth_user', JSON.stringify(next));
+          return next;
+        });
+      } catch {
+        // Auth failures are already handled by apiCall
+      }
+    };
+    refreshUser();
+    window.addEventListener('focus', refreshUser);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', refreshUser);
+    };
+  }, [token, currentView, apiCall]);
+
   const refreshStatusCategories = useCallback(async () => {
     try {
       const data = await apiCall(`/projects/${projectName}/status-categories`);

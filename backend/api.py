@@ -1205,6 +1205,18 @@ def init_project(data: InitProject):
 
 
 # --- 1. User Management ---
+@app.get("/auth/me")
+def get_auth_me(current_user: dict = Depends(get_current_user)):
+    """Returns the current user's live permissions so clients can refresh cached login data."""
+    return {
+        "username": current_user.get("username"),
+        "project_name": current_user.get("project_name"),
+        "adminlevel": current_user.get("adminlevel", 0),
+        "allowed_corpora": current_user.get("allowed_corpora"),
+        "allowed_editors": current_user.get("allowed_editors")
+    }
+
+
 @app.post("/auth")
 def authenticate(login: AuthLogin):
     """Authenticates a user for a specific project and returns a token."""

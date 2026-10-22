@@ -1461,6 +1461,7 @@ export default function DocumentEditor({
                 initialFormat="socialcalc"
                 currentUser={user?.username || 'Anonymous'}
                 defaultAnnotator={dendroidConfig?.default_annotator || 'parser'}
+                canUseSourceViews={(user?.adminlevel ?? 0) >= 2}
                 perUserMode={dendroidConfig?.multiuser ?? true}
                 textCol={dendroidConfig?.sentence_text ?? ''}
                 sentBoundCol={dendroidConfig?.sentence_span ?? 'sent_id'}
