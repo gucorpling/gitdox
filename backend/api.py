@@ -152,6 +152,16 @@ def get_tool_ablate(project_name: Optional[str], tool: str) -> bool:
     return bool(value)
 
 
+def get_restore_from_github_level(project_name: Optional[str]) -> int:
+    """Minimum admin level allowed to restore a document from GitHub (instance.restore_from_github_level, default 1)."""
+    instance = get_project_config(project_name).get("instance")
+    value = instance.get("restore_from_github_level") if isinstance(instance, dict) else None
+    try:
+        return max(int(value), 0) if value is not None else 1
+    except (TypeError, ValueError):
+        return 1
+
+
 VALID_DOCUMENT_MODES = {"xml", "spreadsheet", "entities", "dendroid"}
 
 
@@ -2319,7 +2329,7 @@ def mutate_document_contents(
             raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
         try:
             sgml = social_to_sgml(source)
-            transformed = diaparse(sgml)
+            transformed = diaparse(sgml, ablate=get_tool_ablate(current_user.get("project_name"), tool))
             sgml_valid = validate_tt(transformed)
             if sgml_valid:
                 transformed, _ = sgml_to_social(transformed)
@@ -2916,7 +2926,10 @@ def get_github_file_contents(
         file_path: str,
         current_user: dict = Depends(require_admin(1))
 ):
-    """Fetches the latest file contents directly from GitHub (Requires AdminLevel >= 1)"""
+    """Fetches the latest file contents directly from GitHub (Requires AdminLevel >= 1 and the configured restore_from_github_level)"""
+    required_level = get_restore_from_github_level(current_user.get("project_name"))
+    if int(current_user.get("adminlevel", 0)) < required_level:
+        raise HTTPException(status_code=403, detail=f"Restoring from GitHub requires admin level {required_level} or higher")
     doc_data = r.hgetall(f"doc:{doc_id}")
     if not doc_data:
         raise HTTPException(status_code=404, detail="Document not found")

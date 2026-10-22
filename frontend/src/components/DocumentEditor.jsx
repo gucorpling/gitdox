@@ -30,6 +30,7 @@ export default function DocumentEditor({
   spannotatorConfig = {}, 
   dendroidConfig = {}, 
   spreadsheetConfig = {},
+  instanceConfig = {},
   editorOptions = [], 
   editorFonts = {}, 
   spreadsheetColumnOrderConfig = [], 
@@ -1177,7 +1178,11 @@ export default function DocumentEditor({
   const allowExternalSpreadsheetClipboard = (user?.adminlevel ?? 0) >= (Number.isFinite(copyPasteLevel) ? copyPasteLevel : 0);
   const canCommitToGithub = typeof doc?.repo === 'string' && doc.repo.trim().length > 0;
   const hasGithubCommittedVersion = typeof latestGithubCommitMessage === 'string' && latestGithubCommitMessage.trim().length > 0;
+  const restoreFromGithubLevel = Number.isFinite(Number(instanceConfig?.restore_from_github_level)) && instanceConfig?.restore_from_github_level !== null && instanceConfig?.restore_from_github_level !== ''
+    ? Number(instanceConfig.restore_from_github_level)
+    : 1;
   const canRestoreFromGithub = canShowGithubCommitControls
+    && (user?.adminlevel ?? 0) >= restoreFromGithubLevel
     && canCommitToGithub
     && hasGithubCommittedVersion
     && !isLoadingGithubCommitMessage
