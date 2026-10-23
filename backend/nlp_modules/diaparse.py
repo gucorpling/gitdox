@@ -111,28 +111,32 @@ def merge(conllu, deprels):
 
 
 def ablate_deps(deps):
-    # Divide the token indices into 5 quintiles:
-    # Quintile 1: keep all deps
-    # Quintile 2: keep all deps
-    # Quintile 3: replace parent and peprel with "_" at a 0.10 probability; punct and root are always kept
-    # Quintile 4: replace parent and peprel with "_" at a 0.20 probability; punct is always kept
-    # Quintile 5: replace all tags and lemmas with "_"; punct is always kept
+    # Divide the token indices into 6 sextiles:
+    # Sextile 1: keep all deps
+    # Sextile 2: keep all deps
+    # Sextile 3: replace parent and peprel with "_" at a 0.18 probability; punct and root are always kept
+    # Sextile 4: replace parent and peprel with "_" at a 0.20 probability; punct is always kept
+    # Sextile 5: replace parent and peprel with "_" at a 0.25 probability; punct is always kept
+    # Sextile 6: replace all tags and lemmas with "_"; punct is always kept
     output = []
-    quintile_size = len(deps) // 5
+    sextile_size = len(deps) // 6
     for i, tup in enumerate(deps):
         snum, tid, head, deprel = tup
         keep = True
-        if i < quintile_size:
+        if i < sextile_size:
             pass
-        elif i < 2 * quintile_size:
+        elif i < 2 * sextile_size:
             pass
-        elif i < 3 * quintile_size:
-            if randint(1,100) <= 10 and deprel not in ["punct", "root"]:
+        elif i < 3 * sextile_size:
+            if randint(1,100) <= 18 and deprel not in ["punct", "root"]:
                 keep = False
-        elif i < 4 * quintile_size and deprel not in ["punct"]:
+        elif i < 4 * sextile_size and deprel not in ["punct"]:
             if randint(1,100) <= 20:
                 keep = False
-        else:
+        elif i < 5 * sextile_size and deprel not in ["punct"]:
+            if randint(1,100) <= 25:
+                keep = False
+        elif i >= 5 * sextile_size:
             keep = False
         if keep:
             output.append(tup)
