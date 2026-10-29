@@ -1,0 +1,16 @@
+#FORMAT=WebAnno TSV 3.2
+#T_SP=webanno.custom.Referent|entity|infstat|salience|identity
+#T_RL=webanno.custom.Coref|type|BT_webanno.custom.Referent
+
+#Text=This is my book .
+1-1	0-4	This	object[1]	auto[1]	nnnnn[1]	[1]	coref	1-3[2_1]	
+1-2	5-7	is	_	_	_	_	_	_	
+1-3	8-10	my	object[2]|person[3]	auto[2]|auto[3]	nnnnn[2]|nnnnn[3]	[2]|[3]	coref|coref	2-1[4_3]|2-3[5_2]	
+1-4	11-15	book	object[2]	auto[2]	nnnnn[2]	[2]	_	_	
+1-5	16-17	.	_	_	_	_	_	_	
+
+#Text=I like it .
+2-1	18-19	I	person[4]	auto[4]	nnnnn[4]	[4]	_	_	
+2-2	20-24	like	_	_	_	_	_	_	
+2-3	25-27	it	object[5]	auto[5]	nnnnn[5]	[5]	_	_	
+2-4	28-29	.	_	_	_	_	_	_	
