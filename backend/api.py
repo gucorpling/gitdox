@@ -30,9 +30,7 @@ from nlp_modules.coptic import coptic_tokenize, coptic_nlp_tabulate, coptic_ner
 from nlp_modules.identify import suggest_identities
 from nlp_modules.indent import reindent
 from nlp_modules.stype_classifier import STypeClassifier
-from nlp_modules.diaparse import diaparse
-from nlp_modules.stanza_tag import main as stanza_tag
-from nlp_modules.flair_tag import main as flair_tag
+from nlp_modules.isolated import run_isolated
 
 MASTER_INIT_SECRET = "my_super_secret_master_password"  # CHANGE THIS BEFORE DEPLOYMENT!
 API_PREFIX = (os.environ.get("GITDOX_API_PREFIX", "/gdapi") or "/gdapi").strip()
@@ -112,7 +110,7 @@ async def handle_redis_error(_, exc: RedisError):
 
 
 # Initialize Redis connection. decode_responses=True automatically decodes bytes to strings.
-r = redis.Redis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
+r = redis.Redis(host='127.0.0.1', port=6379, db=0, decode_responses=True, protocol=2)
 
 # Project config
 BASE_DIR = Path(__file__).resolve().parent
@@ -2355,7 +2353,7 @@ def mutate_document_contents(
             raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
         try:
             sgml = social_to_sgml(source)
-            transformed = diaparse(sgml, ablate=get_tool_ablate(current_user.get("project_name"), tool))
+            transformed = run_isolated("diaparse", sgml, ablate=get_tool_ablate(current_user.get("project_name"), tool))
             sgml_valid = validate_tt(transformed)
             if sgml_valid:
                 transformed, _ = sgml_to_social(transformed)
@@ -2371,7 +2369,7 @@ def mutate_document_contents(
             raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
         try:
             sgml = social_to_sgml(source)
-            transformed = stanza_tag(sgml, ablate=get_tool_ablate(current_user.get("project_name"), tool))
+            transformed = run_isolated("stanza_tag", sgml, ablate=get_tool_ablate(current_user.get("project_name"), tool))
             sgml_valid = validate_tt(transformed)
             if sgml_valid:
                 transformed, _ = sgml_to_social(transformed)
@@ -2387,7 +2385,7 @@ def mutate_document_contents(
             raise HTTPException(status_code=400, detail="Provide content_spreadsheet")
         try:
             sgml = social_to_sgml(source)
-            transformed = flair_tag(sgml)
+            transformed = run_isolated("flair_tag", sgml)
             sgml_valid = validate_tt(transformed)
             if sgml_valid:
                 transformed, _ = sgml_to_social(transformed)
