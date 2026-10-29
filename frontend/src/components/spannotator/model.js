@@ -786,7 +786,12 @@ export function sortByStart(ids) {
   return [...ids].sort((a, b) => {
     const [as] = a.split('-').map(Number);
     const [bs] = b.split('-').map(Number);
-    return as - bs;
+    if (as !== bs) return as - bs;
+    // Same start: outer (longer) span first so nested spans order deterministically
+    const ae = Number(a.split('-')[1]);
+    const be = Number(b.split('-')[1]);
+    if (Number.isNaN(ae) || Number.isNaN(be)) return 0;
+    return be - ae;
   });
 }
 
@@ -1342,6 +1347,64 @@ function addEntityMutation(nextState, { tokenIds, entityType }) {
   nextState.uiState.selectedEntities = new Set();
 }
 
+// Re-spans an entity in place, keeping annotations, group membership and references to it.
+function resizeEntityMutation(nextState, { entityId, tokenIds }) {
+  const original = nextState.entitiesById[entityId];
+  if (!original) return;
+
+  const tokIds = uniqueSortedNumbers(tokenIds || []);
+  if (tokIds.length === 0) return;
+  for (let i = 1; i < tokIds.length; i += 1) {
+    if (tokIds[i] !== tokIds[i - 1] + 1) return;
+  }
+
+  const start = tokIds[0];
+  const end = tokIds[tokIds.length - 1];
+  const newId = `${start}-${end}`;
+  if (newId === entityId || nextState.entitiesById[newId]) return;
+
+  const tokenById = {};
+  nextState.tokens.forEach((t) => {
+    tokenById[t.tid] = t;
+  });
+  const sentnum = tokenById[start]?.sentnum;
+  if (!sentnum || tokIds.some((tid) => tokenById[tid]?.sentnum !== sentnum)) return;
+
+  for (const [id, existing] of Object.entries(nextState.entitiesById)) {
+    if (id !== entityId && hasCrossingOverlap(existing, start, end)) return;
+  }
+
+  const entitiesById = {};
+  Object.keys(nextState.entitiesById).forEach((id) => {
+    const entity = nextState.entitiesById[id];
+    if (id === entityId) {
+      entitiesById[newId] = { ...entity, start, end, toks: tokIds, length: end - start + 1, div_id: newId };
+      return;
+    }
+    let updated = entity;
+    if (entity.bridge_antec === entityId) updated = { ...updated, bridge_antec: newId };
+    if (entity.antecedents && Object.values(entity.antecedents).includes(entityId)) {
+      const antecedents = { ...entity.antecedents };
+      Object.keys(antecedents).forEach((mode) => {
+        if (antecedents[mode] === entityId) antecedents[mode] = newId;
+      });
+      updated = { ...updated, antecedents };
+    }
+    entitiesById[id] = updated;
+  });
+  nextState.entitiesById = entitiesById;
+
+  Object.keys(nextState.groupsByType).forEach((mode) => {
+    const groupEntries = nextState.groupsByType[mode];
+    Object.keys(groupEntries).forEach((gid) => {
+      groupEntries[gid] = (groupEntries[gid] || []).map((id) => (id === entityId ? newId : id));
+    });
+  });
+
+  if (nextState.uiState.activeEntityId === entityId) nextState.uiState.activeEntityId = newId;
+  nextState.uiState.selectedEntities = new Set();
+}
+
 function groupSelectedMutation(nextState, { groupType }) {
   const groupTypes = nextState.config?.GROUP_TYPES || ['coref'];
   const edgeTypes = nextState.config?.EDGE_TYPES || ['bridge'];
@@ -1565,6 +1628,12 @@ export function spannotatorReducer(state, action) {
       addEntityMutation(nextState, {
         tokenIds: action.tokenIds,
         entityType: action.entityType
+      });
+      break;
+    case 'RESIZE_ENTITY':
+      resizeEntityMutation(nextState, {
+        entityId: action.entityId,
+        tokenIds: action.tokenIds
       });
       break;
     case 'DELETE_ENTITY':
