@@ -48,7 +48,7 @@ import {
   spannotatorReducer,
   sortByStart
 } from './spannotator/model';
-import { exportSpannotatorData, importSpannotatorData } from './spannotator/io';
+import { exportSpannotatorData, importSpannotatorData, isConlluPayload } from './spannotator/io';
 
 const SOCIALCALC_SIGNATURE = 'SocialCalcSpreadsheetControlSave';
 
@@ -124,6 +124,7 @@ function isClientSideImportPayload(rawInput) {
   const raw = String(rawInput || '');
   if (isSocialCalcPayload(raw)) return true;
   if (raw.includes('#FORMAT=WebAnno')) return true;
+  if (isConlluPayload(raw)) return true;
   if (raw.includes('<entity') || raw.includes('<s>') || /^\s*<[^>]+>\s*$/m.test(raw)) return true;
   return false;
 }
@@ -383,8 +384,7 @@ export default function Spannotator({
     DEFAULT_ANNOS,
     DRAG_TOL,
     ANNO_VALUES,
-    BRIDGETYPE_PRIORITY,
-    COREF_COLORS
+    BRIDGETYPE_PRIORITY
   } = modelConfig;
   const summarySyncKey = String(modelConfig.CAROUSEL_SYNC_KEY || modelConfig.SALIENCE_SETTINGS?.key || 'salience').trim() || 'salience';
   const summarySyncSettings = useMemo(() => getAnnotationCheckSettings(modelConfig, summarySyncKey), [modelConfig, summarySyncKey]);
@@ -787,110 +787,6 @@ export default function Spannotator({
       return nextEntities;
     });
   }, [modelConfig, groups]);
-
-  const assignGroup = useCallback((entityId, groupType, newGroupRaw, oldGroupHint = null) => {
-    const newGroup = parseInt(newGroupRaw, 10);
-
-    setEntities((prevEntities) => {
-      const entity = prevEntities[entityId];
-      if (!entity) return prevEntities;
-      return {
-        ...prevEntities,
-        [entityId]: {
-          ...entity,
-          tgroups: { ...entity.groups, [groupType]: newGroup }
-        }
-      };
-    });
-
-    setGroups((prevGroups) => {
-      const nextGroups = { ...prevGroups };
-      if (!nextGroups[groupType]) nextGroups[groupType] = { 0: [] };
-      nextGroups[groupType] = { ...nextGroups[groupType] };
-
-      const groupEntries = nextGroups[groupType];
-      if (!groupEntries[0]) groupEntries[0] = [];
-      const detectedOldGroup = Object.keys(groupEntries).find((gid) => (groupEntries[gid] || []).includes(entityId));
-      const oldGroup = oldGroupHint != null
-        ? parseInt(oldGroupHint, 10)
-        : (detectedOldGroup != null ? parseInt(detectedOldGroup, 10) : 0);
-
-      if (!groupEntries[newGroup]) groupEntries[newGroup] = [];
-
-      if (oldGroup !== newGroup && groupEntries[oldGroup]) {
-        groupEntries[oldGroup] = groupEntries[oldGroup].filter((id) => id !== entityId);
-        if (oldGroup !== 0 && groupEntries[oldGroup].length === 0) {
-          delete groupEntries[oldGroup];
-        } else if (oldGroup !== 0 && groupEntries[oldGroup].length === 1) {
-          const dissolvedMembers = [...groupEntries[oldGroup]];
-          dissolvedMembers.forEach((id) => {
-            if (!groupEntries[0].includes(id)) groupEntries[0] = [...groupEntries[0], id];
-          });
-          delete groupEntries[oldGroup];
-
-          setEntities((prevEntities) => {
-            const nextEntities = { ...prevEntities };
-            dissolvedMembers.forEach((id) => {
-              const member = nextEntities[id];
-              if (!member) return;
-
-              const nextMember = {
-                ...member,
-                groups: { ...member.groups, [groupType]: 0 }
-              };
-
-              // Dynamic Cleanup for Edge modes
-              if (configuredEdges.includes(groupType)) {
-                nextMember.bridge_antec = groupType === 'bridge' ? '_' : nextMember.bridge_antec;
-                nextMember.antecedents = {
-                  ...(nextMember.antecedents || {}),
-                  [groupType]: '_'
-                };
-                
-                let nextAnnos = { ...nextMember.annos };
-                // Cleanup related subtypes dynamically
-                const edgeConf = modelConfig?.colors?.edges?.[groupType];
-                if (edgeConf) {
-                  const subtypeKeys = Object.keys(edgeConf).filter(k => Array.isArray(edgeConf[k]));
-                  subtypeKeys.forEach(key => {
-                     nextAnnos[key] = `no${groupType}`;
-                  });
-                }
-                
-                // Fallback for strict bridge behavior if configured explicitly
-                if (groupType === 'bridge' && !edgeConf) {
-                    nextAnnos.bridgetype = 'nobridge';
-                    nextAnnos.infstat = nextAnnos.infstat === 'acc' ? 'auto' : nextAnnos.infstat;
-                }
-                nextMember.annos = nextAnnos;
-              }
-
-              nextEntities[id] = nextMember;
-            });
-            return nextEntities;
-          });
-        }
-      }
-
-      if (!groupEntries[newGroup]) groupEntries[newGroup] = [];
-      if (!groupEntries[newGroup].includes(entityId)) {
-        groupEntries[newGroup] = [...groupEntries[newGroup], entityId];
-      }
-
-      return nextGroups;
-    });
-
-    setAssignedColors((prev) => {
-      const next = { ...prev };
-      if (!next[groupType]) next[groupType] = { 0: GLOBAL_DEFAULTS.DEFAULT_COLOR };
-      if (!(newGroup in next[groupType])) {
-        next[groupType][newGroup] = newGroup === 0
-          ? GLOBAL_DEFAULTS.DEFAULT_COLOR
-          : (COREF_COLORS[newGroup - 1] || `#${Math.floor(Math.random() * 16777215).toString(16)}`);
-      }
-      return next;
-    });
-  }, [configuredEdges, modelConfig, COREF_COLORS, GLOBAL_DEFAULTS]);
 
   const addEntity = useCallback((forcedTokenIds = null, forcedType = null) => {
     const tokIds = forcedTokenIds ? [...forcedTokenIds] : Array.from(selectedTokens);
@@ -1379,47 +1275,8 @@ export default function Spannotator({
         return;
       }
 
-      const clonedGroups = { ...original.groups };
-      const clonedAnnos = { ...original.annos };
-      const clonedBridgeAntec = original.bridge_antec;
-      const clonedAntecedents = { ...original.antecedents };
-      const clonedType = original.type;
+      dispatchModelMutation({ type: 'RESIZE_ENTITY', entityId: drag.entityId, tokenIds: proposal.tokIds });
 
-      deleteEntity(drag.entityId);
-      addEntity(proposal.tokIds, clonedType);
-
-      const createdId = `${proposal.tokIds[0]}-${proposal.tokIds[proposal.tokIds.length - 1]}`;
-      setEntities((prev) => {
-        const e = prev[createdId];
-        if (!e) return prev;
-        const next = { ...prev };
-        next[createdId] = {
-          ...e,
-          annos: clonedAnnos,
-          bridge_antec: clonedBridgeAntec,
-          antecedents: clonedAntecedents,
-          groups: { ...e.groups, ...clonedGroups }
-        };
-        return next;
-      });
-
-      Object.keys(clonedGroups).forEach((gtype) => {
-        assignGroup(createdId, gtype, clonedGroups[gtype]);
-      });
-
-      setGroups((prev) => {
-        const next = { ...prev };
-        Object.keys(next).forEach((gtype) => {
-          const gObj = { ...next[gtype] };
-          Object.keys(gObj).forEach((gid) => {
-            gObj[gid] = gObj[gid].map((id) => (id === drag.entityId ? createdId : id));
-          });
-          next[gtype] = gObj;
-        });
-        return next;
-      });
-
-      setSelectedEntities(new Set());
       resizeDragRef.current = null;
       setResizeDragUI(null);
     };
@@ -1430,7 +1287,7 @@ export default function Spannotator({
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [entities, findNearestResizeToken, getResizeProposal, addEntity, assignGroup, deleteEntity]);
+  }, [entities, findNearestResizeToken, getResizeProposal, dispatchModelMutation]);
 
   const refreshNamedEntityListing = useCallback(() => {
     const source = {
@@ -2698,7 +2555,7 @@ export default function Spannotator({
         <div className="sp-modal-backdrop" onMouseDown={() => setShowImportDialog(false)}>
           <div className="sp-modal" onMouseDown={(e) => e.stopPropagation()}>
             <div className="sp-modal-title">Import data</div>
-            <div style={{ marginBottom: '6px' }}>Paste text, WebAnno, TT/SGML, or SocialCalc:</div>
+            <div style={{ marginBottom: '6px' }}>Paste text, WebAnno, CoNLL-U, TT/SGML, or SocialCalc:</div>
             <textarea className="sp-modal-textarea" value={importText} onChange={(e) => setImportText(e.target.value)} />
             <div className="sp-modal-actions">
               <button className="sp-btn" type="button" onClick={() => setShowImportDialog(false)}>Close</button>
