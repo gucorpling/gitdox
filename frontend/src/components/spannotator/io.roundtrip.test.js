@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { exportSpannotatorData, importSpannotatorData } from './io.js';
 import { DEFAULT_SPANNOTATOR_CONFIG, assertStateInvariants, buildSpannotatorConfig, getAnnotationCheckSettings, getAnnotationKeys, getAnnotationStarColor, parseTextToTokens } from './model.js';
 
+// Defaults no longer enable group/edge types; tests that exercise coref/bridge opt in explicitly.
+const LEGACY_GROUP_CONFIG = { GROUP_TYPES: ['coref'], EDGE_TYPES: ['bridge'] };
+
 function buildSeedData() {
   const tokens = parseTextToTokens('John saw Mary\nShe smiled');
   const tokensById = Object.fromEntries(tokens.map((tok) => [tok.tid, tok]));
@@ -122,10 +125,11 @@ test('WebAnno export/import preserves entities and grouping semantics', () => {
     tokensById: seed.tokensById,
     entities: seed.entities,
     groups: seed.groups,
-    summaries: seed.summaries
+    summaries: seed.summaries,
+    config: LEGACY_GROUP_CONFIG
   });
 
-  const imported = importSpannotatorData(exported);
+  const imported = importSpannotatorData(exported, LEGACY_GROUP_CONFIG);
   assertImportInvariantSafe(imported);
 
   assert.deepEqual(
@@ -139,6 +143,47 @@ test('WebAnno export/import preserves entities and grouping semantics', () => {
   );
 
   assert.deepEqual(imported.summaries, seed.summaries);
+});
+
+const WEBANNO_FIXTURE_CONFIG = {
+  ...buildSpannotatorConfig({
+    annotations: {
+      keys: {
+        infstat: { values: ['auto', 'new', 'acc', 'giv', 'split'] },
+        salience: '',
+        identity: ''
+      }
+    }
+  }),
+  GROUP_TYPES: ['coref'],
+  EDGE_TYPES: []
+};
+
+async function reexportWebAnno(raw) {
+  const config = WEBANNO_FIXTURE_CONFIG;
+  const imported = importSpannotatorData(raw, config);
+  assertImportInvariantSafe(imported);
+  return exportSpannotatorData({
+    format: 'webanno',
+    tokens: imported.tokens,
+    tokensById: Object.fromEntries(imported.tokens.map((tok) => [tok.tid, tok])),
+    entities: imported.entities,
+    groups: imported.groups,
+    summaries: imported.summaries,
+    metadata: imported.metadata,
+    config
+  });
+}
+
+test('WebAnno export places coref edges on the first token of the antecedent span', async () => {
+  const { readFileSync } = await import('node:fs');
+  const read = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n').trimEnd();
+  const correct = read('webanno_correct.tsv');
+  const legacy = read('webanno_wrong.tsv');
+
+  assert.equal((await reexportWebAnno(correct)).trimEnd(), correct);
+  // Legacy files (edges on the anaphor row) must still import and be normalized on export.
+  assert.equal((await reexportWebAnno(legacy)).trimEnd(), correct);
 });
 
 test('TT roundtrip remains stable across repeated import/export', () => {
@@ -190,7 +235,7 @@ test('WebAnno import keeps edge columns when token lines end with trailing tab',
     '1-2\t6-10\tbeta\tevent[2]\tacc[2]\tnnnnn[2]\tcomparison-relative[2]\tcoref|bridge:comparison-relative\t1-2[2_1]|1-2[2_1]\t'
   ].join('\n');
 
-  const imported = importSpannotatorData(raw);
+  const imported = importSpannotatorData(raw, LEGACY_GROUP_CONFIG);
   assertImportInvariantSafe(imported);
 
   const corefGroupIds = Object.keys(imported.groups.coref)
@@ -493,6 +538,7 @@ test('Custom span keys survive WebAnno to SocialCalc roundtrip', () => {
 
   const imported = importSpannotatorData(raw, {
     annotations: {
+      keys: { food: ['burger', 'pizza'] },
       checks: {
         salience: [5, 'n', 's']
       }
@@ -561,6 +607,7 @@ test('Custom span keys survive WebAnno to SocialCalc roundtrip', () => {
     },
     config: {
       annotations: {
+        keys: { food: ['burger', 'pizza'] },
         checks: {
           salience: [5, 'n', 's']
         }
@@ -570,6 +617,7 @@ test('Custom span keys survive WebAnno to SocialCalc roundtrip', () => {
 
   const reimported = importSpannotatorData(socialcalcRaw, {
     annotations: {
+      keys: { food: ['burger', 'pizza'] },
       checks: {
         salience: [5, 'n', 's']
       }
@@ -895,7 +943,7 @@ test('SocialCalc export compacts redundant managed columns and updates sheet col
     '--SocialCalcSpreadsheetControlSave--'
   ].join('\n');
 
-  const imported = importSpannotatorData(redundantRaw);
+  const imported = importSpannotatorData(redundantRaw, LEGACY_GROUP_CONFIG);
   const exported = exportSpannotatorData({
     format: 'socialcalc',
     tokens: imported.tokens,
@@ -903,7 +951,8 @@ test('SocialCalc export compacts redundant managed columns and updates sheet col
     entities: imported.entities,
     groups: imported.groups,
     summaries: imported.summaries,
-    socialcalc: imported.socialcalc
+    socialcalc: imported.socialcalc,
+    config: LEGACY_GROUP_CONFIG
   });
 
   const lines = exported.split('\n');
@@ -919,7 +968,8 @@ test('SocialCalc export compacts redundant managed columns and updates sheet col
   assert.ok(exported.includes('cell:D2:t:new:f:1:tvf:1'));
   assert.ok(exported.includes('cell:E2:t:9:f:1:tvf:1'));
 
-  assert.ok(exported.includes('sheet:c:11:r:3:tvf:2'), 'Expected sheet:c to reflect compacted live columns');
+  // 5 compacted source columns (tok, pos, entity, infstat, ent_id) + group:coref, group:bridge, bridge_antec, sentence
+  assert.ok(exported.includes('sheet:c:9:r:3:tvf:2'), 'Expected sheet:c to reflect compacted live columns');
 });
 
 test('SocialCalc export does not emit empty annotation columns when annotations stay at defaults', () => {
@@ -1096,4 +1146,93 @@ test('WebAnno import of star-topology group-type edges clusters all members corr
   assert.equal(div352.antecedents?.split, undefined, 'Entity 352 must not have a split antecedent');
   assert.equal(div358.antecedents?.split, undefined, 'Entity 358 must not have a split antecedent');
   assert.equal(div364.antecedents?.split, undefined, 'Entity 364 must not have a split antecedent');
+});
+
+const CONLLU_SAMPLE = [
+  '# newdoc id = doc_0',
+  '# global.Entity = GRP-etype-infstat',
+  '# sent_id = sent_0',
+  '1\tThis\t_\t_\t_\t_\t_\t_\t_\tSpk=Null',
+  '2\tis\t_\t_\t_\t_\t_\t_\t_\tSpk=Null',
+  '3\tmy\t_\t_\t_\t_\t_\t_\t_\tEntity=(1-person-auto(1-person-auto)|Spk=Null',
+  '4\texample\t_\t_\t_\t_\t_\t_\t_\tEntity=1)|Spk=Null',
+  '',
+  '# sent_id = sent_1',
+  '1\tHere\t_\t_\t_\t_\t_\t_\t_\t_',
+  '2\tmy\t_\t_\t_\t_\t_\t_\t_\tEntity=(2-abstract-acc',
+  '3\texample\t_\t_\t_\t_\t_\t_\t_\tEntity=2)',
+  ''
+].join('\n');
+
+function conlluSheet(words, sentCol) {
+  return [
+    'socialcalc:version:1.0',
+    'MIME-Version: 1.0',
+    'Content-Type: multipart/mixed; boundary=SocialCalcSpreadsheetControlSave',
+    '--SocialCalcSpreadsheetControlSave',
+    'Content-type: text/plain; charset=UTF-8',
+    '',
+    '# SocialCalc Spreadsheet Control Save',
+    'version:1.0',
+    'part:sheet',
+    '--SocialCalcSpreadsheetControlSave',
+    'Content-type: text/plain; charset=UTF-8',
+    '',
+    'version:1.5',
+    'cell:A1:t:word:f:2',
+    ...words.map((w, i) => `cell:A${i + 2}:t:${w}:f:1:tvf:1`),
+    ...(sentCol ? ['cell:B1:t:s_type:f:2', 'cell:B2:t:s:f:1:tvf:1:rowspan:4', 'cell:B6:t:s:f:1:tvf:1:rowspan:3'] : []),
+    `sheet:c:${sentCol ? 2 : 1}:r:${words.length + 1}:tvf:2`,
+    '--SocialCalcSpreadsheetControlSave',
+    'Content-type: text/plain; charset=UTF-8',
+    '--SocialCalcSpreadsheetControlSave--'
+  ].join('\n');
+}
+
+test('CoNLL-U import without existing data creates tokens, sentences, mentions and groups', () => {
+  const imported = importSpannotatorData(CONLLU_SAMPLE, { sent: 's_type' });
+  assert.deepEqual(imported.tokens.map((t) => t.word), ['This', 'is', 'my', 'example', 'Here', 'my', 'example']);
+  assert.deepEqual(imported.tokens.map((t) => t.sentnum), [1, 1, 1, 1, 2, 2, 2]);
+  assert.deepEqual(Object.keys(imported.entities).sort(), ['3-3', '3-4', '6-7']);
+  assert.equal(imported.entities['6-7'].annos.etype, 'abstract');
+  assert.equal(imported.entities['6-7'].annos.infstat, 'acc');
+  assert.equal(imported.entities['3-3'].groups.coref, imported.entities['3-4'].groups.coref);
+  assert.ok(imported.entities['3-3'].groups.coref > 0);
+  assert.equal(imported.entities['6-7'].groups.coref, 0);
+});
+
+test('CoNLL-U import validates against existing tokens and keeps the sheet', () => {
+  const words = ['This', 'is', 'my', 'example', 'Here', 'my', 'example'];
+  const base = importSpannotatorData(conlluSheet(words, true), { word: 'word', tok: 'word', sent: 's_type' }).socialcalc;
+  const imported = importSpannotatorData(CONLLU_SAMPLE, { word: 'word', tok: 'word', sent: 's_type', socialcalc: base });
+  assert.equal(imported.socialcalc, base);
+  assert.equal(imported.entities['3-4'].annos.etype, 'person');
+
+  const badWords = conlluSheet(['This', 'is', 'my', 'sample', 'Here', 'my', 'example'], true);
+  const badBase = importSpannotatorData(badWords, { word: 'word', tok: 'word', sent: 's_type' }).socialcalc;
+  assert.throws(() => importSpannotatorData(CONLLU_SAMPLE, { word: 'word', tok: 'word', sent: 's_type', socialcalc: badBase }), /differs/);
+
+  const moved = CONLLU_SAMPLE.replace('4\texample\t_\t_\t_\t_\t_\t_\t_\tEntity=1)|Spk=Null\n\n# sent_id = sent_1\n', '4\texample\t_\t_\t_\t_\t_\t_\t_\tEntity=1)|Spk=Null\n');
+  assert.throws(() => importSpannotatorData(moved, { word: 'word', tok: 'word', sent: 's_type', socialcalc: base }), /sentence splits differ/);
+});
+
+
+test('SocialCalc import keeps nested mention in its own parallel slot group (bug.socialcalc)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const raw = readFileSync(new URL('./fixtures/bug.socialcalc', import.meta.url), 'utf8');
+  const imported = importSpannotatorData(raw, { GROUP_TYPES: ['coref'] });
+  assert.equal(imported.entities['24-25'].groups.coref, 0);
+  assert.equal(imported.entities['24-24'].groups.coref, imported.entities['3-3'].groups.coref);
+  assert.ok(imported.entities['24-24'].groups.coref > 0);
+});
+
+test('SocialCalc import matches group cells by row span, not column order (compacted bug.socialcalc)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { reorderSocialCalcColumns } = await import('../spreadsheet/io.js');
+  const raw = readFileSync(new URL('./fixtures/bug.socialcalc', import.meta.url), 'utf8');
+  const compacted = reorderSocialCalcColumns(raw, ['entity', 'group:coref']);
+  const imported = importSpannotatorData(compacted, { GROUP_TYPES: ['coref'] });
+  assert.equal(imported.entities['24-25'].groups.coref, 0);
+  assert.equal(imported.entities['24-24'].groups.coref, imported.entities['3-3'].groups.coref);
+  assert.ok(imported.entities['24-24'].groups.coref > 0);
 });
