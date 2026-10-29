@@ -663,10 +663,8 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
 
       const outEdgeTypes = [];
       const outEdgePaths = [];
-      covering.forEach((e) => {
-        // Enforce strictly generating edges only at the leading token of the target span
-        if (tok.tid !== e.start) return;
-
+      // Edges are sourced at the anaphor but serialized on the first token of the antecedent span.
+      Object.values(entities).forEach((e) => {
         enabledGroupTypes.forEach(mode => {
             const gid = parseInt(e.groups[mode] || 0, 10);
             if (gid > 0) {
@@ -675,6 +673,7 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
               if (idx > 0) {
                 const antecId = cluster[idx - 1];
                 const antec = entities[antecId];
+                if (!antec || antec.start !== tok.tid) return;
                 outEdgeTypes.push(mode);
                 outEdgePaths.push(`${tokensById[e.start].sentnum}-${tokensById[e.start].toknum_in_sent}[${entIndex[e.div_id]}_${entIndex[antec.div_id]}]`);
               }
@@ -687,6 +686,7 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
               const antecId = e.antecedents?.[mode] || (mode === 'bridge' ? e.bridge_antec : '_');
               if (antecId && antecId !== '_' && entities[antecId]) {
                 const antec = entities[antecId];
+                if (antec.start !== tok.tid) return;
                 let subtype = 'nobridge';
                 if (mode === 'bridge') {
                     subtype = e.annos[bridgeSubtypeKey] || resolvedConfig.DEFAULT_ANNOS[bridgeSubtypeKey] || 'nobridge';
@@ -1096,7 +1096,8 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
         const startRow = tokenRowsByTid[tids[0]]?.startRow;
         const endRow = tokenRowsByTid[tids[tids.length - 1]]?.endRow;
         if (!startRow || !endRow || endRow < startRow) return null;
-        return { startRow, endRow, rowspan: (endRow - startRow) + 1 };
+        const firstTok = tokens.find((tok) => tok.tid === tids[0]);
+        return { startRow, endRow, rowspan: (endRow - startRow) + 1, value: firstTok?.sent_value || '' };
       })
       .filter(Boolean);
   })();
@@ -1137,7 +1138,7 @@ function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} })
   if (shouldRewriteSentenceSpans) {
     deleteDataCellsInColumns(sentCols);
     expectedSentenceSpans.forEach((span) => {
-      writeSlotValue(sentCols, 0, span.startRow, sentenceColumnKey, span.rowspan);
+      writeSlotValue(sentCols, 0, span.startRow, span.value || sentenceColumnKey, span.rowspan);
     });
   }
 
@@ -1918,6 +1919,10 @@ export function importSpannotatorData(rawInput, configOverrides = {}) {
     return withInvariantCheck(webAnnoResult, config);
   }
 
+  if (isConlluPayload(raw)) {
+    return withInvariantCheck(importConllu(raw, config), config);
+  }
+
   const configuredTokenContainer = readConfiguredTokenContainer(config);
   const hasConfiguredTokenContainerTag = configuredTokenContainer
     ? new RegExp(`<${configuredTokenContainer}\\b|</${configuredTokenContainer}>`, 'i').test(raw)
@@ -1940,6 +1945,242 @@ export function importSpannotatorData(rawInput, configOverrides = {}) {
     assignedColors: initialColors,
     summaries: []
   }, config);
+}
+
+const CONLLU_ID_REGEX = /^\d+(?:-\d+|\.\d+)?$/;
+
+// CoNLL-U allows only blank lines, "#" comments and 10-column tab-delimited token lines.
+export function isConlluPayload(rawInput) {
+  const lines = String(rawInput || '').split(/\r?\n/);
+  let dataLines = 0;
+  for (const line of lines) {
+    if (line.trim() === '' || line.startsWith('#')) continue;
+    const cols = line.split('\t');
+    if (cols.length !== 10 || !CONLLU_ID_REGEX.test(cols[0])) return false;
+    dataLines += 1;
+  }
+  return dataLines > 0;
+}
+
+function parseConlluEntityBrackets(value, lineNo) {
+  const events = [];
+  const text = String(value || '');
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '(') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '(' && text[j] !== ')') j += 1;
+      const name = text.slice(i + 1, j);
+      if (!name) throw new Error(`CoNLL-U import: empty mention annotation on line ${lineNo}.`);
+      if (text[j] === ')') {
+        events.push({ kind: 'single', name });
+        j += 1;
+      } else {
+        events.push({ kind: 'open', name });
+      }
+      i = j;
+    } else if (ch === ')') {
+      i += 1;
+    } else {
+      let j = i;
+      while (j < text.length && text[j] !== '(' && text[j] !== ')') j += 1;
+      if (text[j] !== ')') {
+        throw new Error(`CoNLL-U import: malformed Entity value "${text}" on line ${lineNo}.`);
+      }
+      events.push({ kind: 'close', name: text.slice(i, j) });
+      i = j + 1;
+    }
+  }
+  return events;
+}
+
+function importConllu(raw, config) {
+  const schema = getAnnotationSchema(config);
+  const sentenceKey = schema.sentenceKey;
+  const groupTypes = Array.isArray(config.GROUP_TYPES) ? config.GROUP_TYPES : ['coref'];
+  const edgeTypes = Array.isArray(config.EDGE_TYPES) ? config.EDGE_TYPES : ['bridge'];
+  const primaryGroup = groupTypes[0] || 'coref';
+
+  let entityLayout = [];
+  const tokens = [];
+  const rawMentions = [];
+  const openMentions = [];
+  let sentnum = 0;
+  let toknumInSent = 0;
+  let sentenceOpen = false;
+  let pendingComments = {};
+  let sentValue = sentenceKey;
+  let tid = 1;
+
+  const parseLayout = (spec) => spec.split('-').map((part) => part.trim()).filter(Boolean);
+
+  raw.split(/\r?\n/).forEach((line, idx) => {
+    const lineNo = idx + 1;
+    if (line.trim() === '') {
+      sentenceOpen = false;
+      return;
+    }
+
+    if (line.startsWith('#')) {
+      if (sentenceOpen) sentenceOpen = false;
+      const match = line.match(/^#\s*([^=]+?)\s*=\s*(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const val = match[2].trim();
+        if (key === 'global.Entity') entityLayout = parseLayout(val);
+        pendingComments[key] = val;
+      }
+      return;
+    }
+
+    const cols = line.split('\t');
+    if (!/^\d+$/.test(cols[0])) return;
+
+    if (!sentenceOpen) {
+      sentenceOpen = true;
+      sentnum += 1;
+      toknumInSent = 0;
+      sentValue = pendingComments[sentenceKey] || sentenceKey;
+      pendingComments = {};
+    }
+
+    toknumInSent += 1;
+    const token = {
+      tid,
+      toknum_in_sent: toknumInSent,
+      word: cols[1],
+      sent: toknumInSent === 1 ? sentnum : null,
+      sentnum,
+      sent_tooltip: ''
+    };
+    if (toknumInSent === 1) token.sent_value = sentValue;
+    tokens.push(token);
+
+    const entityItem = cols[9].split('|').find((item) => item.startsWith('Entity='));
+    if (entityItem) {
+      parseConlluEntityBrackets(entityItem.slice('Entity='.length), lineNo).forEach((ev) => {
+        if (ev.kind === 'close') {
+          const closeId = ev.name.replace(/\[\d+\/\d+\]$/, '');
+          let found = -1;
+          for (let k = openMentions.length - 1; k >= 0; k -= 1) {
+            if (openMentions[k].grp === closeId) { found = k; break; }
+          }
+          if (found < 0) {
+            throw new Error(`CoNLL-U import: closing bracket "${ev.name})" without matching opening on line ${lineNo}.`);
+          }
+          const [mention] = openMentions.splice(found, 1);
+          mention.end = tid;
+          rawMentions.push(mention);
+          return;
+        }
+
+        const layout = entityLayout.length > 0 ? entityLayout : ['GRP', schema.entityKey];
+        const parts = ev.name.split('-');
+        const values = {};
+        layout.forEach((key, k) => {
+          values[key] = k === layout.length - 1 ? parts.slice(k).join('-') : parts[k];
+        });
+        const grp = String(values.GRP ?? parts[0] ?? '').replace(/\[\d+\/\d+\]$/, '').trim();
+        if (!grp) throw new Error(`CoNLL-U import: mention without GRP id on line ${lineNo}.`);
+        const mention = { grp, start: tid, end: tid, values };
+        if (ev.kind === 'single') {
+          rawMentions.push(mention);
+        } else {
+          openMentions.push(mention);
+        }
+      });
+    }
+    tid += 1;
+  });
+
+  if (openMentions.length > 0) {
+    throw new Error(`CoNLL-U import: unclosed mention for entity "${openMentions[0].grp}".`);
+  }
+  if (tokens.length === 0) throw new Error('CoNLL-U import: no tokens found.');
+
+  const sc = config.socialcalc;
+  const existingTokenCount = sc?.tokenRowsByTid ? Object.keys(sc.tokenRowsByTid).length : 0;
+  let resultTokens = tokens;
+  let preservedSocialcalc = null;
+
+  if (existingTokenCount > 0) {
+    const existing = importSocialCalc(sc.raw, sc.meta, { ...config, socialcalc: undefined });
+    const existingTokens = existing.tokens;
+    if (existingTokens.length !== tokens.length) {
+      throw new Error(`CoNLL-U import canceled: token count mismatch (existing: ${existingTokens.length}, imported: ${tokens.length}).`);
+    }
+    const hasSentenceColumn = (sc.mappings?.sentCols || []).length > 0;
+    for (let k = 0; k < tokens.length; k += 1) {
+      if (existingTokens[k].word !== tokens[k].word) {
+        throw new Error(`CoNLL-U import canceled: token ${k + 1} differs (existing: "${existingTokens[k].word}", imported: "${tokens[k].word}").`);
+      }
+      if (hasSentenceColumn && existingTokens[k].sentnum !== tokens[k].sentnum) {
+        throw new Error(`CoNLL-U import canceled: sentence splits differ at token ${k + 1} ("${tokens[k].word}").`);
+      }
+    }
+    resultTokens = hasSentenceColumn ? existingTokens : tokens.map((tok, k) => ({ ...existingTokens[k], sentnum: tok.sentnum, toknum_in_sent: tok.toknum_in_sent, sent: tok.sent, sent_value: tok.sent_value }));
+    preservedSocialcalc = sc;
+  }
+
+  const newEntities = {};
+  const divByMention = [];
+  rawMentions
+    .sort((a, b) => (a.start - b.start) || (b.end - a.end))
+    .forEach((mention) => {
+      const tokIds = [];
+      for (let t = mention.start; t <= mention.end; t += 1) tokIds.push(t);
+      const annos = { ...config.DEFAULT_ANNOS };
+      let type = config.GLOBAL_DEFAULTS.DEFAULT_ENTITY_TYPE;
+      Object.entries(mention.values).forEach(([key, val]) => {
+        if (key === 'GRP') return;
+        if (key === schema.entityKey) {
+          if (isMeaningful(val)) type = val;
+          return;
+        }
+        annos[key] = normalizeAnnotationValueForSchema(key, val, schema, config, '_');
+      });
+      const entity = baseEntity(tokIds, type, annos, config);
+      if (newEntities[entity.div_id]) return;
+      newEntities[entity.div_id] = entity;
+      divByMention.push({ grp: mention.grp, div: entity.div_id });
+    });
+
+  const entityIds = Object.keys(newEntities);
+  entityIds.forEach((id) => { newEntities[id].groups[primaryGroup] = 0; });
+  const nextGroups = {};
+  const nextAssigned = {};
+  [...new Set([primaryGroup, ...groupTypes, ...edgeTypes])].forEach((mode) => {
+    nextGroups[mode] = { 0: [...entityIds] };
+    nextAssigned[mode] = { 0: config.GLOBAL_DEFAULTS.DEFAULT_COLOR };
+  });
+
+  const byGrp = {};
+  divByMention.forEach(({ grp, div }) => {
+    if (!byGrp[grp]) byGrp[grp] = [];
+    byGrp[grp].push(div);
+  });
+  let gid = 1;
+  Object.values(byGrp)
+    .filter((members) => members.length > 1)
+    .forEach((members) => {
+      const sorted = sortByStart(members);
+      nextGroups[primaryGroup][gid] = sorted;
+      sorted.forEach((id) => { newEntities[id].groups[primaryGroup] = gid; });
+      nextAssigned[primaryGroup][gid] = config.COREF_COLORS[gid - 1] || randomColor();
+      gid += 1;
+    });
+  nextGroups[primaryGroup][0] = nextGroups[primaryGroup][0].filter((id) => newEntities[id].groups[primaryGroup] === 0);
+
+  const result = {
+    tokens: resultTokens,
+    entities: newEntities,
+    groups: nextGroups,
+    assignedColors: nextAssigned,
+    summaries: []
+  };
+  if (preservedSocialcalc) result.socialcalc = preservedSocialcalc;
+  return result;
 }
 
 function importSocialCalc(raw, meta_dict, config) {
@@ -2130,13 +2371,27 @@ function importSocialCalc(raw, meta_dict, config) {
     return resolveFromCandidates(requested);
   };
 
+  // Spans (start:end rows) of all entity cells. No two entities share a span, so a
+  // cell in a parallel column belongs to the entity whose span it matches exactly,
+  // regardless of which column (slot) it sits in.
+  const entitySpanKeys = new Set();
+
   const readSlotValue = (columns, slotIdx, row, options = {}) => {
     const {
       allowMerged = true,
-      allowSingleColumnFallback = true
+      allowSingleColumnFallback = true,
+      rowEnd = null
     } = options;
 
     if (!columns || columns.length === 0) return '';
+
+    if (rowEnd != null) {
+      for (const c of columns) {
+        const exact = cellsByRef[`${c}${row}`];
+        if (exact && exact.rowEnd === rowEnd && exact.value) return exact.value;
+      }
+    }
+
     let col = columns[slotIdx];
     if (!col && allowSingleColumnFallback && columns.length === 1) {
       col = columns[0];
@@ -2146,6 +2401,11 @@ function importSocialCalc(raw, meta_dict, config) {
     const cell = allowMerged
       ? getEffectiveCell(col, row)
       : (cellsByRef[`${col}${row}`] || null);
+    // Don't take a cell whose span belongs to a different entity
+    if (rowEnd != null && cell && cell.row === row && cell.rowEnd !== rowEnd
+      && entitySpanKeys.has(`${cell.row}:${cell.rowEnd}`)) {
+      return '';
+    }
     return cell?.value || '';
   };
 
@@ -2307,12 +2567,18 @@ function importSocialCalc(raw, meta_dict, config) {
   const externalToDivUnique = {};
   const externalToDivAmbiguous = new Set();
 
+  entityCols.forEach((col) => {
+    (cellsByCol[col] || []).forEach((c) => {
+      if (c.row > 1 && isMeaningful(c.value)) entitySpanKeys.add(`${c.row}:${c.rowEnd}`);
+    });
+  });
+
   entityCols.forEach((col, slotIdx) => {
     const colCells = cellsByCol[col] || [];
     colCells.forEach((entityCell) => {
       if (entityCell.row <= 1) return;
       if (!isMeaningful(entityCell.value)) return;
-
+      const spanOpt = { rowEnd: entityCell.rowEnd };
       const tokIds = [];
       for (let row = entityCell.row; row <= entityCell.rowEnd; row += 1) {
         const mappedTid = rowToTokenId[row];
@@ -2324,9 +2590,9 @@ function importSocialCalc(raw, meta_dict, config) {
 
       const annotationValuesByKey = {};
       annotationKeysForSocialcalc.forEach((key) => {
-        annotationValuesByKey[key] = readSlotValue(annotationColsByKey[key], slotIdx, entityCell.row);
+        annotationValuesByKey[key] = readSlotValue(annotationColsByKey[key], slotIdx, entityCell.row, spanOpt);
       });
-      const entExternalId = enabledEdgeTypes.length > 0 ? readSlotValue(entIdCols, slotIdx, entityCell.row).trim() : '';
+      const entExternalId = enabledEdgeTypes.length > 0 ? readSlotValue(entIdCols, slotIdx, entityCell.row, spanOpt).trim() : '';
 
       const defaultAnnos = { ...config.DEFAULT_ANNOS };
       annotationKeysForSocialcalc.forEach((key) => {
@@ -2342,6 +2608,7 @@ function importSocialCalc(raw, meta_dict, config) {
       const parsedGroups = {};
       enabledGroupTypes.forEach((mode) => {
         parsedGroups[mode] = parseGroupValue(readSlotValue(groupColsByType[mode], slotIdx, entityCell.row, {
+          ...spanOpt,
           allowMerged: false,
           allowSingleColumnFallback: false
         }));
@@ -2349,10 +2616,12 @@ function importSocialCalc(raw, meta_dict, config) {
       const parsedAntecs = {};
       enabledEdgeTypes.forEach(mode => {
          parsedGroups[mode] = parseGroupValue(readSlotValue(groupColsByType[mode], slotIdx, entityCell.row, {
+           ...spanOpt,
            allowMerged: false,
            allowSingleColumnFallback: false
          }));
          parsedAntecs[mode] = readSlotValue(antecColsByType[mode], slotIdx, entityCell.row, {
+           ...spanOpt,
            allowMerged: false,
            allowSingleColumnFallback: false
          }).trim();
