@@ -915,7 +915,8 @@ function assignGroupForEntity({
   newGroup,
   defaultColor,
   corefColors,
-  oldGroupHint
+  oldGroupHint,
+  collapseSingleton = true
 }) {
   const entity = entitiesById[entityId];
   if (!entity) return;
@@ -938,7 +939,7 @@ function assignGroupForEntity({
   if (oldGroup !== nextGroup && groupEntries[oldGroup]) {
     groupEntries[oldGroup] = groupEntries[oldGroup].filter((id) => id !== entityId);
 
-    if (oldGroup > 0 && groupEntries[oldGroup].length === 1) {
+    if (collapseSingleton && oldGroup > 0 && groupEntries[oldGroup].length === 1) {
       const [remainingId] = groupEntries[oldGroup];
       if (remainingId && entitiesById[remainingId]) {
         let nextAnnos = { ...entitiesById[remainingId].annos };
@@ -1456,6 +1457,8 @@ function groupSelectedMutation(nextState, { groupType }) {
           entityId: memberId,
           newGroup: targetGroup,
           oldGroupHint: oldGroupId,
+          // All members are being moved, so don't demote the last one to group 0 mid-merge
+          collapseSingleton: false,
           defaultColor: nextState.config.GLOBAL_DEFAULTS.DEFAULT_COLOR,
           corefColors: nextState.config.COREF_COLORS
         });
