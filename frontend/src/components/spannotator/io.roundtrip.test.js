@@ -186,6 +186,31 @@ test('WebAnno export places coref edges on the first token of the antecedent spa
   assert.equal((await reexportWebAnno(legacy)).trimEnd(), correct);
 });
 
+test('WebAnno export preserves nested spans and the order of relations sharing an antecedent token', () => {
+  const seed = buildSeedData();
+  seed.entities['1-2'] = {
+    ...seed.entities['1-1'],
+    start: 1,
+    end: 2,
+    toks: [1, 2],
+    length: 2,
+    div_id: '1-2'
+  };
+  seed.groups.coref[1] = ['3-3', '1-1', '1-2'];
+  const exported = exportSpannotatorData({ ...seed, format: 'webanno', config: LEGACY_GROUP_CONFIG });
+  const lines = exported.split('\n');
+  const spanCount = lines.find((line) => line.startsWith('#T_SP=')).split('|').length - 1;
+  const row = (id) => lines.find((line) => line.startsWith(`${id}\t`)).split('\t');
+  const first = row('1-1');
+  const third = row('1-3');
+
+  assert.equal(first[3], 'person[1]|person[2]');
+  assert.equal(first[3 + spanCount], 'coref|coref');
+  assert.equal(first[4 + spanCount], '1-1[2_1]|1-3[3_2]');
+  assert.equal(third[3 + spanCount], 'bridge:entity-associative');
+  assert.equal(third[4 + spanCount], '2-1[4_3]');
+});
+
 test('TT roundtrip remains stable across repeated import/export', () => {
   const seed = buildSeedData();
 

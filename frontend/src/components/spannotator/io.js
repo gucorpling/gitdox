@@ -620,12 +620,62 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
     entIndex[id] = i + 1;
   });
 
-  const maxSent = Math.max(...tokens.map((t) => t.sentnum), 1);
+  const sentences = new Map();
+  tokens.forEach((token) => {
+    if (!sentences.has(token.sentnum)) sentences.set(token.sentnum, []);
+    sentences.get(token.sentnum).push(token);
+  });
+
+  const entityValues = Object.values(entities);
+  const edgesByToken = new Map();
+  const groupPredecessors = new Map();
+  const addEdge = (antec, entity, type) => {
+    if (!edgesByToken.has(antec.start)) edgesByToken.set(antec.start, []);
+    edgesByToken.get(antec.start).push({ entity, antec, type });
+  };
+
+  // Preserve entity and mode iteration order while building each relation once.
+  entityValues.forEach((entity) => {
+    enabledGroupTypes.forEach((mode) => {
+      const gid = parseInt(entity.groups[mode] || 0, 10);
+      if (gid <= 0 || Number.isNaN(gid)) return;
+      if (!groupPredecessors.has(mode)) groupPredecessors.set(mode, new Map());
+      const byGroup = groupPredecessors.get(mode);
+      if (!byGroup.has(gid)) {
+        const predecessors = new Map();
+        const cluster = sortByStart(groups[mode]?.[gid] || []);
+        cluster.forEach((id, index) => {
+          if (!predecessors.has(id)) predecessors.set(id, index > 0 ? cluster[index - 1] : null);
+        });
+        byGroup.set(gid, predecessors);
+      }
+      const antecId = byGroup.get(gid).get(entity.div_id);
+      const antec = entities[antecId];
+      if (antecId && antec) addEdge(antec, entity, mode);
+    });
+
+    enabledEdgeTypes.forEach((mode) => {
+      const gid = parseInt(entity.groups[mode] || 0, 10);
+      if (gid <= 0 || Number.isNaN(gid)) return;
+      const antecId = entity.antecedents?.[mode] || (mode === 'bridge' ? entity.bridge_antec : '_');
+      if (!antecId || antecId === '_' || !entities[antecId]) return;
+      let subtype = 'nobridge';
+      if (mode === 'bridge') {
+        subtype = entity.annos[bridgeSubtypeKey] || resolvedConfig.DEFAULT_ANNOS[bridgeSubtypeKey] || 'nobridge';
+      } else {
+        const edgeConf = resolvedConfig.colors?.edges?.[mode] || {};
+        const typeKeys = Object.keys(edgeConf).filter((key) => Array.isArray(edgeConf[key]));
+        if (typeKeys.length > 0) subtype = entity.annos[typeKeys[0]] || `no${mode}`;
+      }
+      const type = subtype !== 'nobridge' && !subtype.startsWith('no') ? `${mode}:${subtype}` : mode;
+      addEdge(entities[antecId], entity, type);
+    });
+  });
+
   let currentDocumentOffset = 0;
 
-  for (let sent = 1; sent <= maxSent; sent += 1) {
-    const sentTokens = tokens.filter((t) => t.sentnum === sent);
-    if (sentTokens.length === 0) continue;
+  for (const sent of [...sentences.keys()].filter((number) => Number.isInteger(number) && number >= 1).sort((a, b) => a - b)) {
+    const sentTokens = sentences.get(sent);
     out.push('');
     out.push(`#Text=${sentTokens.map((t) => t.word).join(' ')}`);
 
@@ -644,7 +694,7 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
           }
       }
 
-      const covering = Object.values(entities)
+      const covering = entityValues
         .filter((e) => e.start <= tok.tid && e.end >= tok.tid)
         .sort((a, b) => (b.end - b.start) - (a.end - a.start));
 
@@ -663,43 +713,10 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
 
       const outEdgeTypes = [];
       const outEdgePaths = [];
-      // Edges are sourced at the anaphor but serialized on the first token of the antecedent span.
-      Object.values(entities).forEach((e) => {
-        enabledGroupTypes.forEach(mode => {
-            const gid = parseInt(e.groups[mode] || 0, 10);
-            if (gid > 0) {
-              const cluster = sortByStart(groups[mode]?.[gid] || []);
-              const idx = cluster.indexOf(e.div_id);
-              if (idx > 0) {
-                const antecId = cluster[idx - 1];
-                const antec = entities[antecId];
-                if (!antec || antec.start !== tok.tid) return;
-                outEdgeTypes.push(mode);
-                outEdgePaths.push(`${tokensById[e.start].sentnum}-${tokensById[e.start].toknum_in_sent}[${entIndex[e.div_id]}_${entIndex[antec.div_id]}]`);
-              }
-            }
-        });
-
-        enabledEdgeTypes.forEach(mode => {
-            const gid = parseInt(e.groups[mode] || 0, 10);
-            if (gid > 0) {
-              const antecId = e.antecedents?.[mode] || (mode === 'bridge' ? e.bridge_antec : '_');
-              if (antecId && antecId !== '_' && entities[antecId]) {
-                const antec = entities[antecId];
-                if (antec.start !== tok.tid) return;
-                let subtype = 'nobridge';
-                if (mode === 'bridge') {
-                    subtype = e.annos[bridgeSubtypeKey] || resolvedConfig.DEFAULT_ANNOS[bridgeSubtypeKey] || 'nobridge';
-                } else {
-                    const edgeConf = resolvedConfig.colors?.edges?.[mode] || {};
-                    const typeKeys = Object.keys(edgeConf).filter(k => Array.isArray(edgeConf[k]));
-                    if (typeKeys.length > 0) subtype = e.annos[typeKeys[0]] || `no${mode}`;
-                }
-                outEdgeTypes.push(subtype !== 'nobridge' && !subtype.startsWith('no') ? `${mode}:${subtype}` : mode);
-                outEdgePaths.push(`${tokensById[e.start].sentnum}-${tokensById[e.start].toknum_in_sent}[${entIndex[e.div_id]}_${entIndex[antec.div_id]}]`);
-              }
-            }
-        });
+      // Edges are serialized on the first token of the antecedent span.
+      (edgesByToken.get(tok.tid) || []).forEach(({ entity, antec, type }) => {
+        outEdgeTypes.push(type);
+        outEdgePaths.push(`${tokensById[entity.start].sentnum}-${tokensById[entity.start].toknum_in_sent}[${entIndex[entity.div_id]}_${entIndex[antec.div_id]}]`);
       });
 
       const row = [

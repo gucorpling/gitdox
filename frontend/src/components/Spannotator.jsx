@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import {
   AlertTriangle,
   Bell,
@@ -49,8 +49,73 @@ import {
   sortByStart
 } from './spannotator/model';
 import { exportSpannotatorData, importSpannotatorData, isConlluPayload } from './spannotator/io';
+import { createIdentityDraft } from './spannotator/identityDraft';
 
 const SOCIALCALC_SIGNATURE = 'SocialCalcSpreadsheetControlSave';
+
+const IdentitySuggestions = React.memo(function IdentitySuggestions({ id, suggestions }) {
+  return (
+    <datalist id={id}>
+      {suggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+    </datalist>
+  );
+});
+const EMPTY_IDENTITY_SUGGESTIONS = [];
+
+const IdentityInput = React.memo(function IdentityInput({ entityType, textValue, value, listId, pendingSuggestion, onDraft, onCommit }) {
+  const [draft, setDraft] = useState(value);
+  const [edited, setEdited] = useState(false);
+  const commitRef = useRef(onCommit);
+  const draftCommitterRef = useRef(null);
+
+  useEffect(() => {
+    commitRef.current = onCommit;
+  }, [onCommit]);
+
+  useEffect(() => {
+    if (!draftCommitterRef.current?.hasPending()) {
+      setDraft(value);
+      setEdited(false);
+    }
+  }, [value, pendingSuggestion]);
+
+  const flush = useCallback(() => {
+    draftCommitterRef.current?.flush();
+  }, []);
+
+  useEffect(() => {
+    return () => flush();
+  }, [flush]);
+
+  return (
+    <input
+      type="text"
+      list={listId}
+      value={draft}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setDraft(nextValue);
+        setEdited(true);
+        onDraft(entityType, textValue, nextValue, flush);
+        if (!draftCommitterRef.current) {
+          draftCommitterRef.current = createIdentityDraft((committedValue) => {
+            commitRef.current(entityType, textValue, committedValue);
+          });
+        }
+        draftCommitterRef.current.update(nextValue);
+      }}
+      onBlur={() => flushSync(flush)}
+      style={{
+        width: '100%',
+        minWidth: '140px',
+        border: 0,
+        borderRadius: 0,
+        padding: '6px 8px',
+        background: pendingSuggestion && !edited ? '#dbeafe' : '#ffffff'
+      }}
+    />
+  );
+});
 
 function isNonEmptyText(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -487,6 +552,10 @@ export default function Spannotator({
   const [activeTools, setActiveTools] = useState({});
   const [isGuessIdentitiesRunning, setIsGuessIdentitiesRunning] = useState(false);
   const [identitySuggestions, setIdentitySuggestions] = useState({});
+  const pendingIdentityDraftsRef = useRef(new Map());
+  const identityUnmountSnapshotRef = useRef(null);
+  const identitySuggestionRequestsRef = useRef(new Set());
+  const identitySuggestionsId = useId();
   const lastImportedValueRef = useRef(null);
   const lastEmittedValueRef = useRef(null);
   const hasHydratedControlledValueRef = useRef(false);
@@ -527,6 +596,78 @@ export default function Spannotator({
   const entityTypeAnnotationKey = String(modelConfig?.entity || 'entity').trim() || 'entity';
 
   const namedEntityInputKey = useCallback((entityType, textValue) => `${entityType}|||${textValue}`, []);
+
+  useEffect(() => {
+    const flushPending = () => {
+      if (pendingIdentityDraftsRef.current.size === 0) return;
+      flushSync(() => {
+        [...pendingIdentityDraftsRef.current.values()].forEach((draft) => draft.flush());
+      });
+    };
+    window.addEventListener('blur', flushPending);
+    document.addEventListener('click', flushPending, true);
+    return () => {
+      window.removeEventListener('blur', flushPending);
+      document.removeEventListener('click', flushPending, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    identityUnmountSnapshotRef.current = {
+      tokens, entities, groups, summaries, socialcalcModel, config, modelConfig,
+      namedEntityMatchIdsByInputKey, identityAnnotationKey,
+      entityTypeAnnotationKey, onChange, value
+    };
+  });
+
+  useEffect(() => () => {
+    const pending = pendingIdentityDraftsRef.current;
+    const snapshot = identityUnmountSnapshotRef.current;
+    if (pending.size === 0 || !snapshot || typeof snapshot.onChange !== 'function') return;
+
+    const source = {
+      tokens: snapshot.tokens,
+      entitiesById: snapshot.entities,
+      socialcalc: snapshot.socialcalcModel,
+      entityTypeKey: snapshot.entityTypeAnnotationKey
+    };
+    const nextEntities = { ...snapshot.entities };
+    pending.forEach(({ entityType, textValue, value: draftValue }, key) => {
+      const directIds = snapshot.namedEntityMatchIdsByInputKey[key] || [];
+      const matchedIds = findEntitiesByTextAndType(textValue, entityType, source)
+        .map((match) => String(match.entityId || '').trim())
+        .filter(Boolean);
+      const kind = getAnnotationKind(snapshot.modelConfig, snapshot.identityAnnotationKey);
+      const nextValue = kind === 'checks'
+        ? normalizeCheckValue(draftValue, snapshot.modelConfig, snapshot.identityAnnotationKey)
+        : draftValue;
+      new Set([...directIds, ...matchedIds]).forEach((entityId) => {
+        const entity = nextEntities[entityId];
+        if (!entity) return;
+        nextEntities[entityId] = {
+          ...entity,
+          annos: { ...entity.annos, [snapshot.identityAnnotationKey]: nextValue },
+          salienceField: kind === 'checks' ? true : entity.salienceField
+        };
+      });
+    });
+    try {
+      const nextValue = exportSpannotatorData({
+        format: 'socialcalc',
+        tokens: snapshot.tokens,
+        tokensById: Object.fromEntries(snapshot.tokens.map((token) => [token.tid, token])),
+        entities: nextEntities,
+        groups: snapshot.groups,
+        summaries: snapshot.summaries,
+        socialcalc: snapshot.socialcalcModel,
+        config: { ...snapshot.config, ...snapshot.modelConfig }
+      });
+      pending.clear();
+      if (nextValue !== snapshot.value) snapshot.onChange(nextValue);
+    } catch (error) {
+      console.error('Failed to commit pending identity edits when closing Spannotator:', error);
+    }
+  }, []);
 
   const applyImportedData = useCallback((rawInput, options = {}) => {
     const isSocialCalcImport = isSocialCalcPayload(rawInput);
@@ -736,24 +877,30 @@ export default function Spannotator({
     modelConfig
   ]);
 
-  const changeEntityAnno = useCallback((entityId, key, changedValue) => {
+  const changeEntityAnnos = useCallback((entityIds, key, changedValue) => {
     const kind = getAnnotationKind(modelConfig, key);
     setEntities((prev) => {
-      const e = prev[entityId];
-      if (!e) return prev;
-      return {
-        ...prev,
-        [entityId]: {
+      let next = prev;
+      entityIds.forEach((entityId) => {
+        const e = prev[entityId];
+        if (!e) return;
+        if (next === prev) next = { ...prev };
+        next[entityId] = {
           ...e,
           annos: {
             ...e.annos,
             [key]: kind === 'checks' ? normalizeCheckValue(changedValue, modelConfig, key) : changedValue
           },
           salienceField: kind === 'checks' ? true : e.salienceField
-        }
-      };
+        };
+      });
+      return next;
     });
   }, [modelConfig]);
+
+  const changeEntityAnno = useCallback((entityId, key, changedValue) => {
+    changeEntityAnnos([entityId], key, changedValue);
+  }, [changeEntityAnnos]);
 
   const changeEntityType = useCallback((entityId, entityType) => {
     setEntities((prev) => {
@@ -1011,8 +1158,9 @@ export default function Spannotator({
 
     Object.keys(namedEntityListing).forEach(async (entityType) => {
       // Skip if we already have the list loaded in the component state
-      if (identitySuggestions[entityType]) return; 
+      if (identitySuggestions[entityType] || identitySuggestionRequestsRef.current.has(entityType)) return;
 
+      identitySuggestionRequestsRef.current.add(entityType);
       try {
         const suggestions = await onFetchIdentitySuggestions(entityType);
         if (Array.isArray(suggestions)) {
@@ -1020,6 +1168,8 @@ export default function Spannotator({
         }
       } catch (e) {
         console.error(e);
+      } finally {
+        identitySuggestionRequestsRef.current.delete(entityType);
       }
     });
   }, [showNamedEntityLinkingPanel, namedEntityListing, onFetchIdentitySuggestions, identitySuggestions]);
@@ -1326,8 +1476,15 @@ export default function Spannotator({
     setShowNamedEntityLinkingPanel(true);
   }, [entities, entityTypeAnnotationKey, identityAnnotationKey, modelConfig, namedEntityInputKey, socialcalcModel, tokens]);
 
+  const onNamedEntityIdentityDraft = useCallback((entityType, textValue, nextValue, flush) => {
+    pendingIdentityDraftsRef.current.set(namedEntityInputKey(entityType, textValue), {
+      entityType, textValue, value: nextValue, flush
+    });
+  }, [namedEntityInputKey]);
+
   const onNamedEntityIdentityChange = useCallback((entityType, textValue, nextValue) => {
     const inputKey = namedEntityInputKey(entityType, textValue);
+    if (!pendingIdentityDraftsRef.current.delete(inputKey)) return;
     const directMatchIds = namedEntityMatchIdsByInputKey[inputKey] || [];
     const source = {
       tokens,
@@ -1350,10 +1507,8 @@ export default function Spannotator({
       return next;
     });
 
-    targetEntityIds.forEach((entityId) => {
-      changeEntityAnno(entityId, identityAnnotationKey, nextValue);
-    });
-  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens, changeEntityAnno]);
+    changeEntityAnnos(targetEntityIds, identityAnnotationKey, nextValue);
+  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens, changeEntityAnnos]);
 
   const confirmNamedEntityIdentitySuggestion = useCallback((entityType, textValue) => {
     const inputKey = namedEntityInputKey(entityType, textValue);
@@ -1370,9 +1525,7 @@ export default function Spannotator({
       .filter((id) => id.length > 0);
     const targetEntityIds = Array.from(new Set([...directMatchIds, ...fallbackMatchIds]));
 
-    targetEntityIds.forEach((entityId) => {
-      changeEntityAnno(entityId, identityAnnotationKey, committedValue);
-    });
+    changeEntityAnnos(targetEntityIds, identityAnnotationKey, committedValue);
 
     setPendingNamedEntityIdentitySuggestions((prev) => {
       if (!prev[inputKey]) return prev;
@@ -1380,7 +1533,7 @@ export default function Spannotator({
       delete next[inputKey];
       return next;
     });
-  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityIdentityInputs, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens, changeEntityAnno]);
+  }, [entities, entityTypeAnnotationKey, identityAnnotationKey, namedEntityIdentityInputs, namedEntityInputKey, namedEntityMatchIdsByInputKey, socialcalcModel, tokens, changeEntityAnnos]);
 
   const runGuessIdentities = useCallback(async () => {
     if (typeof onGuessIdentities !== 'function') return;
@@ -2269,6 +2422,10 @@ export default function Spannotator({
                 {Object.keys(namedEntityListing).sort((a, b) => a.localeCompare(b)).map((entityType) => (
                   <li key={entityType} style={{ marginBottom: '8px' }}>
                     <strong>{entityType}</strong>
+                    <IdentitySuggestions
+                      id={`${identitySuggestionsId}-${entityType}`}
+                      suggestions={identitySuggestions[entityType] || EMPTY_IDENTITY_SUGGESTIONS}
+                    />
                     <ul style={{ marginTop: '6px', paddingLeft: 0, border: '1px solid #d1d5db', borderRadius: '4px', overflow: 'hidden' }}>
                       {(namedEntityListing[entityType] || []).map((textValue, rowIndex, rows) => {
                         const inputKey = namedEntityInputKey(entityType, textValue);
@@ -2287,26 +2444,15 @@ export default function Spannotator({
                               }}
                             >
                               <span style={{ overflowWrap: 'anywhere', padding: '6px 8px', borderRight: '1px solid #d1d5db', background: '#f8fafc' }}>{textValue}</span>
-                              <input
-                                type="text"
-                                list={`suggestions-${entityType}`}
+                              <IdentityInput
+                                entityType={entityType}
+                                textValue={textValue}
+                                listId={`${identitySuggestionsId}-${entityType}`}
                                 value={namedEntityIdentityInputs[inputKey] || ''}
-                                onChange={(e) => onNamedEntityIdentityChange(entityType, textValue, e.target.value)}
-                                style={{
-                                  width: '100%',
-                                  minWidth: '140px',
-                                  border: 0,
-                                  borderRadius: 0,
-                                  padding: '6px 8px',
-                                  background: hasPendingSuggestion ? '#dbeafe' : '#ffffff'
-                                }}
+                                pendingSuggestion={hasPendingSuggestion}
+                                onDraft={onNamedEntityIdentityDraft}
+                                onCommit={onNamedEntityIdentityChange}
                               />
-                              <datalist id={`suggestions-${entityType}`}>
-                                {(identitySuggestions[entityType] || []).map((suggestion) => (
-                                  <option key={suggestion} value={suggestion} />
-                                ))}
-                              </datalist>
-
                               {hasPendingSuggestion ? (
                                 <button
                                   type="button"
