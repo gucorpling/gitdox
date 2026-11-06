@@ -474,6 +474,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
       let operator = prev.operator;
       if (needsSpreadsheet && domain !== 'spreadsheet') operator = 'exists';
       if (needsXml && domain !== 'XML') operator = 'exists';
+      if (domain === 'rst') operator = '!exists';
       return { ...prev, domain, operator };
     });
   };
@@ -585,7 +586,7 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
       return [doc, corp, dom, key, op, val].join('|||');
     }));
 
-    const allowedDomains = ['xml', 'spreadsheet', 'metadata'];
+    const allowedDomains = ['xml', 'spreadsheet', 'metadata', 'rst'];
     const allowedOperators = ['exists', '!exists', '=', '~', '==', '|', '&', '>', 'nelink', 'xsd'];
     const ssOnlyOperators = ['>', '|', '==', 'nelink'];
     const xmlOnlyOperators = ['xsd'];
@@ -621,6 +622,10 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
        }
        if (xmlOnlyOperators.includes(op) && domRaw !== 'xml') {
           alert(`Import rejected. Error on line ${i+1}: Operator '${op}' is only allowed in 'xml' domain.`);
+          e.target.value = null; return;
+       }
+       if (domRaw === 'rst' && (op !== '!exists' || !['empty_hierarchy', 'multiple_flat', 'single_multinuc'].includes(key))) {
+          alert(`Import rejected. Error on line ${i+1}: 'rst' rules need operator '!exists' and a key of empty_hierarchy, multiple_flat or single_multinuc.`);
           e.target.value = null; return;
        }
        if (!key) {
@@ -1791,11 +1796,17 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
                         <option value="XML">XML</option>
                         <option value="spreadsheet">spreadsheet</option>
                         <option value="metadata">metadata</option>
+                        <option value="rst">rst</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-slate-600 mb-1">Key</label>
-                      <input required className="w-full border p-2 rounded" placeholder="Targeted key" value={validationForm.key} onChange={e => setValidationForm({ ...validationForm, key: e.target.value })} />
+                      <input required list={validationForm.domain === 'rst' ? 'rst-check-keys' : undefined} className="w-full border p-2 rounded" placeholder={validationForm.domain === 'rst' ? 'RST check name' : 'Targeted key'} value={validationForm.key} onChange={e => setValidationForm({ ...validationForm, key: e.target.value })} />
+                      <datalist id="rst-check-keys">
+                        <option value="empty_hierarchy" />
+                        <option value="multiple_flat" />
+                        <option value="single_multinuc" />
+                      </datalist>
                     </div>
                     <div>
                       <label className="block text-slate-600 mb-1">Operator</label>

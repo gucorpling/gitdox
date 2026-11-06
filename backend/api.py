@@ -160,7 +160,7 @@ def get_restore_from_github_level(project_name: Optional[str]) -> int:
         return 1
 
 
-VALID_DOCUMENT_MODES = {"xml", "spreadsheet", "entities", "dendroid"}
+VALID_DOCUMENT_MODES = {"xml", "spreadsheet", "entities", "dendroid", "segmenter", "rstweb"}
 
 
 def normalize_document_mode(mode: Optional[str]) -> str:
@@ -286,7 +286,7 @@ def can_manage_user(current_user: Optional[dict], target_user: Optional[dict]) -
 
 
 # --- Pydantic Models for Data Validation ---
-ALLOWED_VALIDATION_DOMAINS = {"xml", "spreadsheet", "metadata"}
+ALLOWED_VALIDATION_DOMAINS = {"xml", "spreadsheet", "metadata", "rst"}
 COMMON_IMPORT_EXTENSIONS = (".xml", ".sgml", ".tt")
 OVERRIDE_KEYS_REPO = ("repo",)
 OVERRIDE_KEYS_ASSIGNED = ("user", "assignee", "assigned")
@@ -1073,7 +1073,7 @@ def _run_document_validations(doc_id: str) -> dict:
         if mode == "spreadsheet":
             input_type = "spreadsheet"
             indata = spreadsheet_content
-        elif mode == "entities":
+        elif mode in ("entities", "segmenter", "rstweb"):
             input_type = "spreadsheet"
             indata = spreadsheet_content
         elif mode == "xml":

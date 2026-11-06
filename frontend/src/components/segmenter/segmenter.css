@@ -1,0 +1,86 @@
+.segmenter-container {
+  font-family: Arial, sans-serif;
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.segmenter-controls {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.layer-toggle {
+  cursor: pointer;
+  user-select: none;
+  font-weight: bold;
+}
+
+.canvas {
+  background: white;
+  padding: 20px;
+  border: 1px solid #ccc;
+  line-height: var(--seg-line-height, 1.5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.token {
+  margin: 0 calc(var(--seg-word-spacing, 0px) / 2);
+  padding: 2px 0;
+  user-select: none;
+}
+
+.segmenter-error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.boundary-stack {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  min-width: 5px;
+  justify-content: center;
+}
+
+.boundary-marker {
+  font-weight: bold;
+  padding: 0 4px;
+  cursor: default;
+  user-select: none;
+  position: relative;
+}
+
+.boundary-marker.active-marker {
+  cursor: pointer;
+}
+
+.boundary-marker.active-marker:hover::after {
+  content: "×";
+  position: absolute;
+  top: -12px;
+  right: -2px;
+  color: red;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.insertion-point {
+  position: absolute;
+  cursor: pointer;
+  opacity: 0;
+  font-weight: bold;
+  transition: opacity 0.15s ease-in-out;
+  padding: 0 4px;
+}
+
+.insertion-point:hover {
+  opacity: 0.5;
+}

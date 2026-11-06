@@ -3,6 +3,8 @@ import { Plus, Trash2, Edit, X, Copy } from 'lucide-react';
 import SpreadsheetEditor from './SpreadsheetEditor';
 import Spannotator from './Spannotator';
 import { Dendroid } from './Dendroid';
+import Segmenter from './Segmenter';
+import RstWeb from './RstWeb';
 import ValidationBadge from './ValidationBadge';
 import XmlEditor from './XmlEditor';
 import {
@@ -29,6 +31,8 @@ export default function DocumentEditor({
   mutationTools, 
   spannotatorConfig = {}, 
   dendroidConfig = {}, 
+  segmenterConfig = {},
+  rstwebConfig = {},
   spreadsheetConfig = {},
   instanceConfig = {},
   editorOptions = [], 
@@ -731,7 +735,7 @@ export default function DocumentEditor({
         await autoSaveXmlContent(transformedXml);
       } 
       // Handle returning Spreadsheet or Entities
-      else if (returnMode === 'spreadsheet' || returnMode === 'entities' || returnMode === 'dendroid') {
+      else if (returnMode === 'spreadsheet' || returnMode === 'entities' || returnMode === 'dendroid' || returnMode === 'segmenter' || returnMode === 'rstweb') {
         const transformedSpreadsheet = response?.content_spreadsheet;
         if (typeof transformedSpreadsheet !== 'string' || transformedSpreadsheet.length === 0) {
           throw new Error(`${toolConfig.caption} returned no spreadsheet content.`);
@@ -783,7 +787,7 @@ export default function DocumentEditor({
         await autoSaveDocField('mode', 'xml');
       }
       // Handle returning Spreadsheet or Entities
-      else if (returnMode === 'spreadsheet' || returnMode === 'entities' || returnMode === 'dendroid') {
+      else if (returnMode === 'spreadsheet' || returnMode === 'entities' || returnMode === 'dendroid' || returnMode === 'segmenter' || returnMode === 'rstweb') {
         const transformedSpreadsheet = response?.content_spreadsheet;
         if (typeof transformedSpreadsheet !== 'string' || transformedSpreadsheet.length === 0) {
           throw new Error(`${toolConfig.caption} returned no spreadsheet content.`);
@@ -798,6 +802,10 @@ export default function DocumentEditor({
 
         if (returnMode === 'entities') {
           await autoSaveDocField('mode', 'entities');
+        } else if (returnMode === 'segmenter') {
+          await autoSaveDocField('mode', 'segmenter');
+        } else if (returnMode === 'rstweb') {
+          await autoSaveDocField('mode', 'rstweb');
         } else if (returnMode === 'dendroid') {
           await autoSaveDocField('mode', 'dendroid');
         }
@@ -1452,6 +1460,25 @@ export default function DocumentEditor({
                 onFetchIdentitySuggestions={fetchIdentitySuggestions}
                 onChange={handleSpreadsheetContentChange}
                 className="h-full overflow-auto"
+              />
+            </div>
+          ) : doc.mode === 'segmenter' ? (
+            <div className="flex-1 w-full h-full pt-10 overflow-hidden border-t border-slate-100 bg-white">
+              <Segmenter
+                value={contentSpreadsheet}
+                config={segmenterConfig}
+                rstConfig={rstwebConfig}
+                fontFamily={uiFontFamily}
+                onChange={handleSpreadsheetContentChange}
+              />
+            </div>
+          ) : doc.mode === 'rstweb' ? (
+            <div className="flex-1 w-full h-full pt-10 overflow-hidden border-t border-slate-100 bg-white">
+              <RstWeb
+                value={contentSpreadsheet}
+                config={rstwebConfig}
+                validation={doc.validation}
+                onChange={handleSpreadsheetContentChange}
               />
             </div>
           ) : doc.mode === 'dendroid' ? (

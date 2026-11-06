@@ -5,7 +5,7 @@ instance:
   # You can set up a link to your annotation guidelines like this:
   help_message: <span style="color:black">For help getting started see the</span> <a href="https://gucorpling.org/gitdox/">website</a>
   excluded_metadata: []  # Document and corpus metadata keys to always exclude on corpus import
-  editors: {xml: "XML", spreadsheet: "spreadsheet", entities: "entities", dendroid: "syntax"}  # Which editors to enable (xml, spreadsheet and/or entities)
+  editors: {xml: "XML", spreadsheet: "spreadsheet", entities: "entities", dendroid: "syntax", segmenter: "segmenter", rstweb: "RST"}  # Which editors to enable (xml, spreadsheet, entities, dendroid, segmenter and/or rstweb)
   restore_from_github_level: 1  # Minimum user level (default 1) allowed to use "Restore from GitHub"
 
 
@@ -113,3 +113,74 @@ dendroid:  # Syntax tree editor
   sentence_annotations: [translation, verse_n]
   sentence_span: translation
   sentence_text: ""  # Use empty string to compute from tokens
+
+segmenter:  # Discourse unit / sentence segmentation editor
+  font: "Verdana"  # Widget font (defaults to the UI font)
+  font_size: "10pt"  # Pixels, or a CSS length such as "1.2em"
+  line_spacing: 1.5  # Line height multiplier
+  word_spacing: 0  # Horizontal gap between words, in pixels or a CSS length
+  nesting: true  # true: layers must nest in declaration order (big to small, violations raise an error), only the largest marker at a position is shown and adding a break also adds it to all smaller layers. false: layers are independent and all markers are shown
+  words: "tok"  # Column header for column supplying the words to display (could be spans)
+  layers:  # Column header names for segmentations to support, in nesting order from largest to smallest
+    paragraph: ["--","red","sequential"]  # name: ["sep", "color", "sequential/words"]  - sequential means span value content is auto-updating sequential numbers, words means the space-joined content of all covered words cells. Other values mean a default, fixed value to use, but values are not edited by the interface unless empty (in which case the default is inserted)
+    sentence: ["||", "blue","sequential"]
+    edu: ["|", "green", ""]  # Shared with rstweb.edu: must use an empty default, since the cells also hold RST node ids and relations
+
+rstweb:  # RST / eRST discourse tree editor (reads EDUs from the segmenter's edu layer)
+  words: "tok"  # Column header supplying the word tokens (could be spans)
+  edu: "edu"  # Column of EDU spans, cells hold id:relation:parent. If the segmenter edits this layer too, give it an empty default value, e.g. edu: ["|", "green", ""], since the "words" style would overwrite these cells
+  node: "node"  # Header shared by the columns holding non-terminal span/multinuc nodes (as many columns as needed are added)
+  secedge: "secedge"  # Column for secondary (eRST) edges. Set to "" to disable secondary edges altogether
+  signal: "signal"  # Column for eRST signals. Set to "" to disable signals altogether
+  disable_spans: false  # No span buttons available (e.g. for flat RST dependencies between EDUs only)
+  disable_multinucs: false  # No multinuclear buttons
+  disable_secedge: false  # No eRST secondary edges (same effect as secedge: "")
+  use_signals: true  # Shows (S) buttons on nodes and turns on signal coloring by default (false has the same effect as signal: ""; needs signal_types)
+  # default_rst: elaboration-additional  # Relation given to newly attached satellites (default: alphabetically first of rst)
+  # default_multinuc: joint-other  # Relation given to new multinuc children (default: alphabetically first of multinuc)
+  relations:  # The single relation inventory of this project. The names "span" and "multinuc" are built into the format and cannot be used or changed; only the labels below are configurable
+    rst: [adversative-antithesis, adversative-concession, attribution-negative, attribution-positive, causal-cause, causal-result, context-background, context-circumstance, contingency-condition, elaboration-additional, elaboration-attribute, evaluation-comment, explanation-evidence, explanation-justify, explanation-motivation, mode-manner, mode-means, organization-heading, organization-phatic, organization-preparation, purpose-attribute, purpose-goal, restatement-partial, topic-question, topic-solutionhood]
+    multinuc: [adversative-contrast, joint-disjunction, joint-list, joint-other, joint-sequence, restatement-repetition, same-unit]
+  relation_labels:  # Optional short names shown in the relation dropdowns (the full name is used if absent)
+    adversative-antithesis: antithesis
+    adversative-concession: concession
+    adversative-contrast: contrast
+    attribution-negative: attrib.-negative
+    attribution-positive: attrib.-positive
+    causal-cause: cause
+    causal-result: result
+    context-background: background
+    context-circumstance: circumstance
+    contingency-condition: condition
+    elaboration-additional: elab.-additional
+    elaboration-attribute: elab.-attribute
+    evaluation-comment: eval.-comment
+    explanation-evidence: evidence
+    explanation-justify: justify
+    explanation-motivation: motivation
+    joint-disjunction: disjunction
+    joint-list: list
+    joint-other: other
+    joint-sequence: sequence
+    mode-manner: manner
+    mode-means: means
+    organization-heading: heading
+    organization-phatic: phatic
+    organization-preparation: preparation
+    purpose-attribute: purp.-attribute
+    purpose-goal: purp.-goal
+    restatement-partial: restat.-partial
+    restatement-repetition: restat.-repetition
+    topic-question: question
+    topic-solutionhood: solutionhood
+  signal_types:  # Signal type: [subtypes]
+    dm: [dm]
+    graphical: [colon, dash, items_in_sequence, layout, parentheses, question_mark, quotation_marks, semicolon]
+    lexical: [alternate_expression, indicative_phrase, indicative_word]
+    morphological: [mood, tense]
+    numerical: [same_count]
+    orphan: [orphan]
+    reference: [comparative_reference, demonstrative_reference, personal_reference, propositional_reference]
+    semantic: [antonymy, attribution_source, lexical_chain, meronymy, negation, repetition, synonymy]
+    syntactic: [causal_excess, infinitival_clause, interrupted_matrix_clause, modified_head, nominal_modifier, parallel_syntactic_construction, past_participial_clause, present_participial_clause, relative_clause, reported_speech, subject_auxiliary_inversion]
+    unsure: [unsure]

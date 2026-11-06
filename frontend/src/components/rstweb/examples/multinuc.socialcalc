@@ -1,0 +1,87 @@
+socialcalc:version:1.0
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=SocialCalcSpreadsheetControlSave
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+# SocialCalc Spreadsheet Control Save
+version:1.0
+part:sheet
+part:edit
+part:audit
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+version:1.5
+cell:A1:t:tok:f:2:bgcolor:#f3f4f6
+cell:B1:t:pos:f:2:bgcolor:#f3f4f6
+cell:C1:t:edu:f:2:bgcolor:#f3f4f6
+cell:D1:t:node:f:2:bgcolor:#f3f4f6
+cell:E1:t:node:f:2:bgcolor:#f3f4f6
+cell:F1:t:node:f:2:bgcolor:#f3f4f6
+cell:A2:t:Ellie:f:1:tvf:1
+cell:B2:t:NP:f:1:tvf:1
+cell:C2:t:1\cspan\c6:f:1:tvf:1:rowspan:4
+cell:F2:t:7\cspan:f:1:tvf:1:rowspan:22
+cell:A3:t:got:f:1:tvf:1
+cell:B3:t:VVD:f:1:tvf:1
+cell:A4:t:mad:f:1:tvf:1
+cell:B4:t:JJ:f:1:tvf:1
+cell:A5:t:,:f:1:tvf:1
+cell:B5:t:,:f:1:tvf:1
+cell:A6:t:because:f:1:tvf:1
+cell:B6:t:IN:f:1:tvf:1
+cell:C6:t:2\cjoint-list\c5:f:1:tvf:1:rowspan:6
+cell:D6:t:5\cmultinuc\ccausal-cause\c1:f:1:tvf:1:rowspan:15
+cell:E6:t:6\cspan\cspan\c7:f:1:tvf:1:rowspan:18
+cell:A7:t:they:f:1:tvf:1
+cell:B7:t:PP:f:1:tvf:1
+cell:A8:t:left:f:1:tvf:1
+cell:B8:t:VVD:f:1:tvf:1
+cell:A9:t:the:f:1:tvf:1
+cell:B9:t:DT:f:1:tvf:1
+cell:A10:t:lights:f:1:tvf:1
+cell:B10:t:NNS:f:1:tvf:1
+cell:A11:t:on:f:1:tvf:1
+cell:B11:t:RP:f:1:tvf:1
+cell:A12:t:and:f:1:tvf:1
+cell:B12:t:CC:f:1:tvf:1
+cell:C12:t:3\cjoint-list\c5:f:1:tvf:1:rowspan:9
+cell:A13:t:then:f:1:tvf:1
+cell:B13:t:RB:f:1:tvf:1
+cell:A14:t:did:f:1:tvf:1
+cell:B14:t:VVD:f:1:tvf:1
+cell:A15:t:n't:f:1:tvf:1
+cell:B15:t:RB:f:1:tvf:1
+cell:A16:t:take:f:1:tvf:1
+cell:B16:t:VV:f:1:tvf:1
+cell:A17:t:out:f:1:tvf:1
+cell:B17:t:RP:f:1:tvf:1
+cell:A18:t:the:f:1:tvf:1
+cell:B18:t:DT:f:1:tvf:1
+cell:A19:t:trash:f:1:tvf:1
+cell:B19:t:NN:f:1:tvf:1
+cell:A20:t:.:f:1:tvf:1
+cell:B20:t:SENT:f:1:tvf:1
+cell:A21:t:That's:f:1:tvf:1
+cell:B21:t:DT:f:1:tvf:1
+cell:C21:t:4\cevaluation-comment\c6:f:1:tvf:1:rowspan:3
+cell:A22:t:unreasonable:f:1:tvf:1
+cell:B22:t:JJ:f:1:tvf:1
+cell:A23:t:!:f:1:tvf:1
+cell:B23:t:SENT:f:1:tvf:1
+sheet:c:6:r:23:tvf:2
+font:1:* * Antinoou
+font:2:normal bold * *
+valueformat:1:text-plain
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+version:1.0
+rowpane:0:1:1
+colpane:0:1:1
+ecell:A1
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+--SocialCalcSpreadsheetControlSave--

@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import Dict, List, Optional, Set, Union, Tuple, Match, Iterable
 
 from run_xsd import validate_xml_string
+from rst_validate import validate_rst
 
 
 class Cell:
@@ -754,6 +755,8 @@ def run_all_validations(
         # Skip domain rules that do not apply to the current input_type
         if domain in ("spreadsheet", "xml") and domain != input_type:
             continue
+        if domain == "rst" and not ss_validator:
+            continue
 
         # xsd checks are deferred until non-xsd XML rules are known to pass (see below)
         if domain == "xml" and operator == "xsd":
@@ -768,7 +771,11 @@ def run_all_validations(
         )
 
         violations = []
-        if domain == "metadata":
+        rst_nodes = None
+        if domain == "rst":
+            rst_config = config.get("rstweb") if config else None
+            violations, rst_nodes = validate_rst(ss_validator, rule.key, rule.operator, rst_config)
+        elif domain == "metadata":
             violations = meta_validator.validate(rule)
         elif domain == "spreadsheet" and ss_validator:
             violations = ss_validator.validate(
@@ -783,11 +790,14 @@ def run_all_validations(
         val_str = f" {rule.value}" if rule.value else ""
         rule_str = f"{rule.key} {rule.operator}{val_str}"
 
-        results.append({
+        result = {
             "domain": domain,
             "rule": rule_str,
             "violations": violations
-        })
+        }
+        if rst_nodes is not None:
+            result["nodes"] = rst_nodes  # RST node ids, parallel to the cell coordinates in violations
+        results.append(result)
 
     if xsd_specs:
         # Only worth running expensive XSD validation once all other XML rules pass

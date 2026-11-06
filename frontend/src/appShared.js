@@ -145,7 +145,9 @@ const EDITOR_DEFINITIONS = {
   xml: { key: 'xml', mode: 'xml', label: 'xml' },
   spreadsheet: { key: 'spreadsheet', mode: 'spreadsheet', label: 'spreadsheet' },
   entities: { key: 'entities', mode: 'entities', label: 'entities' },
-  dendroid: { key: 'dendroid', mode: 'dendroid', label: 'dendroid' }
+  dendroid: { key: 'dendroid', mode: 'dendroid', label: 'dendroid' },
+  segmenter: { key: 'segmenter', mode: 'segmenter', label: 'segmenter' },
+  rstweb: { key: 'rstweb', mode: 'rstweb', label: 'rstweb' }
 };
 const DEFAULT_EDITOR_OPTIONS = Object.freeze([
   { key: 'xml', mode: 'xml', label: 'xml' }
@@ -412,7 +414,7 @@ export const normalizeBackgroundImageValue = (value) => {
   return `url("${normalizedPath}")`;
 };
 
-export const isSpreadsheetBackedMode = (mode) => mode === 'spreadsheet' || mode === 'entities';
+export const isSpreadsheetBackedMode = (mode) => mode === 'spreadsheet' || mode === 'entities' || mode === 'segmenter' || mode === 'rstweb';
 
 // Internal helpers needed for the exported validation functions below
 const normalizeValidation = (validation) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown, GitBranch, Ban } from 'lucide-react';
+import { Plus, Trash2, Edit, Check, AlertCircle, Sheet, Code2, Users, Loader2, ChevronDown, GitBranch, Ban, Scissors, Network } from 'lucide-react';
 import { DEFAULT_STATUS_CATEGORIES, formatStatusCategoryLabel, normalizeCssStyleValue, buildFrontendPath, getDefaultEditorMode, getValidationSummary, normalizeDashboardViewState, areColumnFiltersEqual, isEditorModeAllowedForUser, isCorpusAllowedForUser } from '../appShared';
 
 const getDocumentFieldValue = (doc, field) => {
@@ -280,6 +280,10 @@ const DocumentRow = React.memo(({
           <span className="inline-flex items-center" title={modeLabel}><Code2 size={16} /></span>
         ) : doc.mode === 'dendroid' ? (
           <span className="inline-flex items-center" title={modeLabel}><GitBranch size={16} /></span>
+        ) : doc.mode === 'segmenter' ? (
+          <span className="inline-flex items-center" title={modeLabel}><Scissors size={16} /></span>
+        ) : doc.mode === 'rstweb' ? (
+          <span className="inline-flex items-center" title={modeLabel}><Network size={16} /></span>
         ) : (
           modeLabel
         )}

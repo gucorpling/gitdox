@@ -1,0 +1,301 @@
+/*
+ * Styles of the RST tree editor, taken from the standalone rstWeb's rst.css to keep its look and feel.
+ * Only the tree-editing rules are carried over, all scoped under .rstweb-root so they cannot affect the rest of GitDOX;
+ * the legacy global rules (html, body, banner, admin tabs, ...) are intentionally left out.
+ * Signal drawer and context menu rules are added together with those features.
+ */
+
+.rstweb-root {
+  position: relative;
+  font-family: Verdana, sans-serif;
+  font-size: 10pt;
+  color: #2E2E2E;
+  background: white;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rstweb-root .rstweb-body {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The canvas scrolls inside a wrapper so the drag scroll bands can stay fixed at its edges */
+.rstweb-root .rstweb-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.rstweb-root .rstweb-edgeband {
+  position: absolute;
+  z-index: 7000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(120, 120, 120, 0.35);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  pointer-events: none;
+}
+.rstweb-root .rstweb-edgeband--left, .rstweb-root .rstweb-edgeband--right { top: 0; bottom: 0; width: var(--band); }
+.rstweb-root .rstweb-edgeband--left { left: 0; }
+.rstweb-root .rstweb-edgeband--right { right: 0; }
+.rstweb-root .rstweb-edgeband--top, .rstweb-root .rstweb-edgeband--bottom { left: 0; right: 0; height: var(--band); }
+.rstweb-root .rstweb-edgeband--top { top: 0; }
+.rstweb-root .rstweb-edgeband--bottom { bottom: 0; }
+
+/* The canvas fills the widget and scrolls on its own when the tree is larger */
+.rstweb-root .rstweb-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  user-select: none;
+  padding-left: 10px;
+  transition: background-color 0.3s;
+}
+
+/* Graying the canvas itself (rather than a tint layer) covers its whole area, however far the tree extends */
+.rstweb-root--drawer .rstweb-canvas { background-color: #e0e0e0; }
+
+.rstweb-root .rstweb-inner {
+  position: relative;
+}
+
+/* While nodes glide to new places (see edge-layer.js) nothing can be clicked, as in legacy rstWeb */
+.rstweb-root .rstweb-inner.rstweb-animating { pointer-events: none; }
+
+.rstweb-root .edu {
+  width: 96px;
+  display: inline-block;
+  text-align: center;
+  border-top: solid;
+  margin: 3px;
+  vertical-align: top;
+  position: absolute;
+  word-wrap: break-word;
+  font-family: sans-serif;
+  font-size: 9pt;
+  user-select: none;
+  z-index: 2;
+  transition: left 0.4s ease-in-out, top 0.4s ease-in-out, width 0.4s ease-in-out, font-size 0.35s;
+}
+
+.rstweb-root .whisker {
+  border-left: solid;
+  border-right: solid;
+  height: 2px;
+  display: table-cell;
+  margin: 0;
+  border-collapse: collapse;
+  transition: width 0.4s ease-in-out;
+}
+
+.rstweb-root .group {
+  border-top: solid;
+  margin: 3px;
+  display: block;
+  text-align: center;
+  float: left;
+  min-height: 10px;
+  position: absolute;
+  height: 20px;
+  transition: left 0.4s ease-in-out, top 0.4s ease-in-out, width 0.4s ease-in-out;
+}
+
+.rstweb-root .num_id {
+  min-height: 100px;
+  color: #009933;
+  font-family: sans-serif;
+  font-size: 9pt;
+  z-index: 30;
+  font-weight: bold;
+  border: 1px solid transparent;
+  margin: 1px;
+  user-select: none;
+}
+
+.rstweb-root .num_id:hover { cursor: move; }
+
+.rstweb-root .num_cont {
+  position: absolute;
+  width: 78px;
+  height: 20px;
+  padding-top: 3px;
+  z-index: 40;
+  transition: left 0.4s ease-in-out, top 0.4s ease-in-out;
+}
+
+.rstweb-root .edu_num_cont {
+  top: 1;
+  margin-top: 1px;
+  text-align: center;
+  width: 100%;
+  z-index: 200;
+}
+
+.rstweb-root .edu:hover,
+.rstweb-root .group:hover { border-color: red; }
+.rstweb-root .num_cont:hover .num_id { border: 1px solid red; border-color: red; z-index: 200; }
+.rstweb-root .group:hover .whisker { border-color: red; }
+.rstweb-root .edu:hover .whisker { border-color: red; z-index: 200; }
+
+.rstweb-root .warn { color: red; font-weight: bold; }
+
+.rstweb-root select {
+  font-size: 8pt;
+  color: red;
+  z-index: 10;
+  background-color: rgba(255, 255, 255, 0.85);
+  /* The host page's CSS reset flattens form controls; legacy rstWeb used the browser's native look */
+  appearance: auto;
+  border: 1px solid #767676;
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.rstweb-root select.rst_rel { width: 70px; }
+
+.rstweb-root .minibtn {
+  z-index: 120;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  font-size: 9px;
+  border: solid 1px;
+}
+.rstweb-root .minibtn:hover { background-color: #C0C0C0; }
+
+.rstweb-root .btn_tb { border-collapse: collapse; background: transparent; margin: 0 auto; }
+.rstweb-root .btn_tb td { vertical-align: top; background: transparent; }
+
+.rstweb-root button {
+  border-radius: 8px;
+  background-color: #f7f7f7;
+  background-image: linear-gradient(to bottom, #f7f7f7, #CAE9FF);
+  cursor: pointer;
+  color: black;
+  font-size: 10pt;
+}
+.rstweb-root button:hover:enabled { color: red; background: #f5f5f5; }
+
+.rstweb-root .minibtn--with-signals { background-image: linear-gradient(to bottom, #f7f7f7, cyan); }
+
+.rstweb-root .rstweb-notice { padding: 8px; font-family: sans-serif; font-size: 9pt; }
+.rstweb-root.rstweb-error { color: #b00020; padding: 8px; }
+
+.rstweb-root .rstweb-toolbar { padding: 2px 4px; font-family: sans-serif; font-size: 9pt; display: flex; gap: 4px; align-items: center; }
+.rstweb-root .rstweb-toolbar button { padding: 0 6px; display: inline-flex; align-items: center; gap: 3px; }
+.rstweb-root .rstweb-toolbar button:disabled { opacity: 0.4; cursor: default; }
+.rstweb-root .rstweb-modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 20000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.rstweb-root .rstweb-modal { background: #fff; border: 1px solid #cfcfcf; border-radius: 6px; width: min(640px, 95vw); max-height: 88vh; overflow: auto; padding: 10px; font-family: sans-serif; font-size: 10pt; }
+.rstweb-root .rstweb-modal-title { font-weight: 700; margin-bottom: 8px; }
+.rstweb-root .rstweb-modal-textarea { width: 100%; min-height: 280px; margin-top: 6px; font-family: monospace; font-size: 12px; border: 1px solid #9aa0a6; border-radius: 4px; padding: 6px; box-sizing: border-box; white-space: pre; }
+.rstweb-root .rstweb-modal-actions { margin-top: 8px; text-align: right; display: flex; gap: 6px; justify-content: flex-end; }
+.rstweb-root .rstweb-modal-actions button { padding: 2px 10px; }
+.rstweb-root .rstweb-message { color: #b00020; margin-left: 8px; }
+
+/* ---------- Signals (drawer, word highlighting, context menu), from legacy rst.css ---------- */
+
+/* Relation dropdowns and their buttons (jsPlumb overlays) always sit above nodes and connectors so they stay clickable */
+.rstweb-root ._jsPlumb_overlay { z-index: 5000; }
+
+.rstweb-root .seldiv--active {
+  pointer-events: none;
+  z-index: 10001;
+  border: 6px yellow solid;
+  padding: 2px;
+}
+
+/* Everything but the words is inert while the drawer is open */
+.rstweb-root--drawer .rstweb-inner button,
+.rstweb-root--drawer .rstweb-inner select,
+.rstweb-root--drawer .rstweb-inner .num_id { pointer-events: none; }
+
+.rstweb-root .edu--clickable { z-index: 10001; font-size: 18px; }
+.rstweb-root .edu--clickable .edu_num_cont { pointer-events: none; opacity: 0.8; }
+.rstweb-root .edu--clickable .tok { padding: 0 4px; margin: 0 -3px; transition: background 0.2s; cursor: pointer; }
+.rstweb-root .edu--clickable .tok:not(.tok--selected):hover { background-color: rgba(255, 255, 0, 0.6); }
+.rstweb-root .edu--clickable .tok--selected { background-color: rgba(255, 255, 0, 0.7); }
+
+.rstweb-root .tok--highlighted { background-color: rgba(255, 255, 0, 0.8) !important; }
+.rstweb-root .tok--highlighted.signal-color { background-color: rgba(var(--rgb), 0.8) !important; }
+.rstweb-root .tok--highlighted-by-button { --rgb: 255, 255, 0; background-color: rgba(var(--rgb), 0.2); }
+.rstweb-root .tok--highlighted-by-button.signal-type-1 { --rgb: 255,0,0; }
+.rstweb-root .tok--highlighted-by-button.signal-type-2 { --rgb: 247,231,51; }
+.rstweb-root .tok--highlighted-by-button.signal-type-3 { --rgb: 251,183,52; }
+.rstweb-root .tok--highlighted-by-button.signal-type-4 { --rgb: 128,128,0; }
+.rstweb-root .tok--highlighted-by-button.signal-type-5 { --rgb: 255,0,255; }
+.rstweb-root .tok--highlighted-by-button.signal-type-6 { --rgb: 0,0,255; }
+.rstweb-root .tok--highlighted-by-button.signal-type-7 { --rgb: 4,93,161; }
+.rstweb-root .tok--highlighted-by-button.signal-type-8 { --rgb: 0,255,0; }
+.rstweb-root .tok--highlighted-by-button.signal-type-9 { --rgb: 0,255,255; }
+.rstweb-root .tok--highlighted-by-button.signal-type-10 { --rgb: 105,3,117; }
+.rstweb-root .tok--highlighted-by-button.signal-type-11 { --rgb: 15,8,75; }
+.rstweb-root .tok--highlighted-by-button.signal-type-12 { --rgb: 199,214,109; }
+.rstweb-root .tok--highlighted-by-button.signal-type-13 { --rgb: 131,10,72; }
+.rstweb-root .tok--highlighted-by-button.signal-type-14 { --rgb: 174,132,126; }
+.rstweb-root .tok--highlighted-by-button.signal-type-15 { --rgb: 0,255,0; }
+.rstweb-root .tok--highlighted-by-button.signal-type-16 { --rgb: 255,255,0; }
+.rstweb-root .tok--highlighted-by-button.signal-type-17 { --rgb: 0,255,255; }
+.rstweb-root .tok--highlighted-by-button.signal-type-18 { --rgb: 255,0,255; }
+.rstweb-root .tok--highlighted-by-button.signal-type-19 { --rgb: 255,0,255; }
+.rstweb-root .tok--highlighted-by-button.signal-type-20 { --rgb: 255,0,255; }
+
+.rstweb-root .signal-drawer {
+  flex: none;
+  width: 0;
+  overflow: hidden;
+  background: white;
+  font-family: Verdana, sans-serif;
+  transition: width 0.35s ease-out;
+}
+.rstweb-root .signal-drawer--active { width: 300px; overflow-y: auto; box-shadow: 0 0 1px 2px gray; z-index: 10001; }
+.rstweb-root .signal-drawer__inner { width: 300px; padding: 4px; box-sizing: border-box; }
+.rstweb-root .signal-drawer__hint { font-size: 9pt; padding: 6px 10px; color: #555; }
+.rstweb-root .signal-drawer__item {
+  font-size: 16px;
+  padding: 10px;
+  margin: 10px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+  transition: background 0.2s;
+  position: relative;
+  cursor: pointer;
+}
+.rstweb-root .signal-drawer__item-delete { position: absolute; top: 10px; right: 10px; }
+.rstweb-root .signal-drawer__item:not(.signal-drawer__item--selected):hover { background: rgba(255, 255, 0, 0.3); }
+.rstweb-root .signal-drawer__item--selected { background: yellow; }
+.rstweb-root .signal-drawer__row { padding-bottom: 10px; }
+.rstweb-root .signal-drawer__buttons { padding: 6px 8px; display: flex; gap: 8px; }
+.rstweb-root .signal-drawer__create-new-button { height: 30px; width: 108px; }
+.rstweb-root .signal-drawer__save-button { height: 40px; width: 130px; background: linear-gradient(#f7f7f7, lightgreen); }
+.rstweb-root .signal-drawer__cancel-button { height: 40px; width: 130px; background: linear-gradient(#f7f7f7, lightpink); }
+.rstweb-root .signal-drawer__label { color: black; font-size: 14px; display: inline-block; width: 80px; text-align: right; }
+.rstweb-root .signal-drawer__select { width: 150px; height: 30px; color: black; font-size: 14px; }
+
+.rstweb-root .custom-menu {
+  z-index: 20000;
+  position: absolute;
+  overflow: hidden;
+  border: 1px solid #CCC;
+  white-space: nowrap;
+  font-family: sans-serif;
+  background: #FFF;
+  color: #333;
+  border-radius: 5px;
+  padding: 0;
+  margin: 0;
+}
+.rstweb-root .custom-menu li { padding: 8px 12px; cursor: pointer; list-style-type: none; transition: all 0.3s ease; user-select: none; }
+.rstweb-root .custom-menu li:hover { background-color: #DEF; }
+
+/* Nodes flagged by the backend's rst-domain validations */
+.rstweb-root .edu.rstweb-invalid,
+.rstweb-root .group.rstweb-invalid { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.45); }

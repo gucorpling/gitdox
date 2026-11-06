@@ -11,8 +11,11 @@ import { Dendroid } from './components/Dendroid';
 import SpreadsheetEditor from './components/SpreadsheetEditor'; 
 import XmlEditor from './components/XmlEditor';
 import Spannotator from './components/Spannotator';
+import Segmenter from './components/Segmenter';
+import RstWeb from './components/RstWeb';
 
 import {SAMPLE_SOCIALCALC, SAMPLE_XML} from './demo-data.js';
+import RST_SAMPLE from './components/rstweb/examples/signals.socialcalc?raw';
 
 // --- 1. MOCK DATA & CONFIGS ---
 
@@ -48,6 +51,41 @@ const INITIAL_CONFIG = {
     autoIndent: true,
     fontFamily: "monospace",
     tags_schema: {"!top":["text"],"text":{"attrs":{"id":null},"children":["figure","list","p","table","quote","s","head","sp","incident"]},"head":{"attrs":{"rend":null},"children":["s","hi","foreign","q","w"]},"lg":{"attrs":{"type":null,"n":null},"children":["s"]},"note":{"attrs":{"place":null,"n":null},"children":["s"]},"sp":{"attrs":{"place":null,"upvotes":null,"when":null,"who":null,"whom":null},"children":["s","head","list","p","w","hi","foreign","sic","gap","incident","date","time","quote","q"]},"s":{"attrs":{"type":["decl","sub","imp","q","wh","inf","ger","intj","frag","other","multiple"]},"children":["add","row","figure","hi","foreign","sp","q","cell","w","quote","ref","date","gap","incident","l","list","supplied","sic","time"]},"incident":{"attrs":{"type":null,"who":null},"children":["date","sic"]},"date":{"attrs":{"from":null,"notAfter":null,"notBefore":null,"rend":null,"to":null,"when":null},"children":["w","sic"]},"supplied":{"attrs":{"reason":null}},"gap":{"attrs":{"reason":null}},"measure":{"attrs":{"type":null}},"sic":{"attrs":{"ana":null},"children":["ref","w","hi"]},"w":{"children":["sic","q","hi"]},"time":{"attrs":{"when":null,"from":null,"to":null,"notBefore":null,"notAfter":null}},"quote":{"attrs":{"rend":null},"children":["add","q","date","p","w","ref","hi","foreign","s","gap","sic"]},"figure":{"attrs":{"rend":null},"children":["caption"]},"caption":{"attrs":{"rend":null},"children":["quote","q","w","ref","hi","foreign","s"]},"p":{"attrs":{"rend":null},"children":["add","supplied","gap","figure","hi","foreign","lg","note","quote","list","time","ref","incident","date","sic","w","q","s","sp"]},"table":{"attrs":{"rend":null,"rows":null,"cols":null},"children":["head","row","s"]},"row":{"attrs":{"n":null},"children":["cell","s"]},"cell":{"attrs":{"n":null,"rend":null,"role":null},"children":["figure","date","list","ref","hi","foreign","s"]},"list":{"attrs":{"type":["ordered","unordered"]},"children":["figure","item"]},"item":{"attrs":{"n":null},"children":["head","figure","ref","hi","foreign","list","p","s"]},"add":{"children":["s","ref"]},"l":{"attrs":{"n":null},"children":["s","date"]},"hi":{"attrs":{"rend":null},"children":["ref","figure","incident","w","lg","s","caption","q","sic","date","foreign"]},"foreign":{"attrs":{"xml:lang":null},"children":["ref","figure","incident","w","lg","s","caption","q","sic","date","hi"]},"q":{"children":["figure","hi","foreign","w","sic","ref"]},"ref":{"attrs":{"target":null,"rend":null},"children":["add","w","hi","foreign","sic","date","q"]}}
+  },
+  segmenter: {
+    font: "Verdana, Geneva, Tahoma, sans-serif",
+    nesting: true,
+    font_size: "10pt",
+    line_spacing: 1.5,
+    word_spacing: 4,
+    words: 'tok',
+    layers: {
+      p: ['--', 'red', 'sequential'],
+      s_type: ['||', 'blue', 'decl'],
+      edu: ['|', 'green', '']
+    }
+  },
+  rstweb: {
+    words: 'tok',
+    edu: 'edu',
+    relations: {
+        rst: ["adversative-antithesis", "adversative-concession", "attribution-negative", "attribution-positive", "causal-cause", "causal-result", "context-background", "context-circumstance", "contingency-condition", "elaboration-additional", "elaboration-attribute", "evaluation-comment", "explanation-evidence", "explanation-justify", "explanation-motivation", "mode-manner", "mode-means", "organization-heading", "organization-phatic", "organization-preparation", "purpose-attribute", "purpose-goal", "restatement-partial", "topic-question", "topic-solutionhood"],
+        multinuc: ["adversative-contrast", "joint-disjunction", "joint-list", "joint-other", "joint-sequence", "restatement-repetition", "same-unit"]
+    },
+    signal_types: {
+     dm: ["dm"],
+    reference: ["comparative_reference", "demonstrative_reference", "personal_reference", "propositional_reference"],
+    lexical: ["alternate_expression", "indicative_phrase", "indicative_word"],
+    semantic: ["antonymy", "general_word", "indicative_word_pair", "lexical_chain", "meronymy", "repetition", "synonymy"],
+    morphological: ["tense"],
+    syntactic: ["adjectival_modifier", "imperative_clause", "infinitival_clause", "interrupted_matrix_clause", "nominal_modifier", "parallel_syntactic_construction", "past_participial_clause", "present_participial_clause", "relative_clause", "reported_speech", "subject_auxiliary_inversion"],
+    graphical: ["colon", "dash", "items_in_sequence", "parentheses", "question_mark", "semicolon"],
+    genre: ["inverted_pyramid_scheme", "layout", "newspaper_style_attribution", "newspaper_style_definition"],
+    numerical: ["same_count"],
+    unsure: ["unsure"],
+    orphan: ["orphan"]
+    },
+    relation_labels: {"adversative-antithesis": "antithesis", "adversative-concession": "concession", "adversative-contrast": "contrast", "attribution-negative": "attrib.-negative", "attribution-positive": "attrib.-positive", "causal-cause": "cause", "causal-result": "result", "context-background": "background", "context-circumstance": "circumstance", "contingency-condition": "condition", "elaboration-additional": "elab.-additional", "elaboration-attribute": "elab.-attribute", "evaluation-comment": "eval.-comment", "explanation-evidence": "evidence", "explanation-justify": "justify", "explanation-motivation": "motivation", "joint-disjunction": "disjunction", "joint-list": "list", "joint-other": "other", "joint-sequence": "sequence", "mode-manner": "manner", "mode-means": "means", "organization-heading": "heading", "organization-phatic": "phatic", "organization-preparation": "preparation", "purpose-attribute": "purp.-attribute", "purpose-goal": "purp.-goal", "restatement-partial": "restat.-partial", "restatement-repetition": "restat.-repetition", "topic-question": "question", "topic-solutionhood": "solutionhood"}
   },
   entities: {
     font: "Times New Roman",
@@ -203,13 +241,31 @@ function SpannotatorAdapter({ content, config, onChange, fontFamily }) {
   );
 }
 
+function SegmenterAdapter({ content, config, rstConfig, onChange, fontFamily }) {
+  return (
+    <div className="flex-1 min-h-0 w-full bg-white">
+      <Segmenter value={content} config={config} rstConfig={rstConfig} onChange={onChange} fontFamily={fontFamily} />
+    </div>
+  );
+}
+
 // --- 3. DEMO HARNESS ---
+
+function RstWebAdapter({ content, config, onChange, fontFamily }) {
+  return (
+    <div className="flex-1 min-h-0 w-full bg-white overflow-auto" style={fontFamily ? { fontFamily } : undefined}>
+      <RstWeb value={content} config={config} onChange={onChange} />
+    </div>
+  );
+}
 
 const EDITOR_PARAM_WIDGETS = {
   dendroid: 'dendroid',
   spreadsheet: 'spreadsheet',
   xml: 'xml',
-  spannotator: 'entities'
+  spannotator: 'entities',
+  segmenter: 'segmenter',
+  rst: 'rstweb'
 };
 
 function getInitialWidget() {
@@ -221,7 +277,7 @@ export default function WidgetDemoHarness() {
   const [activeWidget, setActiveWidget] = useState(getInitialWidget);
   
   // Sandbox State
-  const [contentSocialCalc, setContentSocialCalc] = useState(SAMPLE_SOCIALCALC);
+  const [contentSocialCalc, setContentSocialCalc] = useState(() => (getInitialWidget() === 'rstweb' ? RST_SAMPLE : SAMPLE_SOCIALCALC));
   const [contentXml, setContentXml] = useState(SAMPLE_XML);
   const [format, setFormat] = useState('socialcalc'); 
   const [config, setConfig] = useState(INITIAL_CONFIG);
@@ -265,7 +321,7 @@ export default function WidgetDemoHarness() {
 
   const handleReset = () => {
     if (confirm("Discard changes and reload sample data?")) {
-      setContentSocialCalc(SAMPLE_SOCIALCALC);
+      setContentSocialCalc(activeWidget === 'rstweb' ? RST_SAMPLE : SAMPLE_SOCIALCALC);
       setContentXml(SAMPLE_XML);
       setFormat('socialcalc');
       setResetKey(k => k + 1); 
@@ -294,6 +350,8 @@ export default function WidgetDemoHarness() {
           >
             <option value="dendroid">Syntax</option>
             <option value="entities">Entities</option>
+            <option value="segmenter">Segmenter</option>
+            <option value="rstweb">RST</option>
             <option value="spreadsheet">Spreadsheet</option>
             <option value="xml">XML Editor</option>
           </select>
@@ -340,6 +398,33 @@ export default function WidgetDemoHarness() {
                  setContentSocialCalc(newContent);
                  setFormat('socialcalc'); 
                }} 
+             />
+          )}
+
+          {activeWidget === 'segmenter' && (
+             <SegmenterAdapter
+               key={`segmenter-${resetKey}`}
+               content={contentSocialCalc}
+               config={config.segmenter}
+               rstConfig={config.rstweb}
+               fontFamily={uiFont}
+               onChange={(newContent) => {
+                 setContentSocialCalc(newContent);
+                 setFormat('socialcalc');
+               }}
+             />
+          )}
+
+          {activeWidget === 'rstweb' && (
+             <RstWebAdapter
+               key={`rstweb-${resetKey}`}
+               content={contentSocialCalc}
+               config={config.rstweb}
+               fontFamily={uiFont}
+               onChange={(newContent) => {
+                 setContentSocialCalc(newContent);
+                 setFormat('socialcalc');
+               }}
              />
           )}
 

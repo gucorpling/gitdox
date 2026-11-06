@@ -1,0 +1,70 @@
+socialcalc:version:1.0
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=SocialCalcSpreadsheetControlSave
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+# SocialCalc Spreadsheet Control Save
+version:1.0
+part:sheet
+part:edit
+part:audit
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+version:1.5
+cell:A1:t:tok:f:2:bgcolor:#f3f4f6
+cell:B1:t:pos:f:2:bgcolor:#f3f4f6
+cell:C1:t:edu:f:2:bgcolor:#f3f4f6
+cell:D1:t:node:f:2:bgcolor:#f3f4f6
+cell:E1:t:node:f:2:bgcolor:#f3f4f6
+cell:A2:t:Ellie:f:1:tvf:1
+cell:B2:t:NP:f:1:tvf:1
+cell:C2:t:1\cspan\c5:f:1:tvf:1:rowspan:4
+cell:D2:t:5\cspan\cspan\c4:f:1:tvf:1:rowspan:11
+cell:E2:t:4\cspan:f:1:tvf:1:rowspan:15
+cell:A3:t:got:f:1:tvf:1
+cell:B3:t:VVD:f:1:tvf:1
+cell:A4:t:mad:f:1:tvf:1
+cell:B4:t:JJ:f:1:tvf:1
+cell:A5:t:,:f:1:tvf:1
+cell:B5:t:,:f:1:tvf:1
+cell:A6:t:because:f:1:tvf:1
+cell:B6:t:IN:f:1:tvf:1
+cell:C6:t:2\ccausal-cause\c1:f:1:tvf:1:rowspan:7
+cell:A7:t:they:f:1:tvf:1
+cell:B7:t:PP:f:1:tvf:1
+cell:A8:t:left:f:1:tvf:1
+cell:B8:t:VVD:f:1:tvf:1
+cell:A9:t:the:f:1:tvf:1
+cell:B9:t:DT:f:1:tvf:1
+cell:A10:t:lights:f:1:tvf:1
+cell:B10:t:NNS:f:1:tvf:1
+cell:A11:t:on:f:1:tvf:1
+cell:B11:t:IN:f:1:tvf:1
+cell:A12:t:.:f:1:tvf:1
+cell:B12:t:SENT:f:1:tvf:1
+cell:A13:t:That:f:1:tvf:1
+cell:B13:t:DT:f:1:tvf:1
+cell:C13:t:3\cevaluation-comment\c5:f:1:tvf:1:rowspan:4
+cell:A14:t:'s:f:1:tvf:1
+cell:B14:t:VBZ:f:1:tvf:1
+cell:A15:t:unreasonable:f:1:tvf:1
+cell:B15:t:JJ:f:1:tvf:1
+cell:A16:t:!:f:1:tvf:1
+cell:B16:t:SENT:f:1:tvf:1
+sheet:c:5:r:16:tvf:2
+font:1:* * Antinoou
+font:2:normal bold * *
+valueformat:1:text-plain
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+version:1.0
+rowpane:0:1:1
+colpane:0:1:1
+ecell:A1
+--SocialCalcSpreadsheetControlSave
+Content-type: text/plain; charset=UTF-8
+
+--SocialCalcSpreadsheetControlSave--

@@ -1,0 +1,78 @@
+<rst>
+	<header>
+		<relations>
+			<rel name="adversative-antithesis" type="rst"/>
+			<rel name="adversative-concession" type="rst"/>
+			<rel name="adversative-contrast" type="multinuc"/>
+			<rel name="attribution-negative" type="rst"/>
+			<rel name="attribution-positive" type="rst"/>
+			<rel name="causal-cause" type="rst"/>
+			<rel name="causal-result" type="rst"/>
+			<rel name="context-background" type="rst"/>
+			<rel name="context-circumstance" type="rst"/>
+			<rel name="contingency-condition" type="rst"/>
+			<rel name="elaboration-additional" type="rst"/>
+			<rel name="elaboration-attribute" type="rst"/>
+			<rel name="evaluation-comment" type="rst"/>
+			<rel name="explanation-evidence" type="rst"/>
+			<rel name="explanation-justify" type="rst"/>
+			<rel name="explanation-motivation" type="rst"/>
+			<rel name="joint-disjunction" type="multinuc"/>
+			<rel name="joint-list" type="multinuc"/>
+			<rel name="joint-other" type="multinuc"/>
+			<rel name="joint-sequence" type="multinuc"/>
+			<rel name="mode-manner" type="rst"/>
+			<rel name="mode-means" type="rst"/>
+			<rel name="organization-heading" type="rst"/>
+			<rel name="organization-phatic" type="rst"/>
+			<rel name="organization-preparation" type="rst"/>
+			<rel name="purpose-attribute" type="rst"/>
+			<rel name="purpose-goal" type="rst"/>
+			<rel name="restatement-partial" type="rst"/>
+			<rel name="restatement-repetition" type="multinuc"/>
+			<rel name="same-unit" type="multinuc"/>
+			<rel name="topic-question" type="rst"/>
+			<rel name="topic-solutionhood" type="rst"/>
+		</relations>
+		<sigtypes>
+			<sig type="dm" subtypes="dm"/>
+			<sig type="reference" subtypes="comparative_reference;demonstrative_reference;personal_reference;propositional_reference"/>
+			<sig type="lexical" subtypes="alternate_expression;indicative_phrase;indicative_word"/>
+			<sig type="semantic" subtypes="antonymy;general_word;indicative_word_pair;lexical_chain;meronymy;repetition;synonymy"/>
+			<sig type="morphological" subtypes="tense"/>
+			<sig type="syntactic" subtypes="adjectival_modifier;imperative_clause;infinitival_clause;interrupted_matrix_clause;nominal_modifier;parallel_syntactic_construction;past_participial_clause;present_participial_clause;relative_clause;reported_speech;subject_auxiliary_inversion"/>
+			<sig type="graphical" subtypes="colon;dash;items_in_sequence;parentheses;question_mark;semicolon"/>
+			<sig type="genre" subtypes="inverted_pyramid_scheme;layout;newspaper_style_attribution;newspaper_style_definition"/>
+			<sig type="numerical" subtypes="same_count"/>
+			<sig type="reference+syntactic" subtypes="comparative_reference+subject np;demonstrative_reference+subject np;personal_reference+subject np;propositional_reference+subject np"/>
+			<sig type="semantic+syntactic" subtypes="general_word+subject np;lexical_chain+subject np;meronymy+subject np;repetition+subject np;synonymy+subject np"/>
+			<sig type="lexical+syntactic" subtypes="indicative_word+present_participial_clause"/>
+			<sig type="syntactic+positional" subtypes="past_participial_clause+beginning;present_participial_clause+beginning"/>
+			<sig type="syntactic+semantic" subtypes="parallel_syntactic_construction+lexical_chain"/>
+			<sig type="graphical+syntactic" subtypes="comma+past_participial_clause;comma+present_participial_clause"/>
+			<sig type="unsure" subtypes="unsure"/>
+			<sig type="orphan" subtypes="orphan"/>
+		</sigtypes>
+	</header>
+	<body>
+		<segment id="1" parent="5" relname="span">Ellie got mad ,</segment>
+		<segment id="2" parent="6" relname="joint-list">because they left the lights on</segment>
+		<segment id="3" parent="6" relname="joint-list">and then did n't take out the trash .</segment>
+		<segment id="4" parent="5" relname="evaluation-comment">That's unreasonable !</segment>
+		<group id="5" type="span" parent="7" relname="span"/>
+		<group id="6" type="multinuc" parent="1" relname="causal-cause"/>
+		<group id="7" type="span" />
+		<secedges>
+			<secedge id="3-2" source="3" target="2" relname="joint-sequence"/>
+		</secedges>
+		<signals>
+			<signal source="3" type="dm" subtype="dm" tokens="11"/>
+			<signal source="3" type="syntactic" subtype="infinitival_clause" tokens="7,13"/>
+			<signal source="4" type="lexical" subtype="indicative_word" tokens="21"/>
+			<signal source="4" type="reference" subtype="personal_reference" tokens="20"/>
+			<signal source="6" type="dm" subtype="dm" tokens="5"/>
+			<signal source="6" type="reference" subtype="personal_reference" tokens="1,6"/>
+			<signal source="3-2" type="orphan" subtype="orphan" tokens="12"/>
+		</signals>
+	</body>
+</rst>
