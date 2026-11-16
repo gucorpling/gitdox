@@ -1435,6 +1435,31 @@ function groupSelectedMutation(nextState, { groupType }) {
 
   if (isEntireSingleGroupSelected) return;
 
+  if (isEdge) {
+    const edgeConfig = nextState.config?.entities?.colors?.edges?.[groupType]
+      || nextState.config?.colors?.edges?.[groupType];
+    const firstIn = edgeConfig?.anaphor_is_first_in;
+    if (firstIn != null && typeof firstIn !== 'string') {
+      return `Cannot create ${groupType} edges: anaphor_is_first_in must name a group type.`;
+    }
+    const requiredGroup = firstIn?.trim();
+    if (requiredGroup) {
+      if (!groupTypes.includes(requiredGroup)) {
+        return `Cannot create ${groupType} edges: group type "${requiredGroup}" is not configured.`;
+      }
+      const sortedIds = sortByStart(selectedIds);
+      const invalidId = sortedIds.slice(1).find((entityId) => {
+        const groupId = normalizeGroupId(nextState.entitiesById[entityId].groups?.[requiredGroup]);
+        if (groupId === 0) return false;
+        const members = nextState.groupsByType[requiredGroup]?.[groupId] || [];
+        return sortByStart(members)[0] !== entityId;
+      });
+      if (invalidId) {
+        return `Cannot create ${groupType} edges: the later mention (${invalidId}) must be the first member of its ${requiredGroup} group.`;
+      }
+    }
+  }
+
   let targetGroup = Infinity;
   if (isSingleExistingGroupSelection) {
     targetGroup = nextGroupId(nextState.groupsByType, groupType);
@@ -1660,7 +1685,7 @@ export function spannotatorReducer(state, action) {
       }
       break;
     case 'GROUP_SELECTED':
-      groupSelectedMutation(nextState, { groupType: action.groupType });
+      nextState.uiState.mutationWarning = groupSelectedMutation(nextState, { groupType: action.groupType }) || '';
       break;
     case 'UNGROUP_SELECTED':
       ungroupSelectedMutation(nextState, { groupType: action.groupType });

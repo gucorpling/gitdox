@@ -673,10 +673,13 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
   });
 
   let currentDocumentOffset = 0;
+  const sortedSents = [...sentences.keys()].filter((number) => Number.isInteger(number) && number >= 1).sort((a, b) => a - b);
+  const firstSent = sortedSents[0];
 
-  for (const sent of [...sentences.keys()].filter((number) => Number.isInteger(number) && number >= 1).sort((a, b) => a - b)) {
+  for (const sent of sortedSents) {
     const sentTokens = sentences.get(sent);
     out.push('');
+    if (sent === firstSent) out.push('');
     out.push(`#Text=${sentTokens.map((t) => t.word).join(' ')}`);
 
     sentTokens.forEach((tok) => {
@@ -700,15 +703,19 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
 
       const spanCols = spanKeys.map((key) => {
         if (covering.length === 0) return '_';
-        return covering.map((e) => {
+        const items = covering.map((e) => {
           let value = '_';
           if (key === schema.entityKey) {
             value = e.type || resolvedConfig.GLOBAL_DEFAULTS.DEFAULT_ENTITY_TYPE;
           } else {
             value = normalizeAnnotationValueForSchema(key, e.annos?.[key], schema, resolvedConfig, '_');
           }
-          return `${value}[${entIndex[e.div_id]}]`;
-        }).join('|');
+          const empty = value === undefined || value === null || value === '' || value === '_';
+          return { empty, text: `${empty ? '' : value}[${entIndex[e.div_id]}]` };
+        });
+        // Mentions without a value are dropped; '_' only if no mention has one
+        const valued = items.filter((item) => !item.empty);
+        return valued.length > 0 ? valued.map((item) => item.text).join('|') : '_';
       });
 
       const outEdgeTypes = [];
@@ -744,7 +751,7 @@ export function exportSpannotatorData({ format, tokens, tokensById, entities, gr
       }
     }
   }
-  return webannoText;
+  return `${webannoText.replace(/\n+$/, '')}\n`;
 }
 
 function exportSocialCalc({ tokens, entities, groups, socialcalc, config = {} }) {
@@ -1448,14 +1455,12 @@ function importWebAnno(raw, config) {
     });
 
     const slotItemsByKey = {};
-    const slotValuesByKey = {};
     const slotValueByRefByKey = {};
     header.spanKeys.forEach((key) => {
       const colIndex = header.spanColumnByKey[key];
       const rawValue = fields[colIndex] ?? '_';
       const parsedItems = parseWebAnnoCellItems(rawValue);
       slotItemsByKey[key] = parsedItems;
-      slotValuesByKey[key] = parsedItems.map((item) => item.raw);
       const byRef = {};
       parsedItems.forEach((item) => {
         if (!item.refId) return;
@@ -1481,8 +1486,10 @@ function importWebAnno(raw, config) {
       header.spanKeys.forEach((key) => {
         if (key === header.entityKey) return;
         const valueByRef = slotValueByRefByKey[key] || {};
-        const slotValues = slotValuesByKey[key] || [];
-        const parsedValue = valueByRef[eid] ?? slotValues[idx]?.split('[')?.[0];
+        const slotItem = (slotItemsByKey[key] || [])[idx];
+        // Positional fallback only for items that belong to this mention (value-less mentions may be omitted)
+        const positional = slotItem && (!slotItem.refId || slotItem.refId === eid) ? slotItem.raw.split('[')[0] : undefined;
+        const parsedValue = valueByRef[eid] ?? positional;
         if (!isMeaningful(parsedValue)) return;
         e2annos[eid][key] = normalizeAnnotationValueForSchema(key, parsedValue, schema, config, '_');
       });

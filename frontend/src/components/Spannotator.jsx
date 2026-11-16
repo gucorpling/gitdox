@@ -67,13 +67,14 @@ const IdentityInput = React.memo(function IdentityInput({ entityType, textValue,
   const [edited, setEdited] = useState(false);
   const commitRef = useRef(onCommit);
   const draftCommitterRef = useRef(null);
+  const editingRef = useRef(false);
 
   useEffect(() => {
     commitRef.current = onCommit;
   }, [onCommit]);
 
   useEffect(() => {
-    if (!draftCommitterRef.current?.hasPending()) {
+    if (!editingRef.current && !draftCommitterRef.current?.hasPending()) {
       setDraft(value);
       setEdited(false);
     }
@@ -94,6 +95,7 @@ const IdentityInput = React.memo(function IdentityInput({ entityType, textValue,
       value={draft}
       onChange={(event) => {
         const nextValue = event.target.value;
+        editingRef.current = true;
         setDraft(nextValue);
         setEdited(true);
         onDraft(entityType, textValue, nextValue, flush);
@@ -104,7 +106,11 @@ const IdentityInput = React.memo(function IdentityInput({ entityType, textValue,
         }
         draftCommitterRef.current.update(nextValue);
       }}
-      onBlur={() => flushSync(flush)}
+      onBlur={(event) => {
+        editingRef.current = false;
+        setDraft(event.target.value.trim());
+        flushSync(flush);
+      }}
       style={{
         width: '100%',
         minWidth: '140px',
@@ -412,7 +418,8 @@ export default function Spannotator({
   onFetchIdentitySuggestions,
   onMetadataChange,
   meta_dict = {},
-  externalControlsHostId = ''
+  externalControlsHostId = '',
+  replaceOnImport = false
 }) {
   const modelConfig = useMemo(() => buildSpannotatorConfig(config), [config]);
   const canAccessDataTransfer = Boolean(canDataTransfer);
@@ -527,6 +534,7 @@ export default function Spannotator({
   const [resizeDragUI, setResizeDragUI] = useState(null);
   const resizeDragRef = useRef(null);
   const tokenDragRef = useRef({ active: false, anchor: null, mode: 'replace', base: new Set() });
+  const mouseGestureRef = useRef({ downTarget: null, upTarget: null });
   const lastTokenClickRef = useRef(null);
 
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -638,9 +646,10 @@ export default function Spannotator({
         .map((match) => String(match.entityId || '').trim())
         .filter(Boolean);
       const kind = getAnnotationKind(snapshot.modelConfig, snapshot.identityAnnotationKey);
+      const trimmedValue = draftValue.trim();
       const nextValue = kind === 'checks'
-        ? normalizeCheckValue(draftValue, snapshot.modelConfig, snapshot.identityAnnotationKey)
-        : draftValue;
+        ? normalizeCheckValue(trimmedValue, snapshot.modelConfig, snapshot.identityAnnotationKey)
+        : trimmedValue;
       new Set([...directIds, ...matchedIds]).forEach((entityId) => {
         const entity = nextEntities[entityId];
         if (!entity) return;
@@ -672,7 +681,6 @@ export default function Spannotator({
   const applyImportedData = useCallback((rawInput, options = {}) => {
     const isSocialCalcImport = isSocialCalcPayload(rawInput);
     
-    // Unconditionally pass socialcalcModel so io.js can optionally merge on top of it.
     const importConfig = isSocialCalcImport
       ? {
         ...config,
@@ -680,13 +688,13 @@ export default function Spannotator({
         word: modelConfig.word || 'word',
         tok: modelConfig.tok || 'tok',
         meta_dict,
-        socialcalc: socialcalcModel
+        socialcalc: replaceOnImport ? null : socialcalcModel
       }
       : {
         ...config,
         ...modelConfig,
         meta_dict,
-        socialcalc: socialcalcModel
+        socialcalc: replaceOnImport ? null : socialcalcModel
       };
 
     const imported = importSpannotatorData(rawInput, importConfig);
@@ -791,7 +799,7 @@ export default function Spannotator({
     }
 
     return imported;
-  }, [config, meta_dict, modelConfig, onMetadataChange, socialcalcModel, tokens, value]);
+  }, [config, meta_dict, modelConfig, onMetadataChange, replaceOnImport, socialcalcModel, tokens, value]);
 
   const tokensById = useMemo(() => {
     const m = {};
@@ -851,6 +859,10 @@ export default function Spannotator({
     });
 
     const nextState = spannotatorReducer(currentState, action);
+    if (nextState.uiState.mutationWarning) {
+      window.alert(nextState.uiState.mutationWarning);
+      return;
+    }
     setTokens(nextState.tokens);
     setEntities(nextState.entitiesById);
     setGroups(nextState.groupsByType);
@@ -1512,7 +1524,7 @@ export default function Spannotator({
 
   const confirmNamedEntityIdentitySuggestion = useCallback((entityType, textValue) => {
     const inputKey = namedEntityInputKey(entityType, textValue);
-    const committedValue = namedEntityIdentityInputs[inputKey] || '';
+    const committedValue = (namedEntityIdentityInputs[inputKey] || '').trim();
     const directMatchIds = namedEntityMatchIdsByInputKey[inputKey] || [];
     const source = {
       tokens,
@@ -1527,6 +1539,7 @@ export default function Spannotator({
 
     changeEntityAnnos(targetEntityIds, identityAnnotationKey, committedValue);
 
+    setNamedEntityIdentityInputs((prev) => ({ ...prev, [inputKey]: committedValue }));
     setPendingNamedEntityIdentitySuggestions((prev) => {
       if (!prev[inputKey]) return prev;
       const next = { ...prev };
@@ -1815,6 +1828,9 @@ export default function Spannotator({
 
   const onEntityClick = useCallback((event, entityId) => {
     event.stopPropagation();
+    const { downTarget, upTarget } = mouseGestureRef.current;
+    // A drag across descendants can synthesize a click on their shared entity.
+    if (event.detail !== 0 && (!downTarget || downTarget !== upTarget)) return;
     setContextMenu((cm) => ({ ...cm, open: false })); // Close any open context menu
     setActiveEntityId(entityId);
     setSelectedTokens(new Set());
@@ -2019,7 +2035,7 @@ export default function Spannotator({
       if (!rawText) return;
 
       if (isClientSideImportPayload(rawText) || typeof onImportSgml !== 'function') {
-        const mergeOpts = isSocialCalcPayload(rawText) ? { enforceSpreadsheetMerge: true } : {};
+        const mergeOpts = !replaceOnImport && isSocialCalcPayload(rawText) ? { enforceSpreadsheetMerge: true } : {};
         applyImportedData(rawText, { closeDialog: true, ...mergeOpts });
         setShowImportDialog(false);
         return;
@@ -2655,7 +2671,12 @@ export default function Spannotator({
           ) : null}
         </div>
 
-        <div id="editor" onClick={() => { setSelectedEntities(new Set()); setContextMenu((cm) => ({ ...cm, open: false })); }}>
+        <div
+          id="editor"
+          onMouseDownCapture={(event) => { mouseGestureRef.current = { downTarget: event.target, upTarget: null }; }}
+          onMouseUpCapture={(event) => { mouseGestureRef.current.upTarget = event.target; }}
+          onClick={() => { setSelectedEntities(new Set()); setContextMenu((cm) => ({ ...cm, open: false })); }}
+        >
           {resizeDragUI?.active ? (
             <div
               className={`sp-resize-guide ${resizeDragUI.valid ? 'valid' : 'invalid'}`}
