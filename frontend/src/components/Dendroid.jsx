@@ -1,7 +1,9 @@
 ﻿import { useState, useRef, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Upload, X, ChevronLeft, Info, Users, GitBranch } from 'lucide-react';
+import { ChevronDown, ChevronRight, Upload, X, ChevronLeft, Info, Users, GitBranch, Merge } from 'lucide-react';
+import { parseEdeps, stringifyEdeps, hasAnnotationData, getAvailableAnns, getDisplayableAnns, getDisplayedAnnotator, buildFallbackText, mergeSentences } from './dendroid/sentences.js';
 
 const COLORS = ['#94a3b8', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#f43f5e', '#14b8a6', '#d946ef', '#f97316'];
+const EMPTY_COLOR_MAP = {};
 
 // --- Data Formatting Helpers ---
 
@@ -11,19 +13,6 @@ const isEmptyValue = (v) => v === undefined || v === null || String(v).trim() ==
 const isTokenIncomplete = (token, annName) => {
   const ann = token.annotations?.[annName];
   return isEmptyValue(ann?.head) || isEmptyValue(ann?.deprel);
-};
-
-const parseEdeps = (depsStr) => {
-  if (!depsStr || depsStr === '_') return [];
-  return depsStr.split('|').map(edge => {
-    const parts = edge.split(':');
-    return { head: parts[0], deprel: parts.slice(1).join(':') };
-  }).filter(e => e.head && e.deprel);
-};
-
-const stringifyEdeps = (edepsArray) => {
-  if (!edepsArray || edepsArray.length === 0) return '_';
-  return [...edepsArray].sort((a, b) => parseInt(a.head) - parseInt(b.head)).map(e => `${e.head}:${e.deprel}`).join('|');
 };
 
 const parseFeatures = (str) => {
@@ -48,23 +37,6 @@ const intToCol = (num) => { let s=''; while(num>0) { let r=(num-1)%26; s=String.
 
 // --- Sentence Analysis & Text Synthesis ---
 
-const hasAnnotationData = (sent, annName) => {
-  return sent.tokens.some(t => {
-    const ann = t.annotations[annName];
-    return ann && (ann.head !== '_' || ann.deprel !== '_' || (ann.deps && ann.deps !== '_'));
-  });
-};
-
-const getAvailableAnns = (sent, defaultAnn) => {
-  const set = new Set();
-  if (sent.activeAnnotator) set.add(sent.activeAnnotator);
-  sent.tokens.forEach(t => {
-    Object.keys(t.annotations || {}).forEach(a => set.add(a));
-  });
-  if (set.size === 0) set.add(defaultAnn);
-  return Array.from(set).sort();
-};
-
 const getFallbackAnnotator = (sent, preferred, defaultAnn) => {
   const available = getAvailableAnns(sent, defaultAnn);
   if (available.includes(preferred) && hasAnnotationData(sent, preferred)) return preferred;
@@ -72,46 +44,6 @@ const getFallbackAnnotator = (sent, preferred, defaultAnn) => {
     if (hasAnnotationData(sent, ann)) return ann;
   }
   return available.length > 0 ? available[0] : preferred;
-};
-
-const buildFallbackText = (tokens, mwts) => {
-  const mwtMap = {};
-  (mwts || []).forEach(m => {
-    const [start, end] = m.id.split('-');
-    mwtMap[start] = { ...m, endId: parseInt(end) };
-  });
-  
-  let out = "";
-  let skipUntil = -1;
-  
-  const sortedTokens = [...(tokens || [])]
-    .filter(t => !String(t.id).includes('.'))
-    .sort((a,b) => parseInt(a.id) - parseInt(b.id));
-    
-  for (let i = 0; i < sortedTokens.length; i++) {
-    const t = sortedTokens[i];
-    const idNum = parseInt(t.id);
-    if (idNum <= skipUntil) continue;
-    
-    let form = t.form;
-    let hasSpace = true;
-    
-    if (mwtMap[t.id]) {
-      const mwt = mwtMap[t.id];
-      form = mwt.form;
-      skipUntil = mwt.endId;
-      
-      const lastToken = sortedTokens.find(tok => parseInt(tok.id) === skipUntil);
-      if ((mwt.misc || '').includes('SpaceAfter=No') || (lastToken && (lastToken.misc || '').includes('SpaceAfter=No'))) {
-        hasSpace = false;
-      }
-    } else {
-      if ((t.misc || '').includes('SpaceAfter=No')) hasSpace = false;
-    }
-    
-    out += form + (hasSpace ? ' ' : '');
-  }
-  return out.trimEnd();
 };
 
 // --- Color Pipeline ---
@@ -809,28 +741,10 @@ const DependencyGraph = ({ sentence, activeAnn, onUpdateSentence, isCompareMode,
   );
 };
   
-const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentence, config }) => {
+const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentence, onMerge, config }) => {
   const { defaultAnnotator, perUserMode } = config;
-  const availableAnns = getAvailableAnns(sentence, defaultAnnotator);
-  
-  const displayableAnns = useMemo(() => {
-      return availableAnns.filter(ann => {
-          if (!hasAnnotationData(sentence, ann)) return false;
-          if (ann === defaultAnnotator) return true;
-          if (!hasAnnotationData(sentence, defaultAnnotator)) return true;
-
-          return sentence.tokens.some(t => {
-              const a = t.annotations[ann] || { head: '_', deprel: '_', deps: '_' };
-              const d = t.annotations[defaultAnnotator] || { head: '_', deprel: '_', deps: '_' };
-              return a.head !== d.head || a.deprel !== d.deprel || a.deps !== d.deps;
-          });
-      });
-  }, [sentence, availableAnns, defaultAnnotator]);
-
-  let activeAnn = perUserMode ? (sentence.activeAnnotator || defaultAnnotator) : defaultAnnotator;
-  if (perUserMode && !displayableAnns.includes(activeAnn)) {
-      activeAnn = displayableAnns.includes(defaultAnnotator) ? defaultAnnotator : (displayableAnns[0] || defaultAnnotator);
-  }
+  const displayableAnns = getDisplayableAnns(sentence, defaultAnnotator);
+  const activeAnn = getDisplayedAnnotator(sentence, defaultAnnotator, perUserMode);
 
   const showAnnotators = perUserMode && displayableAnns.length > 1;
   
@@ -856,7 +770,7 @@ const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentenc
   return (
     <div className="border border-gray-200 bg-white rounded-xl shadow-sm overflow-hidden transition-all duration-300">
       <div className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${isExpanded ? 'border-b border-gray-100 bg-indigo-50/30' : ''}`} onClick={onToggle}>
-        <div className="flex items-center gap-3 overflow-hidden">
+        <div className="flex items-center gap-3 min-w-0">
           <div className={`p-1 rounded-md transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-700' : 'text-gray-400'}`}>
             {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
           </div>
@@ -867,6 +781,13 @@ const SentenceEditor = ({ sentence, index, isExpanded, onToggle, onUpdateSentenc
           <h3 className={`text-base truncate font-medium ${isExpanded ? 'text-indigo-900' : 'text-gray-800'}`}>
             {sentence.text}
           </h3>
+          {onMerge && (
+            <button type="button" title="Merge with next sentence" aria-label="Merge with next sentence"
+              onClick={e => { e.stopPropagation(); onMerge(); }}
+              className="shrink-0 p-1 rounded text-gray-500 hover:text-indigo-700 hover:bg-indigo-100">
+              <Merge size={18} />
+            </button>
+          )}
         </div>
         
         {showAnnotators && (
@@ -964,13 +885,13 @@ export function Dendroid({
   const [viewMode, setViewMode] = useState('editor'); 
   const [showHelp, setShowHelp] = useState(false);
   const [globalPreferredAnnotator, setGlobalPreferredAnnotator] = useState('LATEST');
-  const [colorMap, setColorMap] = useState({});
+  const [colorMap, setColorMap] = useState(null);
   const [showLocalEdges, setShowLocalEdges] = useState(true);
   const [showLongEdges, setShowLongEdges] = useState(true);
 
   // Bundle the context necessary for the extracted components
   const editorConfig = useMemo(() => ({
-    features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser,     colorMap, showLocalEdges, showLongEdges, tokenDistance
+    features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap: colorMap || EMPTY_COLOR_MAP, showLocalEdges, showLongEdges, tokenDistance
       }), [features, tagsets, colMappings, defaultAnnotator, perUserMode, currentUser, colorMap, showLocalEdges, showLongEdges, tokenDistance]);
 
   // --- GitDOX Integration Helper ---
@@ -1177,7 +1098,7 @@ export function Dendroid({
       if (boundVal !== undefined && boundVal !== lastBoundVal) {
         isNewSent = true;
       } else if (currentSpanOrigin !== lastSpanOrigin) {
-        if ((boundCell && boundCell.originalRowspan > 1) || (lastBoundCell && lastBoundCell.originalRowspan > 1)) {
+        if ((boundCell && !boundCell.isPropagated) || (lastBoundCell && lastBoundCell.originalRowspan > 1)) {
            isNewSent = true;
         }
       }
@@ -1477,11 +1398,9 @@ export function Dendroid({
       const localToGlobal = { '0': '0', '_': '_' };
       sent.tokens.forEach(t => {
         localToGlobal[t.id] = t._newGlobalId;
-        if (t._originalGlobalId) localToGlobal[t._originalGlobalId] = t._newGlobalId;
       });
       (sent.mwts || []).forEach(mwt => {
         localToGlobal[mwt.id] = mwt._newGlobalId;
-        if (mwt._originalGlobalId) localToGlobal[mwt._originalGlobalId] = mwt._newGlobalId;
       });
   
       const allLines = [...sent.tokens];
@@ -1653,7 +1572,7 @@ export function Dendroid({
     try {
       const parsed = initialFormat === 'conllu' ? parseCoNLLU(initialData) : parseSocialCalc(initialData);
       setSentences(parsed);
-      setColorMap(generateColorMap(parsed));
+      if (colorMap === null && parsed.length > 0) setColorMap(generateColorMap(parsed));
       if (parsed.length > 0 && expandedIds.size === 0) setExpandedIds(new Set([parsed[0].id]));
     } catch (e) { alert(e.message); console.error("Failed to parse initial data", e); }
   }
@@ -1662,7 +1581,7 @@ export function Dendroid({
     try {
       const parsed = viewMode === 'conllu' ? parseCoNLLU(rawData) : parseSocialCalc(rawData);
       setSentences(parsed);
-      setColorMap(generateColorMap(parsed));
+      if (colorMap === null && parsed.length > 0) setColorMap(generateColorMap(parsed));
       setViewMode('editor');
       notifyChange(parsed);
     } catch (e) { alert(`Parse Error:\n${e.message}`); console.error(e); }
@@ -1675,6 +1594,21 @@ export function Dendroid({
     const next = sentences.map(sent => sent.id === newSentence.id ? newSentence : sent);
     setSentences(next);
     if (!isViewOnly) notifyChange(next);
+  };
+
+  const handleMergeSentences = (index) => {
+    if (!window.confirm("Merge these sentences? This affects all annotations of both sentences and cannot be undone. Sentence metadata from the second sentence will be lost, except for sentence text.")) return;
+    const merged = mergeSentences(sentences[index], sentences[index + 1], {
+      currentUser, defaultAnnotator, perUserMode, textCol,
+    });
+    const next = [...sentences.slice(0, index), merged, ...sentences.slice(index + 2)];
+    setSentences(next);
+    setExpandedIds(prev => {
+      const ids = new Set(prev);
+      if (ids.delete(sentences[index + 1].id)) ids.add(merged.id);
+      return ids;
+    });
+    notifyChange(next);
   };
 
   // --- UI Frame ---
@@ -1724,6 +1658,7 @@ export function Dendroid({
                   <ul className="list-disc pl-5 space-y-1.5" style={{ textAlign: 'left' }}>
                     <li><b>Edit Labels:</b> Click on arc labels or POS tags to change them.</li>
                     <li><b>Edit Text:</b> Double-click on words or lemmas to edit them directly.</li>
+                    <li><b>Edge Colors:</b> Label colors stay fixed until the editor is reopened or refreshed.</li>
                   </ul>
                 </div>
               )}
@@ -1742,6 +1677,7 @@ export function Dendroid({
                     isExpanded={expandedIds.has(sent.id)} 
                     onToggle={() => { setExpandedIds(prev => { const next = new Set(prev); if (next.has(sent.id)) next.delete(sent.id); else next.add(sent.id); return next; }); }} 
                     onUpdateSentence={handleUpdateSentence}
+                    onMerge={idx < sentences.length - 1 ? () => handleMergeSentences(idx) : undefined}
                     config={editorConfig} 
                   />
                 ))}
