@@ -22,6 +22,99 @@ from xml.sax.saxutils import escape
 
 CELL_ID_PATTERN = re.compile(r'^([A-Z]+)([0-9]+)$')
 
+
+def split_socialcalc(content, split_row):
+    """Split at a 1-based data row, retaining the header and crossing spans."""
+    lines = content.splitlines(keepends=True)
+    sheet_lines = [line for line in lines if re.match(r'^sheet:c:\d+:r:\d+(?::|$)', line)]
+    if len(sheet_lines) != 1:
+        raise ValueError("Expected one SocialCalc sheet with row and column totals.")
+    total_rows = int(re.match(r'^sheet:c:\d+:r:(\d+)', sheet_lines[0]).group(1))
+    if not 3 <= split_row <= total_rows:
+        raise ValueError(f"Split row must be between 3 and {total_rows}, leaving data in both parts.")
+
+    cells = [[], []]
+    other_lines = [[], []]
+    insert_at = None
+    for line in lines:
+        cell = re.match(r'^cell:([A-Z]+)(\d+):(.*?)(\r?\n)?$', line)
+        if cell:
+            if insert_at is None:
+                insert_at = len(other_lines[0])
+            col, row_text, attrs, ending = cell.groups()
+            row = int(row_text)
+            ending = ending or ""
+            span_match = re.search(r'(?:^|:)rowspan:(\d+)(?=:|$)', attrs)
+            span = int(span_match.group(1)) if span_match else 1
+            if row < 1 or span < 1 or row + span - 1 > total_rows:
+                raise ValueError(f"Invalid cell or row span at {col}{row}.")
+            if row == 1 and span > 1:
+                raise ValueError("A header cell cannot span data rows.")
+
+            def make_cell(new_row, new_span):
+                new_attrs = attrs
+                if span_match:
+                    new_attrs = re.sub(r'(?::|^)rowspan:\d+(?=:|$)', '', attrs)
+                    if new_span > 1:
+                        new_attrs += f':rowspan:{new_span}'
+                return (new_row, col, f"cell:{col}{new_row}:{new_attrs}{ending}")
+
+            if row == 1:
+                cells[0].append(make_cell(1, 1))
+                cells[1].append(make_cell(1, 1))
+            elif row < split_row:
+                cells[0].append(make_cell(row, min(span, split_row - row)))
+                if row + span > split_row:
+                    cells[1].append(make_cell(2, row + span - split_row))
+            else:
+                cells[1].append(make_cell(row - split_row + 2, span))
+            continue
+
+        if line.startswith("cell:"):
+            raise ValueError("Malformed SocialCalc cell record.")
+        row_record = re.match(r'^row:(\d+):(.*)$', line)
+        if row_record:
+            row = int(row_record.group(1))
+            if row == 1 or row < split_row:
+                other_lines[0].append(line)
+            if row == 1:
+                other_lines[1].append(line)
+            elif row >= split_row:
+                other_lines[1].append(re.sub(r'^row:\d+:', f'row:{row - split_row + 2}:', line))
+            continue
+        if line.startswith("sheet:"):
+            other_lines[0].append(re.sub(r'^(sheet:c:\d+:r:)\d+', rf'\g<1>{split_row - 1}', line))
+            other_lines[1].append(re.sub(r'^(sheet:c:\d+:r:)\d+', rf'\g<1>{total_rows - split_row + 2}', line))
+        elif line.startswith("ecell:"):
+            other_lines[0].append("ecell:A1\n" if line.endswith("\n") else "ecell:A1")
+            other_lines[1].append("ecell:A1\n" if line.endswith("\n") else "ecell:A1")
+        else:
+            other_lines[0].append(line)
+            other_lines[1].append(line)
+
+    if insert_at is None:
+        raise ValueError("SocialCalc sheet has no cells.")
+    result = []
+    for part in range(2):
+        def cell_order(cell):
+            col_number = 0
+            for char in cell[1]:
+                col_number = col_number * 26 + ord(char) - ord('A') + 1
+            return cell[0], col_number
+
+        ordered_cells = [cell[2] for cell in sorted(cells[part], key=cell_order)]
+        result.append(''.join(other_lines[part][:insert_at] + ordered_cells + other_lines[part][insert_at:]))
+    return tuple(result)
+
+
+def split_xml_lines(content, split_line):
+    """Split text before the given 1-based line without changing line endings."""
+    lines = content.splitlines(keepends=True)
+    if not 2 <= split_line <= len(lines):
+        raise ValueError(f"Split line must be between 2 and {len(lines)}, leaving lines in both parts.")
+    return ''.join(lines[:split_line - 1]), ''.join(lines[split_line - 1:])
+
+
 class ExportConfig:
 
     def __init__(self, **kwargs):

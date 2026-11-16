@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from io import BytesIO
 from pydantic import BaseModel, Field, field_validator
-from gdutils import social_to_sgml, sgml_to_social, get_social_stylesheets
+from gdutils import social_to_sgml, sgml_to_social, get_social_stylesheets, split_socialcalc, split_xml_lines
 from github_utils import GitHubUtility
 from excel import parse_socialcalc_to_xlsx, parse_xlsx_to_socialcalc
 from validate import run_all_validations    
@@ -392,6 +392,13 @@ class DocumentUpdate(BaseModel):
 
 class DocumentRename(BaseModel):
     new_docname: str
+
+
+class DocumentSplit(BaseModel):
+    part1_name: str
+    part2_name: str
+    split_row: int = Field(strict=True)
+    delete_original: bool = False
 
 
 class DocumentContentUpdate(BaseModel):
@@ -1602,6 +1609,91 @@ def rename_corpus(
 
 
 # --- 3. Document Management ---
+@app.post("/documents/{doc_id}/split")
+def split_document(
+    doc_id: str,
+    data: DocumentSplit,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(require_admin(2)),
+):
+    """Split an XML or spreadsheet document atomically within its project."""
+    names = [data.part1_name.strip(), data.part2_name.strip()]
+    if not all(names) or names[0] == names[1]:
+        raise HTTPException(status_code=400, detail="Part names must be nonempty and different.")
+
+    doc_key = f"doc:{doc_id}"
+    project = current_user.get("project_name")
+    if not project:
+        raise HTTPException(status_code=403, detail="Access denied to this project.")
+    project_docs_key = f"project:{project}:docs"
+
+    try:
+        with r.pipeline() as pipe:
+            pipe.watch(doc_key, project_docs_key, VALIDATION_QUEUE_KEY)
+            if pipe.type(VALIDATION_QUEUE_KEY) not in {"none", "set"}:
+                raise HTTPException(status_code=503, detail="Validation queue has an invalid Redis type.")
+            source = pipe.hgetall(doc_key)
+            if not source:
+                raise HTTPException(status_code=404, detail="Document not found.")
+            if source.get("project") != project:
+                raise HTTPException(status_code=403, detail="Access denied to this project.")
+            if source.get("docname") in names and not data.delete_original:
+                raise HTTPException(status_code=400, detail="Deleting the original is required to reuse its name.")
+
+            existing_ids = pipe.smembers(project_docs_key)
+            if doc_id not in existing_ids:
+                raise HTTPException(status_code=404, detail="Document not found in this project.")
+            existing_keys = [f"doc:{existing_id}" for existing_id in existing_ids if existing_id != doc_id]
+            if existing_keys:
+                pipe.watch(*existing_keys)
+            for existing_key in existing_keys:
+                existing = pipe.hmget(existing_key, "corpus", "docname")
+                if existing[0] == source.get("corpus") and existing[1] in names:
+                    raise HTTPException(status_code=409, detail=f"Document '{existing[1]}' already exists in this corpus.")
+
+            mode = normalize_document_mode(source.get("mode")) or get_default_document_mode(get_project_config(project))
+            if mode not in {"xml", "spreadsheet"}:
+                raise HTTPException(status_code=400, detail="Only XML and spreadsheet documents can be split.")
+            try:
+                if mode == "spreadsheet":
+                    contents = split_socialcalc(source.get("content_spreadsheet", ""), data.split_row)
+                else:
+                    contents = split_xml_lines(source.get("content_xml", ""), data.split_row)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+            new_ids = [_allocate_project_doc_id(project), _allocate_project_doc_id(project)]
+            new_keys = [f"doc:{new_id}" for new_id in new_ids]
+            pipe.watch(*new_keys)
+            if any(pipe.exists(key) for key in new_keys):
+                raise HTTPException(status_code=409, detail="A document ID was allocated concurrently. Please retry.")
+            timestamp = time.time()
+            pipe.multi()
+            for new_id, name, content in zip(new_ids, names, contents):
+                part = dict(source)
+                part.update({
+                    "id": new_id,
+                    "docname": name,
+                    "content_xml": content if mode == "xml" else "",
+                    "content_spreadsheet": content if mode == "spreadsheet" else "",
+                    "validation": _dump_json_field(_build_validation_pending_payload(state="queued")),
+                    "last_modified_at": timestamp,
+                    "last_modified_by": current_user.get("username", "system"),
+                })
+                pipe.hset(f"doc:{new_id}", mapping=part)
+                pipe.sadd(project_docs_key, new_id)
+                pipe.sadd(VALIDATION_QUEUE_KEY, new_id)
+            if data.delete_original:
+                pipe.delete(doc_key)
+                pipe.srem(project_docs_key, doc_id)
+            pipe.execute()
+    except WatchError as exc:
+        raise HTTPException(status_code=409, detail="Documents changed during splitting. Please retry.") from exc
+
+    background_tasks.add_task(_process_validation_queue)
+    return {"message": "Document split successfully.", "doc_ids": new_ids}
+
+
 @app.post("/documents")
 def add_document(
     doc: DocumentCreate,

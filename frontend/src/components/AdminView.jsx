@@ -101,6 +101,11 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
   const [isRenamingCorpus, setIsRenamingCorpus] = useState(false);
   const [isDeletingCorpus, setIsDeletingCorpus] = useState(false);
   const [corpusActionResult, setCorpusActionResult] = useState(null);
+  const [splitDocuments, setSplitDocuments] = useState([]);
+  const [splitForm, setSplitForm] = useState({ id: '', part1: '', part2: '', row: '', deleteOriginal: false });
+  const [splitResult, setSplitResult] = useState(null);
+  const [isLoadingSplitDocuments, setIsLoadingSplitDocuments] = useState(false);
+  const [isSplittingDocument, setIsSplittingDocument] = useState(false);
   const [corpusExportMode, setCorpusExportMode] = useState('xml');
   const [corpusExportConfig, setCorpusExportConfig] = useState('');
   const [corpusExportExtension, setCorpusExportExtension] = useState('');
@@ -269,6 +274,9 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
       }
       if (activeTab === 'corpus-management' && !canManageCorpus) {
         setActiveTab(canManageUsers ? 'users' : canManageAssignments ? 'assignments' : canManageValidations ? 'validations' : 'assignments');
+      }
+      if (activeTab === 'split-document' && !canManageCorpus) {
+        setActiveTab(canManageAssignments ? 'assignments' : 'validations');
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -944,6 +952,70 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
     return Array.isArray(data) ? data : [];
   };
 
+  const openSplitPanel = async () => {
+    setActiveTab('split-document');
+    setIsLoadingSplitDocuments(true);
+    setSplitResult(null);
+    try {
+      const docs = await fetchProjectDocuments();
+      setSplitDocuments(docs);
+      setSplitForm({ id: '', part1: '', part2: '', row: '', deleteOriginal: false });
+    } catch (err) {
+      setSplitDocuments([]);
+      setSplitResult({ ok: false, message: err?.message || 'Unable to load documents.' });
+    } finally {
+      setIsLoadingSplitDocuments(false);
+    }
+  };
+
+  const selectedSplitDocument = splitDocuments.find((doc) => String(doc.id) === splitForm.id);
+  const selectedSplitMode = selectedSplitDocument?.mode || editorOptions[0]?.mode || editorOptions[0]?.key || 'xml';
+  const handleSplitDocument = async (e) => {
+    e.preventDefault();
+    const part1 = splitForm.part1.trim();
+    const part2 = splitForm.part2.trim();
+    if (!selectedSplitDocument || !part1 || !part2 || part1 === part2) {
+      setSplitResult({ ok: false, message: 'Select a document and enter two different, nonempty names.' });
+      return;
+    }
+    if (!/^[0-9]+$/.test(splitForm.row) || !Number.isSafeInteger(Number(splitForm.row)) || Number(splitForm.row) < 2) {
+      setSplitResult({ ok: false, message: 'Enter a valid row or line number for part 2.' });
+      return;
+    }
+    const overwritesOriginal = part1 === selectedSplitDocument.docname || part2 === selectedSplitDocument.docname;
+    if (overwritesOriginal && !splitForm.deleteOriginal) {
+      setSplitResult({ ok: false, message: 'Check “Delete the original” to reuse its name.' });
+      return;
+    }
+    const contentType = selectedSplitMode === 'spreadsheet' ? 'Spreadsheet' : 'XML';
+    const deletionWarning = overwritesOriginal
+      ? ' The original document will be overwritten.'
+      : splitForm.deleteOriginal ? ' The original document will be deleted.' : '';
+    if (!window.confirm(`${contentType} content will be split into 2 documents.${deletionWarning} Continue?`)) return;
+    setIsSplittingDocument(true);
+    setSplitResult(null);
+    try {
+      await apiCall(`/documents/${encodeURIComponent(splitForm.id)}/split`, 'POST', {
+        part1_name: part1,
+        part2_name: part2,
+        split_row: Number(splitForm.row),
+        delete_original: splitForm.deleteOriginal
+      });
+      setSplitForm({ id: '', part1: '', part2: '', row: '', deleteOriginal: false });
+      try {
+        setSplitDocuments(await fetchProjectDocuments());
+        setSplitResult({ ok: true, message: 'Document split successfully.' });
+      } catch (err) {
+        setSplitDocuments([]);
+        setSplitResult({ ok: false, message: `Document split successfully, but the document list could not be refreshed: ${err?.message || 'Unknown error'}` });
+      }
+    } catch (err) {
+      setSplitResult({ ok: false, message: err?.message || 'Unable to split document.' });
+    } finally {
+      setIsSplittingDocument(false);
+    }
+  };
+
   // Allow repoOverride so we can pass a specific repo without overriding current assignments or status
   const updateDocumentRecord = async (doc, status, assigned, repoOverride) => {
     await apiCall(`/documents/${doc.id}`, 'PUT', {
@@ -1346,12 +1418,74 @@ export default function AdminView({ apiCall, user, token, projectName, isNavDark
         >
           Corpus Management
         </button>}
+        {canManageCorpus && <button
+          type="button"
+          onClick={openSplitPanel}
+          className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === 'split-document' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Split document
+        </button>}
       </div>
 
       <div
         className={`rounded-b-xl border border-slate-200 border-t-0 p-6 space-y-6 ${panelStyle ? '' : 'bg-white'}`}
         style={panelStyle}
       >
+      {canManageCorpus && activeTab === 'split-document' && (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <h3 className="text-lg font-semibold mb-4">Split document</h3>
+          <form onSubmit={handleSplitDocument} className="space-y-4 text-sm">
+            <label className="block text-slate-600">
+              Document
+              <select
+                className="w-full border p-2 rounded bg-white mt-1"
+                value={splitForm.id}
+                disabled={isLoadingSplitDocuments || isSplittingDocument}
+                required
+                onChange={(e) => {
+                  const doc = splitDocuments.find((item) => String(item.id) === e.target.value);
+                  setSplitForm({ id: e.target.value, part1: doc ? `${doc.docname}_part1` : '', part2: doc ? `${doc.docname}_part2` : '', row: '', deleteOriginal: false });
+                  setSplitResult(null);
+                }}
+              >
+                <option value="">{isLoadingSplitDocuments ? 'Loading documents...' : 'Select a document'}</option>
+                {[...splitDocuments].sort((a, b) => `${a.corpus}/${a.docname}`.localeCompare(`${b.corpus}/${b.docname}`)).map((doc) => (
+                  <option key={doc.id} value={doc.id}>{doc.corpus}/{doc.docname} ({doc.mode || 'default'})</option>
+                ))}
+              </select>
+            </label>
+            {selectedSplitDocument && !['xml', 'spreadsheet'].includes(selectedSplitMode) && (
+              <p className="text-amber-700">Only XML and spreadsheet documents can be split.</p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="block text-slate-600">Part 1 name
+                <input className="w-full border p-2 rounded mt-1" required value={splitForm.part1} onChange={(e) => setSplitForm((prev) => ({ ...prev, part1: e.target.value }))} />
+              </label>
+              <label className="block text-slate-600">Part 2 name
+                <input className="w-full border p-2 rounded mt-1" required value={splitForm.part2} onChange={(e) => setSplitForm((prev) => ({ ...prev, part2: e.target.value }))} />
+              </label>
+            </div>
+            <label className="block text-slate-600">
+              {selectedSplitMode === 'spreadsheet' ? 'First spreadsheet row in part 2' : 'First line in part 2'}
+              <input className="w-full border p-2 rounded mt-1" type="text" inputMode="numeric" pattern="[0-9]+" required value={splitForm.row} onChange={(e) => setSplitForm((prev) => ({ ...prev, row: e.target.value.replace(/[^0-9]/g, '') }))} />
+            </label>
+            <p className="text-slate-500"><b>Notes:</b></p>
+            <ul className="list-disc pl-5">      
+              <li>XML is split as text and may require additional editing to be well-formed</li>
+              <li>Splitting in the middle of a spreadsheet span is OK</li>
+              <li>Only the current editor's content is copied (XML docs are split into XML docs without their spreadsheets and vice versa)</li>
+            </ul>
+            <label className="flex items-center gap-2 text-slate-700">
+              <input type="checkbox" checked={splitForm.deleteOriginal} onChange={(e) => setSplitForm((prev) => ({ ...prev, deleteOriginal: e.target.checked }))} />
+              Delete the original after splitting
+            </label>
+            <button type="submit" disabled={isSplittingDocument || isLoadingSplitDocuments || !selectedSplitDocument || !['xml', 'spreadsheet'].includes(selectedSplitMode)} className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed">
+              {isSplittingDocument ? 'Splitting...' : 'Split'}
+            </button>
+            {splitResult && <p role="status" className={splitResult.ok ? 'text-green-700' : 'text-red-700'}>{splitResult.message}</p>}
+          </form>
+        </div>
+      )}
       {canManageUsers && activeTab === 'users' && (
         <div className="flex gap-8">
           <div className="w-1/3 bg-white p-6 rounded-xl shadow-sm border border-slate-200 self-start">
